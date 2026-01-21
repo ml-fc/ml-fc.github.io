@@ -21,7 +21,7 @@ let SUPPRESS_META_ONCE = false;
 // When users switch away and back to the Match tab, we still need to check
 // for new matches (meta banner). We keep references to the last rendered
 // match list root and re-check meta on tab activation.
-let ACTIVE_MATCH = { pageRoot: null, listRoot: null, seasonId: "" };
+let ACTIVE_MATCH = { pageRoot: null, listRoot: null, seasonId: "", seasons: [] };
 let MATCH_META_LAST_CHECK = 0;
 let MATCH_META_LISTENERS_INSTALLED = false;
 
@@ -45,7 +45,7 @@ function scheduleMatchMetaCheck(reason = "") {
   const listEl = ACTIVE_MATCH.pageRoot.querySelector("#matchListView");
   if (!listEl || listEl.style.display === "none") return;
 
-  checkMetaAndShowBanner(ACTIVE_MATCH.pageRoot, ACTIVE_MATCH.listRoot, ACTIVE_MATCH.seasonId)
+  checkMetaAndShowBanner(ACTIVE_MATCH.pageRoot, ACTIVE_MATCH.seasonId)
     .catch(() => {});
 }
 
@@ -177,6 +177,48 @@ function seasonsSelectHtml(seasons, selected) {
     </div>
   `;
 }
+
+
+function injectSeasonSelector(root, seasons, seasonId) {
+  const seasonBlock = root.querySelector("#seasonBlock");
+  if (!seasonBlock) return;
+
+  seasonBlock.innerHTML = seasonsSelectHtml(seasons, seasonId);
+
+  const sel = root.querySelector("#seasonSelect");
+  if (!sel) return;
+
+  sel.onchange = () => {
+    const sid = sel.value;
+    localStorage.setItem(LS_SELECTED_SEASON, sid);
+
+    const c = lsGet(openKey(sid));
+    renderMatchList(root, sid, c?.matches || []);
+    injectSeasonSelector(root, seasons, sid);
+    prefetchOpenMatchDetails(c?.matches || []);
+
+    // Update active season + meta check
+    ACTIVE_MATCH.seasonId = sid;
+    ACTIVE_MATCH.listRoot = root.querySelector("#matchListView");
+    setTimeout(() => scheduleMatchMetaCheck("load"), 0);
+
+    // If this season has no cached open matches yet, fetch once to populate.
+    if (!(c?.matches && c.matches.length)) {
+      API.publicOpenMatches(sid)
+        .then(res => {
+          if (!res?.ok) return;
+          lsSet(openKey(sid), { ts: now(), matches: res.matches || [] });
+          if (isMatchRouteActive() && ACTIVE_MATCH.seasonId === sid) {
+            renderMatchList(root, sid, res.matches || []);
+            injectSeasonSelector(root, seasons, sid);
+            prefetchOpenMatchDetails(res.matches || []);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+}
+
 
 function availabilityGroups(av) {
   const yes = uniqueSorted(av.filter(x=>x.availability==="YES").map(x=>x.playerName));
@@ -336,6 +378,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
 
     // Refresh UI (IMPORTANT: use pageRoot, not listRoot)
     renderMatchList(pageRoot, seasonId, out.matches || []);
+    injectSeasonSelector(pageRoot, ACTIVE_MATCH.seasons || [], seasonId);
 
     // Prefetch details for speed
     prefetchOpenMatchDetails(out.matches || []);
@@ -786,6 +829,7 @@ export async function renderMatchPage(root, query) {
 
   // Render immediately from cache.
   renderMatchList(root, seasonId, openMatches);
+  injectSeasonSelector(root, seasons, seasonId);
 
   // Re-fetch open matches ONLY when the user does a browser reload.
   // (Or when cache is empty for the first time.)
@@ -806,6 +850,7 @@ export async function renderMatchPage(root, query) {
         const currentSeason = ACTIVE_MATCH?.seasonId || seasonId;
         if (currentListVisible && currentSeason === seasonId) {
           renderMatchList(root, seasonId, res.matches || []);
+          injectSeasonSelector(root, seasons, seasonId);
           prefetchOpenMatchDetails(res.matches || []);
         }
       })
@@ -813,6 +858,7 @@ export async function renderMatchPage(root, query) {
   }
 
   // Save active refs for activation meta checks
+  ACTIVE_MATCH.seasons = seasons;
   ACTIVE_MATCH.pageRoot = root;
   ACTIVE_MATCH.listRoot = root.querySelector('#matchListView');
   ACTIVE_MATCH.seasonId = seasonId;
@@ -822,35 +868,4 @@ export async function renderMatchPage(root, query) {
   // Prefetch details for all cached open matches immediately (background)
   prefetchOpenMatchDetails(openMatches);
 
-  // inject season selector
-  const seasonBlock = root.querySelector("#seasonBlock");
-  seasonBlock.innerHTML = seasonsSelectHtml(seasons, seasonId);
-
-  root.querySelector("#seasonSelect").onchange = () => {
-    const sid = root.querySelector("#seasonSelect").value;
-    localStorage.setItem(LS_SELECTED_SEASON, sid);
-    const c = lsGet(openKey(sid));
-    renderMatchList(root, sid, c?.matches || []);
-    prefetchOpenMatchDetails(c?.matches || []);
-    root.querySelector("#seasonBlock").innerHTML = seasonsSelectHtml(seasons, sid);
-
-    // Update active season and run a single meta check for the new season.
-    ACTIVE_MATCH.seasonId = sid;
-    ACTIVE_MATCH.listRoot = root.querySelector('#matchListView');
-    setTimeout(() => scheduleMatchMetaCheck("load"), 0);
-
-    // If this season has no cached open matches yet, fetch once to populate.
-    if (!(c?.matches && c.matches.length)) {
-      API.publicOpenMatches(sid)
-        .then(res => {
-          if (!res?.ok) return;
-          lsSet(openKey(sid), { ts: now(), matches: res.matches || [] });
-          if (isMatchRouteActive() && ACTIVE_MATCH.seasonId === sid) {
-            renderMatchList(root, sid, res.matches || []);
-            prefetchOpenMatchDetails(res.matches || []);
-          }
-        })
-        .catch(() => {});
-    }
-  };
 }
