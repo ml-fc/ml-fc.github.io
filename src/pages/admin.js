@@ -1128,61 +1128,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     };
   }
 
-  const closeAvailabilityBtn = manageArea.querySelector("#closeAvailability");
-  if (closeAvailabilityBtn) {
-    closeAvailabilityBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      setDisabled(closeAvailabilityBtn, true, "Closing…");
-      const out = await API.adminCloseAvailability(m.matchId);
-      setDisabled(closeAvailabilityBtn, false);
-      if (!out.ok) return toastError(out.error || "Failed");
 
-      toastSuccess("Availability closed.");
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-
-      // Update MEM locally (no API)
-      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
-        ? { ...x, availabilityLocked: "TRUE" }
-        : x
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-
-      const fresh = await API.getPublicMatch(m.publicCode);
-      if (stillOnAdmin(routeToken) && fresh.ok) {
-        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-      }
-    };
-  }
-
-  const openAvailabilityBtn = manageArea.querySelector("#openAvailability");
-  if (openAvailabilityBtn) {
-    openAvailabilityBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      setDisabled(openAvailabilityBtn, true, "Opening…");
-      const out = await API.adminOpenAvailability(m.matchId);
-      setDisabled(openAvailabilityBtn, false);
-      if (!out.ok) return toastError(out.error || "Failed");
-
-      toastSuccess("Availability re-opened.");
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-
-      // Update MEM locally (no API)
-      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
-        ? { ...x, availabilityLocked: "FALSE" }
-        : x
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-
-      const fresh = await API.getPublicMatch(m.publicCode);
-      if (stillOnAdmin(routeToken) && fresh.ok) {
-        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-      }
-    };
-  }
+ 
 
   manageArea.querySelector("#lockRatingsTop").onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
@@ -1483,7 +1430,60 @@ function renderComboList(filterText = "") {
   }
 })();
 
+  const closeAvailabilityBtn = manageBody.querySelector("#closeAvailability");
+  if (closeAvailabilityBtn) {
+    closeAvailabilityBtn.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      setDisabled(closeAvailabilityBtn, true, "Closing…");
+      const out = await API.adminCloseAvailability(m.matchId);
+      setDisabled(closeAvailabilityBtn, false);
+      if (!out.ok) return toastError(out.error || "Failed");
 
+      toastSuccess("Availability closed.");
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+
+      // Update MEM locally (no API)
+      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
+        ? { ...x, availabilityLocked: "TRUE" }
+        : x
+      );
+      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+
+      const fresh = await API.getPublicMatch(m.publicCode);
+      if (stillOnAdmin(routeToken) && fresh.ok) {
+        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+      }
+    };
+  }
+ const openAvailabilityBtn = manageBody.querySelector("#openAvailability");
+  if (openAvailabilityBtn) {
+    openAvailabilityBtn.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      setDisabled(openAvailabilityBtn, true, "Opening…");
+      const out = await API.adminOpenAvailability(m.matchId);
+      setDisabled(openAvailabilityBtn, false);
+      if (!out.ok) return toastError(out.error || "Failed");
+
+      toastSuccess("Availability re-opened.");
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+
+      // Update MEM locally (no API)
+      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
+        ? { ...x, availabilityLocked: "FALSE" }
+        : x
+      );
+      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+
+      const fresh = await API.getPublicMatch(m.publicCode);
+      if (stillOnAdmin(routeToken) && fresh.ok) {
+        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+      }
+    };
+  }
 
   // Add/update availability for any named player (admin only)
   const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
