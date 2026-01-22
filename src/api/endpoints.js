@@ -2,6 +2,15 @@
 import { apiGet, apiPost } from "./client.js";
 
 export const API = {
+  // auth
+  me: () => apiGet({ action: "me" }),
+  login: (name, password) => apiPost({ action: "login", name, password }),
+  registerUser: (name, password, phone = "") => apiPost({ action: "register_user", name, password, phone }),
+  logout: () => apiPost({ action: "logout" }),
+
+  // notifications
+  notifications: () => apiGet({ action: "notifications" }),
+  notificationsMarkRead: (ids) => apiPost({ action: "notifications_mark_read", ids }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
@@ -14,28 +23,35 @@ export const API = {
   // players / public match
   players: () => apiGet({ action: "players" }),
   getPublicMatch: (code) => apiGet({ action: "public_match", code }),
-setAvailability: (code, playerName, availability) =>
-  apiPost({ action: "set_availability", code, playerName, availability }),
-registerPlayer(name, phone = "") {
-  return apiPost({
-    action: "register_player",
-    name,
-    phone
-  });
-},
+  setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
   // admin
-  adminListMatches: (adminKey, seasonId) => apiGet({ action: "admin_list_matches", adminKey, seasonId }),
-  adminCreateMatch: (adminKey, payload) => apiPost({ action: "admin_create_match", adminKey, ...payload }),
-  adminCreateSeason: (adminKey, payload) => apiPost({ action: "admin_create_season", adminKey, ...payload }),
-  adminLockRatings: (adminKey, matchId) => apiPost({ action: "admin_lock_ratings", adminKey, matchId }),
-  adminUnlockMatch: (adminKey, matchId) => apiPost({ action: "admin_unlock_match", adminKey, matchId }),
-  adminSetupInternal: (adminKey, payload) => apiPost({ action: "admin_setup_internal", adminKey, ...payload }),
-  adminSetupOpponent: (adminKey, payload) => apiPost({ action: "admin_setup_opponent", adminKey, ...payload }),
+  adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
+  adminCreateMatch: (payload) => apiPost({ action: "admin_create_match", ...payload }),
+  adminCreateSeason: (payload) => apiPost({ action: "admin_create_season", ...payload }),
+  adminUpdateSeason: (payload) => apiPost({ action: "admin_update_season", ...payload }),
+  adminDeleteSeason: (seasonId) => apiPost({ action: "admin_delete_season", seasonId }),
+  adminLockRatings: (matchId) => apiPost({ action: "admin_lock_ratings", matchId }),
+  adminUnlockMatch: (matchId) => apiPost({ action: "admin_unlock_match", matchId }),
+  adminCloseAvailability: (matchId) => apiPost({ action: "admin_close_availability", matchId }),
+  adminOpenAvailability: (matchId) => apiPost({ action: "admin_open_availability", matchId }),
+  adminDeleteMatch: (matchId) => apiPost({ action: "admin_delete_match", matchId }),
+  adminSetupInternal: (payload) => apiPost({ action: "admin_setup_internal", ...payload }),
+  adminSetupOpponent: (payload) => apiPost({ action: "admin_setup_opponent", ...payload }),
+  adminUsers: () => apiGet({ action: "admin_users" }),
+  adminSetAdmin: (name, isAdmin) => apiPost({ action: "admin_set_admin", name, isAdmin: isAdmin ? 1 : 0 }),
+  adminSetPassword: (name, password) => apiPost({ action: "admin_set_password", name, password }),
+  adminDeleteUser: (name) => apiPost({ action: "admin_delete_user", name }),
+
+  // admin: match availability management (for adding players who may not have the app)
+  adminSetAvailabilityFor: (matchId, playerName, availability, note = "") =>
+    apiPost({ action: "admin_set_availability_for", matchId, playerName, availability, note }),
+
+  // user self-service
+  userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
 
   // captain
-  captainSubmitScore: (code, captain, mode, a, b) =>
-    apiPost({ action: "captain_submit_score", code, captain, mode, scoreA: a, scoreB: b }),
-
-  captainSubmitRatingsBatch: (code, captain, rows) =>
-    apiPost({ action: "captain_submit_ratings_batch", code, captain, rows }),
+  captainSubmitScore: (code, mode, a, b, scope = "CAPTAIN") => apiPost({ action: "captain_submit_score", code, mode, scoreA: a, scoreB: b, scope }),
+  adminSubmitScore: (code, mode, a, b) => apiPost({ action: "admin_submit_score", code, mode, scoreA: a, scoreB: b }),
+  captainSubmitRatingsBatch: (code, rows, scope = "CAPTAIN") => apiPost({ action: "captain_submit_ratings_batch", code, rows, scope }),
+  adminSubmitRatingsBatch: (code, rows) => apiPost({ action: "admin_submit_ratings_batch", code, rows }),
 };

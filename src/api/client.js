@@ -1,5 +1,10 @@
 import { CONFIG } from "../config.js";
 
+const LS_TOKEN = "mlfc_token_v1";
+function getToken() {
+  try { return String(localStorage.getItem(LS_TOKEN) || "").trim(); } catch { return ""; }
+}
+
 /**
  * Global loading bar controller:
  * - shows only if request takes >300ms
@@ -58,6 +63,7 @@ export async function apiGet(params) {
           method: "GET",
           cache: "no-store",
           credentials: "omit",
+          headers: (getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}),
         });
         return await res.json();
       } catch (e) {
@@ -90,7 +96,10 @@ export async function apiPost(body) {
       method: "POST",
       cache: "no-store",
       credentials: "omit",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        ...(getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}),
+      },
       body: params.toString(),
     });
 

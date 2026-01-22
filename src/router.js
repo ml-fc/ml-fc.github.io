@@ -3,14 +3,15 @@ import { renderMatchPage } from "./pages/match.js";
 import { renderLeaderboardPage } from "./pages/leaderboard.js";
 import { renderAdminPage } from "./pages/admin.js";
 import { renderCaptainPage } from "./pages/captain.js";
-import { renderRegisterPage } from "./pages/register.js";
+import { renderLoginPage } from "./pages/login.js";
+import { getToken, getCachedUser, refreshMe } from "./auth.js";
 
 const ROUTES = {
   "#/match": renderMatchPage,
   "#/leaderboard": renderLeaderboardPage,
   "#/admin": renderAdminPage,
   "#/captain": renderCaptainPage,
-  "#/register": renderRegisterPage,
+  "#/login": renderLoginPage,
 };
 
 const PAGE_CONTAINERS = {};   // route -> div
@@ -66,7 +67,26 @@ function showOnly(route) {
 
 async function renderRoute() {
   const { path, query, fullHash } = getPathQueryAndHash();
-  const route = ROUTES[path] ? path : "#/match";
+  // Auth guard
+  const hasToken = !!getToken();
+  let route = ROUTES[path] ? path : (hasToken ? "#/match" : "#/login");
+
+  // If not logged in, force login page except for leaderboard
+  if (!hasToken && route !== "#/login" && route !== "#/leaderboard") {
+    window.location.hash = "#/login";
+    return;
+  }
+
+  // If logged in, ensure we have user cached to gate admin
+  if (hasToken && !getCachedUser()) await refreshMe().catch(() => {});
+
+  if (route === "#/admin") {
+    const u = getCachedUser();
+    if (!u?.isAdmin) {
+      window.location.hash = "#/match";
+      return;
+    }
+  }
   const token = setRouteToken();
 
   const container = ensureContainer(route);
@@ -78,7 +98,8 @@ async function renderRoute() {
   // Key behavior:
   // - Switch tabs: no rerender if same hash for that route
   // - Open match detail: hash changes (#/match?code=...) => rerender match page
-  const shouldRender = firstTime || (fullHash !== lastHash);
+  // Login page content depends on auth state, so always re-render it.
+  const shouldRender = firstTime || (fullHash !== lastHash) || route === "#/login";
   LAST_HASH_BY_ROUTE[route] = fullHash;
 
   if (!shouldRender) return;
@@ -106,6 +127,6 @@ async function renderRoute() {
 window.addEventListener("hashchange", renderRoute);
 
 export function startRouter() {
-  if (!window.location.hash) window.location.hash = "#/match";
+  if (!window.location.hash) window.location.hash = (getToken() ? "#/match" : "#/leaderboard");
   renderRoute();
 }

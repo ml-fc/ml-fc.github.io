@@ -2,6 +2,7 @@
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
+import { getCachedUser } from "../auth.js";
 
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
@@ -45,8 +46,8 @@ function normalizeAvail(list) {
 
 function initialRosterFromAvailability(avail) {
   const yes = avail.filter(a => a.availability === "YES").map(a => a.playerName);
-  const maybe = avail.filter(a => a.availability === "MAYBE").map(a => a.playerName);
-  return uniqueSorted([...yes, ...maybe]);
+  // Waiting list players are not confirmed, so we do NOT auto-add them to the roster.
+  return uniqueSorted([...yes]);
 }
 
 function clampInt(x, min=0, max=99) {
@@ -59,12 +60,35 @@ function clampInt(x, min=0, max=99) {
 
 function safeUpper(x){ return String(x || "").trim().toUpperCase(); }
 
+// Some API calls accept a "scope" so the backend can validate permissions.
+// Captain flow defaults to CAPTAIN; when an admin opens the captain page from
+// the admin UI (e.g. #/captain?code=...&src=admin) we send ADMIN.
+function getScopeFromHash() {
+  try {
+    const hash = String(window.location.hash || "");
+    const qs = hash.includes("?") ? hash.split("?").slice(1).join("?") : "";
+    const p = new URLSearchParams(qs);
+    const src = (p.get("src") || "").toLowerCase();
+    return src === "admin" ? "ADMIN" : "CAPTAIN";
+  } catch {
+    return "CAPTAIN";
+  }
+}
+
 export async function renderCaptainPage(root, query) {
   const code = query.get("code");
-  const captain = (query.get("captain") || "").trim();
+  const me = getCachedUser();
+  const captain = String(me?.name || "").trim();
+  const isAdmin = !!me?.isAdmin;
+  const src = (query.get("src") || "match").toLowerCase();
+  const adminMode = isAdmin && src === "admin";
 
-  if (!code || !captain) {
-    root.innerHTML = `<div class="card"><div class="h1">Captain</div><div class="small">Missing code/captain.</div></div>`;
+  if (!code) {
+    root.innerHTML = `<div class="card"><div class="h1">Captain</div><div class="small">Missing code.</div></div>`;
+    return;
+  }
+  if (!captain) {
+    root.innerHTML = `<div class="card"><div class="h1">Captain</div><div class="small">Please login first.</div></div>`;
     return;
   }
 
@@ -91,6 +115,14 @@ export async function renderCaptainPage(root, query) {
         <div class="small" style="margin-top:10px">Ratings are locked.</div>
       </div>
     `;
+    return;
+  }
+
+  const capRow = data.captains || {};
+  const assigned = [capRow.captain1, capRow.captain2]
+    .some(c => String(c || "").trim().toLowerCase() === captain.toLowerCase());
+  if (!adminMode && !assigned) {
+    root.innerHTML = `<div class="card"><div class="h1">Captain</div><div class="small">You are not assigned as captain for this match.</div></div>`;
     return;
   }
 
@@ -144,16 +176,19 @@ export async function renderCaptainPage(root, query) {
   // - INTERNAL: captain can only submit opponent score, so unlock once *their* opponent score field exists.
   // - OPPONENT / other: unlock once both scores exist.
   let ratingsEnabled = false;
-  if (type === "INTERNAL" && captainTeam) {
+  if (!adminMode && type === "INTERNAL" && captainTeam) {
+    // Captains: INTERNAL matches unlock ratings after they submit the opponent score.
     const oppStored = String(m[opponentScoreField] ?? "").trim();
     ratingsEnabled = oppStored !== "";
   } else {
+    // Admins (src=admin) + non-internal: unlock once both scores exist.
     const a = String(m.scoreHome ?? "").trim();
     const b = String(m.scoreAway ?? "").trim();
     ratingsEnabled = a !== "" && b !== "";
   }
 
   function isOpponentPlayer(playerName) {
+    if (adminMode) return true;
     if (type !== "INTERNAL") return true;
     if (!captainTeam) return true;
     const tm = safeUpper(teamMap[playerName]);
@@ -168,7 +203,27 @@ export async function renderCaptainPage(root, query) {
 
   const drafts = {}; // { [playerName]: { rating, goals, assists } }
 
-  const hint = (type === "INTERNAL" && captainTeam)
+  // Prefill drafts from backend if ratings/events already exist.
+  const ratingMap = {};
+  (data.ratings || []).slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
+    .forEach(r => { const p = String(r.playerName||"").trim(); if (p) ratingMap[p] = String(r.rating ?? ""); });
+  const eventMap = {};
+  (data.events || []).slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
+    .forEach(e => {
+      const p = String(e.playerName||"").trim();
+      if (!p) return;
+      eventMap[p] = { goals: String(e.goals ?? ""), assists: String(e.assists ?? "") };
+    });
+
+  // Initialize drafts for any roster player we already have data for.
+  roster.forEach(p => {
+    drafts[p] = drafts[p] || {};
+    if (drafts[p].rating == null || drafts[p].rating === "") drafts[p].rating = ratingMap[p] ?? "";
+    if (drafts[p].goals == null || drafts[p].goals === "") drafts[p].goals = eventMap[p]?.goals ?? "";
+    if (drafts[p].assists == null || drafts[p].assists === "") drafts[p].assists = eventMap[p]?.assists ?? "";
+  });
+
+  const hint = (!adminMode && type === "INTERNAL" && captainTeam)
     ? `<span style="opacity:.75">• You can only put <b>opponent</b> score.</span>`
     : "";
 
@@ -195,6 +250,7 @@ export async function renderCaptainPage(root, query) {
       .rosterGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
       .teamPills { display:flex; gap:8px; justify-content:flex-start; flex-wrap:wrap; }
       .teamPills .btn { padding: 8px 10px; border-radius: 12px; }
+      .tinyBtn { padding: 6px 8px !important; border-radius: 10px !important; font-size: 12px !important; }
       .pill { display:inline-block; padding: 4px 10px; border-radius:999px; background: rgba(11,18,32,0.06); font-weight:950; }
       .inlineNote { margin-top:6px; }
     </style>
@@ -207,7 +263,7 @@ export async function renderCaptainPage(root, query) {
       </div>
       <div class="small" style="margin-top:10px">${when}</div>
       <div class="small" style="margin-top:6px"><b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}</div>
-      ${type === "INTERNAL" && captainTeam ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
+      ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">Open match</button>
         <button class="btn gray" id="refreshMatch">Refresh match data</button>
@@ -222,7 +278,7 @@ export async function renderCaptainPage(root, query) {
       </div>
 
       ${
-        (type === "INTERNAL" && captainTeam) ? `
+        (type === "INTERNAL" && captainTeam && !adminMode) ? `
           <div class="scoreGrid">
             <div class="scoreBox">
               <div class="scoreLabel">${captainTeam} score (read-only)</div>
@@ -251,7 +307,7 @@ export async function renderCaptainPage(root, query) {
 
     <div class="card">
       <div class="h1">Roster</div>
-      <div class="small">Roster starts from YES/MAYBE availability. Add more players if someone joins late.</div>
+      <div class="small">Roster starts from confirmed YES availability. Add more players if someone joins late.</div>
 
       <details class="card" style="margin-top:10px">
         <summary style="font-weight:950">Players who posted availability (${postedPlayers.length})</summary>
@@ -273,12 +329,12 @@ export async function renderCaptainPage(root, query) {
       </div>
 
       <div id="ratingsGate" class="small" style="margin-top:12px; ${ratingsEnabled ? "display:none" : ""}">
-        <span class="pill">Step 1</span> Submit your opponent score to unlock ratings.
+        <span class="pill">Step 1</span> ${adminMode ? "Submit the score to unlock ratings." : "Submit your opponent score to unlock ratings."}
       </div>
 
       <div id="ratingsSection" style="margin-top:12px; ${ratingsEnabled ? "" : "display:none"}">
         ${
-          (type === "INTERNAL" && captainTeam) ? `
+        (!adminMode && type === "INTERNAL" && captainTeam) ? `
             <div class="small" style="margin-bottom:8px">
               <span class="pill">Rating</span> Rate <b>${opponentTeam}</b> players (switch a player to <b>${opponentTeam}</b> to show the rating box).
             </div>
@@ -317,7 +373,7 @@ export async function renderCaptainPage(root, query) {
 
   // Prefill score UI (no extra fetch)
   try {
-    if (type === "INTERNAL" && captainTeam) {
+    if (!adminMode && type === "INTERNAL" && captainTeam) {
       const homeLabel = root.querySelector("#homeScoreLabel");
       const oppInput = root.querySelector("#oppScoreInput");
       const homeScore = (captainTeam === "BLUE") ? String(m.scoreHome ?? "").trim() : String(m.scoreAway ?? "").trim();
@@ -367,7 +423,7 @@ export async function renderCaptainPage(root, query) {
     try {
       let out;
 
-      if (type === "INTERNAL" && captainTeam) {
+      if (!adminMode && type === "INTERNAL" && captainTeam) {
         const oppInput = root.querySelector("#oppScoreInput");
         const oppVal = clampInt(String(oppInput?.value ?? "").trim(), 0, 99);
         if (oppVal == null) {
@@ -378,10 +434,10 @@ export async function renderCaptainPage(root, query) {
 
         // Partial update: send only opponent side (backend supports COALESCE)
         if (captainTeam === "BLUE") {
-          out = await API.captainSubmitScore(code, captain, "INTERNAL", "", String(oppVal));
+          out = await API.captainSubmitScore(code, "INTERNAL", "", String(oppVal));
           m.scoreAway = String(oppVal);
         } else {
-          out = await API.captainSubmitScore(code, captain, "INTERNAL", String(oppVal), "");
+          out = await API.captainSubmitScore(code, "INTERNAL", String(oppVal), "");
           m.scoreHome = String(oppVal);
         }
 
@@ -398,6 +454,7 @@ export async function renderCaptainPage(root, query) {
         root.querySelector("#ratingsGate").style.display = "none";
         root.querySelector("#ratingsSection").style.display = "block";
         ratingsEnabled = true;
+        renderRows();
       } else {
         const sAEl = root.querySelector("#scoreA");
         const sBEl = root.querySelector("#scoreB");
@@ -409,7 +466,7 @@ export async function renderCaptainPage(root, query) {
           return;
         }
 
-        out = await API.captainSubmitScore(code, captain, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b));
+        out = await API.captainSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b));
 
         if (!out.ok) {
           msg.textContent = out.error || "Failed";
@@ -426,6 +483,7 @@ export async function renderCaptainPage(root, query) {
         root.querySelector("#ratingsGate").style.display = "none";
         root.querySelector("#ratingsSection").style.display = "block";
         ratingsEnabled = true;
+        renderRows();
       }
 
       // Update label if present
@@ -450,9 +508,6 @@ export async function renderCaptainPage(root, query) {
     const f = String(searchEl.value || "").trim().toLowerCase();
     const list = f ? roster.filter(p => p.toLowerCase().includes(f)) : roster;
 
-    // Display order:
-    // - Players who can be rated (opponent team, when ratings are enabled) come first
-    // - Your team players (and any non-rateable entries) come after
     const ordered = [...list].sort((a, b) => {
       const aRateable = !!(ratingsEnabled && isOpponentPlayer(a));
       const bRateable = !!(ratingsEnabled && isOpponentPlayer(b));
@@ -460,86 +515,192 @@ export async function renderCaptainPage(root, query) {
       return String(a).localeCompare(String(b));
     });
 
-    bodyEl.innerHTML = ordered.map(p => {
-      const tm = safeUpper(teamMap[p] || "BLUE");
-      const canEdit = ratingsEnabled && isOpponentPlayer(p);
+    const isInternalCaptainView = !adminMode && type === "INTERNAL" && captainTeam && opponentTeam;
+    const isOpponentMatch = type !== "INTERNAL";
 
-      const d = drafts[p] || {};
-      const ratingCell = canEdit
-        ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
-        : `<span class="small muted">—</span>`;
+    const oppList = isInternalCaptainView ? ordered.filter(p => isOpponentPlayer(p)) : ordered;
+    const myList = isInternalCaptainView ? ordered.filter(p => !isOpponentPlayer(p)) : [];
 
-      const goalsCell = canEdit
-        ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
-        : `<span class="small muted">—</span>`;
-
-      const assistsCell = canEdit
-        ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
-        : `<span class="small muted">—</span>`;
-
-      return `
-        <tr style="border-top:1px solid rgba(11,18,32,0.06)">
-          <td style="padding:10px; font-weight:950">${p}</td>
-          <td style="padding:10px; text-align:center">
-            <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
-              <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
-              <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
-            </div>
-          </td>
-          <td style="padding:10px; text-align:center">${ratingCell}</td>
-          <td style="padding:10px; text-align:center">${goalsCell}</td>
-          <td style="padding:10px; text-align:center">${assistsCell}</td>
-          <td style="padding:10px; text-align:center">
-            <button class="btn gray" data-remove="${encodeURIComponent(p)}" style="padding:8px 10px; border-radius:12px">Remove</button>
-          </td>
-        </tr>
-      `;
-    }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
-
-    mobileWrap.innerHTML = ordered.map(p => {
+    function playerCardHtml(p) {
       const tm = safeUpper(teamMap[p] || "BLUE");
       const canEdit = ratingsEnabled && isOpponentPlayer(p);
       const d = drafts[p] || {};
+
+      const ratingInput = canEdit
+        ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="text-align:center" value="${d.rating ?? ""}" />`
+        : `<div class="small muted">—</div>`;
+
+      const goalsInput = canEdit
+        ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="text-align:center" value="${d.goals ?? ""}" />`
+        : `<div class="small muted">—</div>`;
+
+      const assistsInput = canEdit
+        ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="text-align:center" value="${d.assists ?? ""}" />`
+        : `<div class="small muted">—</div>`;
+
+      let moveBtns = "";
+      if (isInternalCaptainView) {
+        const onMyTeam = (safeUpper(teamMap[p]) || "") === captainTeam;
+        moveBtns = onMyTeam
+          ? `<button class="btn gray tinyBtn" data-move="${encodeURIComponent(p)}" data-move-to="OPP">Move to opponent</button>`
+          : `<button class="btn gray tinyBtn" data-move="${encodeURIComponent(p)}" data-move-to="MY">Move to my team</button>`;
+      } else if (!isOpponentMatch) {
+        // admin/internal or legacy: keep Blue/Orange assignment
+        moveBtns = `
+          <div class="row" style="gap:6px; flex-wrap:wrap">
+            <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
+            <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
+          </div>
+        `;
+      } else {
+        // opponent match: no team buttons
+        moveBtns = `<span class="small muted">MLFC vs Opponent</span>`;
+      }
 
       return `
         <div class="rosterCard">
           <div style="font-weight:950; font-size:16px">${p}</div>
           <div class="muted" style="margin-top:6px; font-size:12px">Team</div>
-          <div class="teamPills" style="margin-top:6px">
-            <button class="btn good" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
-            <button class="btn warn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
-            <button class="btn gray" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>
+          <div class="teamPills" style="margin-top:6px; gap:6px">
+            ${moveBtns}
+            <button class="btn gray tinyBtn" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>
           </div>
 
-          ${
-            canEdit ? `
-              <div class="rosterGrid">
-                <div>
-                  <div class="muted" style="font-size:12px">Rating</div>
-                  <input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="text-align:center" value="${d.rating ?? ""}" />
-                </div>
-                <div>
-                  <div class="muted" style="font-size:12px">Goals</div>
-                  <input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="text-align:center" value="${d.goals ?? ""}" />
-                </div>
-                <div>
-                  <div class="muted" style="font-size:12px">Assists</div>
-                  <input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="text-align:center" value="${d.assists ?? ""}" />
-                </div>
+          ${canEdit ? `
+            <div class="rosterGrid">
+              <div>
+                <div class="muted" style="font-size:12px">Rating</div>
+                ${ratingInput}
               </div>
-            ` : `
-              <div class="small muted" style="margin-top:10px">No rating box (not opponent).</div>
-            `
-          }
+              <div>
+                <div class="muted" style="font-size:12px">Goals</div>
+                ${goalsInput}
+              </div>
+              <div>
+                <div class="muted" style="font-size:12px">Assists</div>
+                ${assistsInput}
+              </div>
+            </div>
+          ` : `
+            <div class="small muted" style="margin-top:10px">${ratingsEnabled ? "No rating box (not opponent)." : "Submit score to unlock ratings."}</div>
+          `}
         </div>
       `;
-    }).join("") || `<div class="small">No players in roster.</div>`;
+    }
 
+    // Desktop table is kept for admin + wide screens only
+    if (!isInternalCaptainView && !isOpponentMatch) {
+      const tableHtml = ordered.map(p => {
+        const tm = safeUpper(teamMap[p] || "BLUE");
+        const canEdit = ratingsEnabled && isOpponentPlayer(p);
+        const d = drafts[p] || {};
+        const ratingCell = canEdit
+          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          : `<span class="small muted">—</span>`;
+        const goalsCell = canEdit
+          ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
+          : `<span class="small muted">—</span>`;
+        const assistsCell = canEdit
+          ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
+          : `<span class="small muted">—</span>`;
+        return `
+          <tr style="border-top:1px solid rgba(11,18,32,0.06)">
+            <td style="padding:10px; font-weight:950">${p}</td>
+            <td style="padding:10px; text-align:center">
+              <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
+                <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
+                <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
+              </div>
+            </td>
+            <td style="padding:10px; text-align:center">${ratingCell}</td>
+            <td style="padding:10px; text-align:center">${goalsCell}</td>
+            <td style="padding:10px; text-align:center">${assistsCell}</td>
+            <td style="padding:10px; text-align:center">
+              <button class="btn gray" data-remove="${encodeURIComponent(p)}" style="padding:8px 10px; border-radius:12px">Remove</button>
+            </td>
+          </tr>
+        `;
+      }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
+      bodyEl.innerHTML = tableHtml;
+      mobileWrap.innerHTML = ordered.map(playerCardHtml).join("") || `<div class="small">No players in roster.</div>`;
+    } else {
+      // Internal captain view or opponent match:
+      // Keep table rows for desktop (tbody must contain <tr>), and render the clearer
+      // sectioned card layout into the dedicated mobile container.
+
+      const tableHtml = ordered.map(p => {
+        const tm = safeUpper(teamMap[p] || "BLUE");
+        const canEdit = ratingsEnabled && isOpponentPlayer(p);
+        const d = drafts[p] || {};
+
+        const ratingCell = canEdit
+          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          : `<div class="small muted">—</div>`;
+
+        const goalsCell = canEdit
+          ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
+          : `<div class="small muted">—</div>`;
+
+        const assistsCell = canEdit
+          ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
+          : `<div class="small muted">—</div>`;
+
+        const moveBtn = isInternalCaptainView
+          ? `<button class="btn gray" data-move="${encodeURIComponent(p)}" data-move-to="${isOpponentPlayer(p) ? "MY" : "OPP"}" style="padding:6px 10px; border-radius:12px; font-size:12px">${isOpponentPlayer(p) ? "Move to my team" : "Move to opponent"}</button>`
+          : ``;
+
+        return `
+          <tr style="border-top:1px solid rgba(11,18,32,0.08)">
+            <td style="padding:10px">${p}</td>
+            <td style="padding:10px; text-align:center">
+              ${isInternalCaptainView ? moveBtn : `<span class="badge" style="background:${tm === "ORANGE" ? "#f97316" : "#2563eb"}; color:#fff">${tm}</span>`}
+            </td>
+            <td style="padding:10px; text-align:center">${ratingCell}</td>
+            <td style="padding:10px; text-align:center">${goalsCell}</td>
+            <td style="padding:10px; text-align:center">${assistsCell}</td>
+            <td style="padding:10px; text-align:center"><button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button></td>
+          </tr>
+        `;
+      }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
+
+      bodyEl.innerHTML = tableHtml;
+
+      // Mobile: show sections (opponent to rate, my team collapsed)
+      mobileWrap.innerHTML = `
+        ${isInternalCaptainView ? `
+          <div class="card" style="margin-top:10px">
+            <div style="font-weight:950">Opponent (rate these)</div>
+            <div style="margin-top:8px">${oppList.map(playerCardHtml).join("") || `<div class="small">No players.</div>`}</div>
+          </div>
+          <details class="card" style="margin-top:10px">
+            <summary style="font-weight:950">My team (collapsed)</summary>
+            <div style="margin-top:8px">${myList.map(playerCardHtml).join("") || `<div class="small">No players.</div>`}</div>
+          </details>
+        ` : `
+          <div class="card" style="margin-top:10px">
+            ${ordered.map(playerCardHtml).join("") || `<div class="small">No players.</div>`}
+          </div>
+        `}
+      `;
+    }
+
+    // Bind move/team/remove
     root.querySelectorAll("[data-team]").forEach(btn => {
       btn.onclick = () => {
         const team = btn.getAttribute("data-team");
         const p = decodeURIComponent(btn.getAttribute("data-p"));
         teamMap[p] = team;
+        saveTeamsLocal();
+        renderRows();
+      };
+    });
+
+    root.querySelectorAll("[data-move]").forEach(btn => {
+      btn.onclick = () => {
+        const p = decodeURIComponent(btn.getAttribute("data-move"));
+        const to = btn.getAttribute("data-move-to");
+        if (to === "MY") teamMap[p] = captainTeam;
+        else teamMap[p] = opponentTeam;
         saveTeamsLocal();
         renderRows();
       };
@@ -615,7 +776,7 @@ export async function renderCaptainPage(root, query) {
 
         // INTERNAL captain flow: require ratings for ALL ratable (opponent) players.
         // Other match types keep the "rate whoever you want" behavior.
-        const requireAll = (type === "INTERNAL" && !!captainTeam);
+        const requireAll = !adminMode; // captains must rate all required opponents; admins may submit partial
 
         const rows = [];
         const missing = [];
@@ -660,7 +821,18 @@ export async function renderCaptainPage(root, query) {
           return;
         }
 
-        const out = await API.captainSubmitRatingsBatch(code, captain, rows);
+        // Opponent match: ensure MLFC score matches total goals entered
+        if (type !== "INTERNAL") {
+          const mlfcScore = clampInt(String(m.scoreHome ?? "").trim(), 0, 99);
+          if (mlfcScore != null) {
+            const totalGoals = rows.reduce((s,r)=>s+Number(r.goals||0),0);
+            if (totalGoals !== mlfcScore) {
+              throw new Error(`MLFC score (${mlfcScore}) must match total goals entered (${totalGoals}).`);
+            }
+          }
+        }
+
+        const out = await API.captainSubmitRatingsBatch(code, rows, getScopeFromHash());
         if (!out.ok) {
           msg.textContent = out.error || "Failed";
           toastError(out.error || "Submit failed");

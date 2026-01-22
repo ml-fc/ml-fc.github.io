@@ -2,6 +2,7 @@
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
+import { getCachedUser } from "../auth.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -21,9 +22,22 @@ let SUPPRESS_META_ONCE = false;
 // When users switch away and back to the Match tab, we still need to check
 // for new matches (meta banner). We keep references to the last rendered
 // match list root and re-check meta on tab activation.
-let ACTIVE_MATCH = { pageRoot: null, listRoot: null, seasonId: "", seasons: [] };
+let ACTIVE_MATCH = { pageRoot: null, listRoot: null, seasonId: "", seasons: [], captainCodes: [] };
 let MATCH_META_LAST_CHECK = 0;
 let MATCH_META_LISTENERS_INSTALLED = false;
+
+function matchTeamLabel(m, side) {
+  const t = String(m?.type || "").toUpperCase();
+  if (t === "INTERNAL") return side === "HOME" ? "BLUE" : "ORANGE";
+  return side === "HOME" ? "MLFC" : "OPPONENT";
+}
+
+function formatResultLabel(m) {
+  const a = String(m?.scoreHome ?? "").trim();
+  const b = String(m?.scoreAway ?? "").trim();
+  if (a === "" || b === "") return "";
+  return `${matchTeamLabel(m, "HOME")} ${a} - ${b} ${matchTeamLabel(m, "AWAY")}`;
+}
 
 function isMatchRouteActive() {
   const hash = window.location.hash || "#/match";
@@ -145,6 +159,8 @@ function getLatestOpenCode(openMatches) {
 // Prefetch details for all open matches and store in localStorage cache.
 // Runs in background; never blocks UI.
 function prefetchOpenMatchDetails(openMatches) {
+  // To reduce Cloudflare free-tier API usage, only prefetch on a browser reload of the match list.
+  if (!isReloadForMatchList()) return;
   const list = Array.isArray(openMatches) ? openMatches : [];
   const toFetch = list.filter(m => {
     const code = m?.publicCode;
@@ -203,7 +219,7 @@ function injectSeasonSelector(root, seasons, seasonId) {
     setTimeout(() => scheduleMatchMetaCheck("load"), 0);
 
     // If this season has no cached open matches yet, fetch once to populate.
-    if (!(c?.matches && c.matches.length)) {
+    if (!c || !Array.isArray(c.matches)) {
       API.publicOpenMatches(sid)
         .then(res => {
           if (!res?.ok) return;
@@ -220,16 +236,39 @@ function injectSeasonSelector(root, seasons, seasonId) {
 }
 
 
+const MAX_AVAILABLE = 22;
+
 function availabilityGroups(av) {
-  const yes = uniqueSorted(av.filter(x=>x.availability==="YES").map(x=>x.playerName));
-  const no = uniqueSorted(av.filter(x=>x.availability==="NO").map(x=>x.playerName));
-  const maybe = uniqueSorted(av.filter(x=>x.availability==="MAYBE").map(x=>x.playerName));
-  return { yes, no, maybe };
+  const byTs = (a, b) => {
+    const ta = String(a?.timestamp || "");
+    const tb = String(b?.timestamp || "");
+    return ta.localeCompare(tb);
+  };
+
+  // Keep YES / WAITING list ordering by timestamp (first come, first served).
+  const yes = av
+    .filter((x) => x.availability === "YES")
+    .slice()
+    .sort(byTs)
+    .map((x) => x.playerName)
+    .filter(Boolean);
+
+  const waiting = av
+    .filter((x) => x.availability === "WAITING")
+    .slice()
+    .sort(byTs)
+    .map((x) => x.playerName)
+    .filter(Boolean);
+
+  // NO is informational only; alphabetical is fine.
+  const no = uniqueSorted(av.filter((x) => x.availability === "NO").map((x) => x.playerName));
+
+  return { yes, no, waiting };
 }
 
 function whatsappAvailabilityMessage(match, availability) {
   const when = formatHumanDateTime(match.date, match.time);
-  const { yes, no, maybe } = availabilityGroups(availability);
+  const { yes, no, waiting } = availabilityGroups(availability);
 
   const lines = [];
   lines.push(`match details : ${match.title}`);
@@ -241,8 +280,8 @@ function whatsappAvailabilityMessage(match, availability) {
   (yes.length ? yes : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
   lines.push("not available");
   (no.length ? no : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
-  lines.push("maybe");
-  (maybe.length ? maybe : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
+  lines.push("waiting list");
+  (waiting.length ? waiting : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
   lines.push("");
   lines.push(`link : ${baseUrl()}#/match?code=${match.publicCode}`);
   return lines.join("\n");
@@ -267,10 +306,12 @@ async function loadSeasons() {
 function pickSelectedSeason(seasonsRes) {
   const seasons = seasonsRes.seasons || [];
   const current = seasonsRes.currentSeasonId || seasons[0]?.seasonId || "";
+  const hadStored = !!localStorage.getItem(LS_SELECTED_SEASON);
   let selected = localStorage.getItem(LS_SELECTED_SEASON) || "";
   if (!seasons.some(s=>s.seasonId===selected)) selected = current;
   if (selected) localStorage.setItem(LS_SELECTED_SEASON, selected);
-  return { seasons, selected };
+  const defaulted = !hadStored;
+  return { seasons, selected, defaulted };
 }
 
 async function getPlayersCached() {
@@ -308,6 +349,7 @@ function renderBanner(root, html) {
 }
 
 async function checkMetaAndShowBanner(pageRoot, seasonId) {
+  // Check meta when Match tab is active (throttled); used for update banner + captain tags.
   const listRoot = pageRoot.querySelector("#matchListView");
   if (!listRoot) return;
 
@@ -318,6 +360,18 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
     renderBanner(listRoot, "");
     return;
   }
+
+  ACTIVE_MATCH.captainCodes = Array.isArray(res.captainCodes) ? res.captainCodes : [];
+
+  // Update CAPTAIN badges in-place so they show up immediately after a hard refresh
+  // (the match list is rendered from cache before meta returns).
+  try {
+    const codes = new Set(ACTIVE_MATCH.captainCodes || []);
+    listRoot.querySelectorAll("[data-captain-badge]").forEach(el => {
+      const c = el.getAttribute("data-captain-badge") || "";
+      el.style.display = codes.has(c) ? "inline-flex" : "none";
+    });
+  } catch {}
 
   const next = { ts: now(), fingerprint: res.fingerprint || "", latestCode: res.latestCode || "" };
   lsSet(metaKey(seasonId), next);
@@ -335,20 +389,27 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
 
   if (!isNew) { renderBanner(listRoot, ""); return; }
 
+  // Mark open list as potentially stale so clicking Open can refresh from API if needed.
+  ACTIVE_MATCH.openListStale = true;
+
   renderBanner(listRoot, `
     <div class="card" style="border:1px solid rgba(16,185,129,0.35); background: rgba(16,185,129,0.10)">
       <div class="row" style="justify-content:space-between; align-items:center">
         <div style="min-width:0">
-          <div style="font-weight:950">New match available</div>
-          <div class="small">Tap Update to refresh open matches list.</div>
+          <div style="font-weight:950">Match updates available</div>
+          <div class="small">Tap Update to refresh open matches list (scores/captains may have changed).</div>
         </div>
-        <div class="row" style="gap:10px">
+        <div class="row" style="gap:10px; align-items:center">
           <button class="btn primary" id="metaUpdateBtn">Update</button>
           ${next.latestCode ? `<button class="btn gray" id="metaOpenBtn">Open</button>` : ""}
+          <button class="btn gray" id="metaCloseBtn" title="Dismiss" style="padding:8px 10px; border-radius:12px">×</button>
         </div>
       </div>
     </div>
   `);
+
+  const closeBtn = listRoot.querySelector("#metaCloseBtn");
+  if (closeBtn) closeBtn.onclick = () => { renderBanner(listRoot, ""); };
 
   const up = listRoot.querySelector("#metaUpdateBtn");
   if (up) up.onclick = async () => {
@@ -367,6 +428,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
 
     // Update cache
     lsSet(openKey(seasonId), { ts: now(), matches: out.matches || [] });
+    ACTIVE_MATCH.openListStale = false;
 
     // Update meta cache too so banner won't immediately reappear
     const prevMeta = lsGet(metaKey(seasonId));
@@ -431,8 +493,10 @@ function renderMatchList(root, seasonId, openMatches) {
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
                 <div style="font-weight:950">${m.title}</div>
                 ${m.publicCode === latestCode ? `<span class="badge" style="background:#16a34a;color:#fff">LATEST</span>` : ""}
+                <span class="badge" data-captain-badge="${m.publicCode}" style="background:#111827;color:#fff; display:${ACTIVE_MATCH.captainCodes?.includes?.(m.publicCode) ? "inline-flex" : "none"}">CAPTAIN</span>
               </div>
               <div class="small">${formatHumanDateTime(m.date,m.time)} • ${m.type} • ${m.status}</div>
+              ${formatResultLabel(m) ? `<div class="small" style="margin-top:4px"><b>Result:</b> ${formatResultLabel(m)}</div>` : ``}
               <div class="row" style="margin-top:8px">
                 <button class="btn primary" data-open="${m.publicCode}">Open</button>
               </div>
@@ -453,7 +517,23 @@ function renderMatchList(root, seasonId, openMatches) {
   `;
 
   list.querySelectorAll("[data-open]").forEach(btn=>{
-    btn.onclick=()=>{ location.hash = `#/match?code=${encodeURIComponent(btn.getAttribute("data-open"))}`; };
+    btn.onclick = async () => {
+      const code = btn.getAttribute("data-open");
+      if (!code) return;
+
+      // If meta says our open list is stale (score/captain changes), refresh once before opening.
+      if (ACTIVE_MATCH.openListStale) {
+        try {
+          const out = await API.publicOpenMatches(seasonId);
+          if (out?.ok) {
+            lsSet(openKey(seasonId), { ts: now(), matches: out.matches || [] });
+            ACTIVE_MATCH.openListStale = false;
+          }
+        } catch {}
+      }
+
+      location.hash = `#/match?code=${encodeURIComponent(code)}`;
+    };
   });
 
   // Per requirement: no Refresh Open / Clear cache buttons here.
@@ -492,6 +572,7 @@ function renderPastArea(root, seasonId) {
         <div style="padding:10px 0; border-bottom:1px solid rgba(11,18,32,0.10)">
           <div style="font-weight:950">${m.title}</div>
           <div class="small">${formatHumanDateTime(m.date,m.time)} • ${m.type} • ${m.status}</div>
+          ${formatResultLabel(m) ? `<div class="small" style="margin-top:4px"><b>Result:</b> ${formatResultLabel(m)}</div>` : ``}
           <div class="row" style="margin-top:8px">
             <button class="btn gray" data-open="${m.publicCode}">View</button>
           </div>
@@ -513,7 +594,17 @@ async function renderMatchDetail(root, code) {
   const cached = lsGet(detailKey(code))?.data;
   let data = cached;
 
-  const shouldFetch = isReloadForMatchCode(code) || !data?.ok;
+  // If match meta fingerprint changed since we cached this detail, force a refetch.
+  let metaChanged = false;
+  try {
+    const sid = cached?.match?.seasonId || ACTIVE_MATCH.seasonId || lsGet(LS_SELECTED_SEASON);
+    const currentFp = sid ? lsGet(metaKey(sid))?.fingerprint : "";
+    const cachedFp = lsGet(detailKey(code))?.metaFingerprint;
+    if (currentFp && cachedFp && currentFp !== cachedFp) metaChanged = true;
+  } catch {}
+
+  // Fetch match details only on browser reload of this match, or if not cached.
+  const shouldFetch = isReloadForMatchCode(code) || !data?.ok || metaChanged;
 
   if (shouldFetch) {
     if (!data?.ok) {
@@ -526,12 +617,21 @@ async function renderMatchDetail(root, code) {
       return toastError(res.error||"Failed");
     }
     data = res;
-    lsSet(detailKey(code), { ts: now(), data });
+    // Remember current meta fingerprint so we can detect changes later.
+    let fp = "";
+    try {
+      const sid = data?.match?.seasonId || ACTIVE_MATCH.seasonId || lsGet(LS_SELECTED_SEASON);
+      fp = sid ? String(lsGet(metaKey(sid))?.fingerprint || "") : "";
+    } catch {}
+    lsSet(detailKey(code), { ts: now(), data, metaFingerprint: fp });
   }
 
   const m = data.match;
   const when = formatHumanDateTime(m.date, m.time);
   const status = String(m.status||"").toUpperCase();
+  const me = getCachedUser();
+  const meName = String(me?.name || "").trim();
+  const meIsAdmin = !!me?.isAdmin;
 
   let availability = (data.availability || []).map(a=>({
     playerName: String(a.playerName||"").trim(),
@@ -540,234 +640,203 @@ async function renderMatchDetail(root, code) {
 
   function renderAvailLists() {
     const g = availabilityGroups(availability);
+    const yesCount = Math.min(g.yes.length, MAX_AVAILABLE);
+
+    const yesHdr = detail.querySelector("#yesHdr");
+    if (yesHdr) yesHdr.textContent = `Available (${yesCount}/${MAX_AVAILABLE})`;
+
     detail.querySelector("#yesList").innerHTML = g.yes.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
     detail.querySelector("#noList").innerHTML = g.no.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
-    detail.querySelector("#maybeList").innerHTML = g.maybe.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
+    detail.querySelector("#waitList").innerHTML = g.waiting.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
+
+    // Waiting list button is only enabled once quota is reached.
+    const btnWait = detail.querySelector("#btnWait");
+    if (btnWait) {
+      const quotaReached = yesCount >= MAX_AVAILABLE;
+      btnWait.disabled = !meName || !quotaReached;
+      btnWait.title = quotaReached ? "" : `Waiting list unlocks when ${MAX_AVAILABLE} players are available.`;
+    }
   }
+
+  const caps = data.captains || {};
+  const isCaptain = !!meName && [caps.captain1, caps.captain2].some(c => String(c || "").trim().toLowerCase() === meName.toLowerCase());
+
+  const teamsSelected = Array.isArray(data.teams) && data.teams.length > 0;
+  // Availability should NOT auto-close when captains are selected.
+  // Instead, admin can explicitly close availability (match.availabilityLocked=1), and ratings lock will also close it.
+  const availabilityClosed = Number(m.availabilityLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
+  // Captains should only proceed once availability is explicitly closed (admin button / ratings lock).
+  const captainPageEnabled = !!availabilityClosed;
+  // Availability visibility should depend only on availabilityClosed (admin button / ratings lock),
+  // NOT on whether captains/teams have been selected.
+  const hideAvailability = false;
+  const teamForPlayer = {};
+  (data.teams || []).forEach(t=>{ const pn=String(t.playerName||'').trim(); const tm=String(t.team||'').trim(); if(pn&&tm) teamForPlayer[pn]=tm; });
+  const scoreHome = String(m.scoreHome ?? "").trim();
+  const scoreAway = String(m.scoreAway ?? "").trim();
+  const hasScore = scoreHome !== "" && scoreAway !== "";
+
+  function teamLabel(side) {
+    // side: "HOME" | "AWAY"
+    const t = String(m.type || "").toUpperCase();
+    if (t === "INTERNAL") return side === "HOME" ? "BLUE" : "ORANGE";
+    return side === "HOME" ? "MLFC" : "OPPONENT";
+  }
+
+  function resultInline() {
+    if (!hasScore) return "";
+    return `${teamLabel("HOME")} ${scoreHome} - ${scoreAway} ${teamLabel("AWAY")}`;
+  }
+
+  // Build scorers list from events (if backend provided it)
+  const events = Array.isArray(data.events) ? data.events : [];
+  const scorerMap = {};
+  for (const e of events) {
+    const n = String(e?.playerName || "").trim();
+    const g = Number(e?.goals ?? 0);
+    const a = Number(e?.assists ?? 0);
+    if (!n) continue;
+    if (!scorerMap[n]) scorerMap[n] = { goals: 0, assists: 0, team: teamForPlayer[n] || "" };
+    if (Number.isFinite(g)) scorerMap[n].goals += Math.max(0, Math.floor(g));
+    if (Number.isFinite(a)) scorerMap[n].assists += Math.max(0, Math.floor(a));
+    if (!scorerMap[n].team && teamForPlayer[n]) scorerMap[n].team = teamForPlayer[n];
+  }
+  const scorers = Object.entries(scorerMap)
+    .filter(([_, v]) => (v.goals || 0) > 0)
+    .sort((a, b) => (b[1].goals - a[1].goals) || a[0].localeCompare(b[0]))
+    .map(([name, v]) => ({ name, goals: v.goals, assists: v.assists, team: v.team || "" }));
+
+  // Group scorers by team when possible
+  const scorersByTeam = {};
+  for (const s of scorers) {
+    const t = String(s.team || "").trim().toUpperCase() || "UNKNOWN";
+    if (!scorersByTeam[t]) scorersByTeam[t] = [];
+    scorersByTeam[t].push(s);
+  }
+
 
   detail.innerHTML = `
     <div class="card">
       <div style="font-weight:950; font-size:18px">${m.title}</div>
       <div class="small" style="margin-top:6px">${when} • ${m.type} • ${m.status}</div>
       <div class="small" id="detailMsg" style="margin-top:10px">Refresh your browser to reload match details from the server.</div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between; align-items:center">
-        <div class="h1">Availability</div>
-        <div class="row" style="gap:10px; align-items:center">
-          <button class="btn primary" id="shareBtn">Share</button>
-          <button class="btn gray" id="refreshNamesBtn" title="Refresh names" style="padding:8px 10px;border-radius:12px">Refresh Players ↻</button>
+      ${isCaptain ? `
+        <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+          ${isCaptain ? `<span class="badge">CAPTAIN</span>` : ``}
+          <button class="btn primary" id="openCaptain" ${captainPageEnabled ? "" : "disabled"} title="${captainPageEnabled ? "" : "Captain page unlocks after availability is closed by admin."}">Open captain page</button>
         </div>
-      </div>
-
-      ${
-        status === "OPEN"
-          ? `
-            <div class="small">Search your name, then select it from the list (only registered players are allowed).</div>
-            <div style="position:relative; margin-top:10px">
-              <input id="playerSearch" class="input"
-                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                placeholder="Type to search players…" />
-              <div id="playerDropdown"
-                style="position:absolute; left:0; right:0; top:46px; z-index:50; display:none; max-height:220px; overflow:auto; border:1px solid rgba(11,18,32,0.12); background:#fff; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.08)"></div>
-            </div>
-
-
-            <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-              <button class="btn good" id="btnYes" disabled>YES</button>
-              <button class="btn bad" id="btnNo" disabled>NO</button>
-              <button class="btn warn" id="btnMaybe" disabled>MAYBE</button>
-            </div>
-
-            <div class="small" id="saveMsg" style="margin-top:10px"></div>
-          `
-          : `<div class="small">This match is not open.</div>`
-      }
-
-      <div class="hr"></div>
-
-      <div class="small"><b>Available</b></div>
-      <ol id="yesList" class="list"></ol>
-
-      <div class="small" style="margin-top:10px"><b>Not available</b></div>
-      <ol id="noList" class="list"></ol>
-
-      <div class="small" style="margin-top:10px"><b>Maybe</b></div>
-      <ol id="maybeList" class="list"></ol>
+        ${captainPageEnabled ? `` : `<div class="small" style="margin-top:8px"><b>Note:</b> Captain page will unlock after admin closes availability.</div>`}
+      ` : ``}
     </div>
+
+    ${hasScore ? `
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+          <div class="h1">Match result</div>
+          <div class="small"><b>${resultInline()}</b></div>
+        </div>
+
+        <div class="small" style="margin-top:8px">
+          <b>Home:</b> ${m.type === "INTERNAL" ? "BLUE" : "MLFC"} &nbsp; • &nbsp; <b>Away:</b> ${m.type === "INTERNAL" ? "ORANGE" : "OPPONENT"}
+        </div>
+
+        ${scorers.length ? `
+          <div class="small" style="margin-top:10px"><b>Scorers</b></div>
+          <div class="small" style="margin-top:6px">
+            ${
+              Object.keys(scorersByTeam).length > 1
+                ? Object.entries(scorersByTeam)
+                    .map(([team, list]) => `<div style="margin-top:6px"><b>${team}:</b> ${list.map(s => `${s.name} (${s.goals})`).join(" • ")}</div>`)
+                    .join("")
+                : `${scorers.map(s => `${s.name} (${s.goals})`).join(" • ")}`
+            }
+          </div>
+        ` : ``}
+      </div>
+    ` : ``}
+
+    ${hideAvailability ? `` : `
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div class="h1">Availability</div>
+          <div class="row" style="gap:10px; align-items:center">
+            <button class="btn primary" id="shareBtn">Share</button>
+          </div>
+        </div>
+
+        ${
+          status === "OPEN"
+            ? `
+              ${availabilityClosed ? `<div class="small"><b>Availability is closed.</b></div>` : (meName ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${MAX_AVAILABLE} available), you can join the waiting list.</div>` : `<div class="small">Login required to post availability.</div>`)}
+              ${meName ? `` : `
+                <div class="small" style="margin-top:10px">Go to <b>Login</b> tab to sign in.</div>
+              `}
+              ${availabilityClosed ? `` : `
+                <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+                  <button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>
+                  <button class="btn bad" id="btnNo" ${meName ? "" : "disabled"}>NO</button>
+                  <button class="btn warn" id="btnWait" disabled>WAITING LIST</button>
+                </div>
+
+                <div class="small" id="saveMsg" style="margin-top:10px"></div>
+              `}
+            `
+            : `<div class="small">This match is not open.</div>`
+        }
+
+        <div class="hr"></div>
+
+        <div class="small"><b id="yesHdr">Available</b></div>
+        <ol id="yesList" class="list"></ol>
+
+        <div class="small" style="margin-top:10px"><b>Not available</b></div>
+        <ol id="noList" class="list"></ol>
+
+        <div class="small" style="margin-top:10px"><b>Waiting list</b></div>
+        <ol id="waitList" class="list"></ol>
+      </div>
+    `}
   `;
 
-  detail.querySelector("#shareBtn").onclick = () => {
-    const msg = whatsappAvailabilityMessage(m, availability);
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-    toastInfo("WhatsApp opened.");
+  const shareBtn = detail.querySelector("#shareBtn");
+  if (shareBtn) {
+    shareBtn.onclick = () => {
+      const msg = whatsappAvailabilityMessage(m, availability);
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+      toastInfo("WhatsApp opened.");
+    };
+  }
+
+  const capBtn = detail.querySelector("#openCaptain");
+  if (capBtn) capBtn.onclick = () => {
+    if (!captainPageEnabled) return toastWarn("Captain page unlocks after availability is closed by admin.");
+    location.hash = `#/captain?code=${encodeURIComponent(code)}&src=match`;
   };
 
-
-renderAvailLists();
-  const playerSearch = detail.querySelector("#playerSearch");
-  const playerDropdown = detail.querySelector("#playerDropdown");
-  const refreshNamesBtn = detail.querySelector("#refreshNamesBtn");
-
-  let allPlayers = await getPlayersCached();
-  let selectedPlayer = "";
-
-  const esc = (s) => String(s || "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
-
-  function isValidPlayerName(name) {
-    const n = String(name || "").trim();
-    if (!n) return false;
-    return (allPlayers || []).some(p => String(p).toLowerCase() === n.toLowerCase());
+  if (!hideAvailability) {
+    renderAvailLists();
   }
 
-  function setVoteEnabled(enabled) {
-    const y = detail.querySelector("#btnYes");
-    const n = detail.querySelector("#btnNo");
-    const mb = detail.querySelector("#btnMaybe");
-    if (y) y.disabled = !enabled;
-    if (n) n.disabled = !enabled;
-    if (mb) mb.disabled = !enabled;
-  }
-
-  function hideDropdown() {
-    if (playerDropdown) playerDropdown.style.display = "none";
-  }
-
-  function showDropdown() {
-    if (playerDropdown) playerDropdown.style.display = "block";
-  }
-
-  function renderDropdown(filterText) {
-    if (!playerDropdown) return;
-    const q = String(filterText || "").trim().toLowerCase();
-    const items = (allPlayers || [])
-      .filter(n => !q || String(n).toLowerCase().includes(q))
-      .slice(0, 30);
-
-    if (!items.length) {
-      playerDropdown.innerHTML = `<div style="padding:10px" class="small">No matching players.</div>`;
-      showDropdown();
-      return;
-    }
-
-    playerDropdown.innerHTML = items.map(n => `
-      <div class="playerOption" data-name="${esc(n)}"
-           style="padding:10px; cursor:pointer; border-bottom:1px solid rgba(11,18,32,0.08)">
-        ${esc(n)}
-      </div>
-    `).join("");
-
-    playerDropdown.querySelectorAll(".playerOption").forEach(el => {
-      el.onclick = () => {
-        const name = el.getAttribute("data-name") || "";
-        selectedPlayer = name;
-        if (playerSearch) playerSearch.value = name;
-        hideDropdown();
-        setVoteEnabled(true);
-      };
-    });
-
-    showDropdown();
-  }
-
-  // Disable until a valid selection is made
-  setVoteEnabled(false);
-
-  if (playerSearch) {
-    playerSearch.addEventListener("focus", () => {
-      renderDropdown(playerSearch.value);
-    });
-
-    playerSearch.addEventListener("input", () => {
-      selectedPlayer = "";
-      setVoteEnabled(false);
-
-      const v = playerSearch.value || "";
-      renderDropdown(v);
-
-      // If exact match typed, accept it (still from list)
-      if (isValidPlayerName(v)) {
-        selectedPlayer =
-          (allPlayers || []).find(p => String(p).toLowerCase() === String(v).trim().toLowerCase()) || v;
-        setVoteEnabled(true);
-      }
-    });
-
-    playerSearch.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        const v = String(playerSearch.value || "").trim();
-        if (isValidPlayerName(v)) {
-          selectedPlayer = (allPlayers || []).find(p => String(p).toLowerCase() === v.toLowerCase()) || v;
-          hideDropdown();
-          setVoteEnabled(true);
-        } else {
-          toastWarn("Please choose a name from the list.");
-        }
-      }
-      if (e.key === "Escape") hideDropdown();
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
-      const t = e.target;
-      if (!t) return;
-      const inside =
-        playerSearch.contains(t) ||
-        (playerDropdown && playerDropdown.contains(t));
-      if (!inside) hideDropdown();
-    }, { capture: true });
-  }
-
-  // Small refresh button near availability (requested)
-  if (refreshNamesBtn) refreshNamesBtn.onclick = async () => {
-    refreshNamesBtn.disabled = true;
-    const fresh = await refreshPlayersCache();
-    refreshNamesBtn.disabled = false;
-    if (fresh && fresh.length) {
-      allPlayers = fresh;
-
-      const v = String(playerSearch?.value || "").trim();
-      if (isValidPlayerName(v)) {
-        selectedPlayer = (allPlayers || []).find(p => String(p).toLowerCase() === v.toLowerCase()) || v;
-        setVoteEnabled(true);
-      } else {
-        selectedPlayer = "";
-        setVoteEnabled(false);
-      }
-
-      if (playerSearch) renderDropdown(playerSearch.value);
-      toastSuccess("Players list updated.");
-    }
-  };
-
-  if (status !== "OPEN") return;
+  if (hideAvailability || status !== "OPEN" || availabilityClosed) return;
 
 
   async function submit(choice) {
-    const playerName = String(selectedPlayer || playerSearch?.value || "").trim();
-    if (!playerName) return toastWarn("Please select your name.");
-    if (!isValidPlayerName(playerName)) return toastWarn("Please choose a name from the list.");
+    if (!meName) return toastWarn("Please login first.");
 
     const y = detail.querySelector("#btnYes");
     const n = detail.querySelector("#btnNo");
-    const mb = detail.querySelector("#btnMaybe");
-    y.disabled = true; n.disabled = true; mb.disabled = true;
+    const w = detail.querySelector("#btnWait");
+    y.disabled = true; n.disabled = true; if (w) w.disabled = true;
 
     const saveMsg = detail.querySelector("#saveMsg");
     saveMsg.textContent = "Saving…";
 
-    const res = await API.setAvailability(code, playerName, choice);
+    const res = await API.setAvailability(code, choice);
 
     if (!res.ok) {
       saveMsg.textContent = res.error || "Failed";
       toastError(res.error || "Failed to post availability");
-      y.disabled = false; n.disabled = false; mb.disabled = false;
+      y.disabled = false; n.disabled = false; renderAvailLists();
       return;
     }
 
@@ -780,15 +849,16 @@ if (Array.isArray(res.availability)) {
   })).filter(x=>x.playerName);
 } else {
   // Fallback: keep local behavior if backend didn't return list
-  const idx = availability.findIndex(a => a.playerName.toLowerCase() === playerName.toLowerCase());
+  const idx = availability.findIndex(a => a.playerName.toLowerCase() === meName.toLowerCase());
   if (idx >= 0) availability[idx].availability = choice;
-  else availability.push({ playerName, availability: choice });
+  else availability.push({ playerName: meName, availability: choice });
 }
 renderAvailLists();
 
 
+    const effective = String(res.effectiveAvailability || choice || "").toUpperCase();
     saveMsg.textContent = "Saved ✅";
-    toastSuccess(`Saved: ${choice}`);
+    toastSuccess(`Saved: ${effective}`);
 
     const merged = { ...data, availability };
     lsSet(detailKey(code), { ts: now(), data: merged });
@@ -797,12 +867,13 @@ renderAvailLists();
     // window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
     // toastInfo("WhatsApp opened (tap Send).");
 
-    setTimeout(()=>{ y.disabled=false; n.disabled=false; mb.disabled=false; }, 900);
+    // Re-enable buttons, but keep Waiting List rule enforced.
+    setTimeout(()=>{ y.disabled=false; n.disabled=false; renderAvailLists(); }, 900);
   }
 
   detail.querySelector("#btnYes").onclick = () => submit("YES");
   detail.querySelector("#btnNo").onclick = () => submit("NO");
-  detail.querySelector("#btnMaybe").onclick = () => submit("MAYBE");
+  detail.querySelector("#btnWait").onclick = () => submit("WAITING");
 }
 
 export async function renderMatchPage(root, query) {
@@ -821,7 +892,7 @@ export async function renderMatchPage(root, query) {
     return;
   }
 
-  const { seasons, selected } = pickSelectedSeason(seasonsRes);
+  const { seasons, selected, defaulted } = pickSelectedSeason(seasonsRes);
   const seasonId = selected;
 
   const openCached = lsGet(openKey(seasonId));
@@ -836,6 +907,8 @@ export async function renderMatchPage(root, query) {
   const needInitial = !openMatches.length;
   // Reload open matches from API ONLY if the browser reload happened on the list view
   // (not when navigating back from a match detail).
+  // If user never selected a season, default to latest season and fetch open matches once.
+  // Also fetch when cache is empty, or when browser reload happened on list.
   const shouldReloadFetch = isReloadForMatchList() || needInitial;
   if (shouldReloadFetch) {
     // If we already rendered cached data, refresh in the background.
