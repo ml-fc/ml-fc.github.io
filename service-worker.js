@@ -5,25 +5,23 @@
 
 const CACHE_NAME = "mlfc-static-v2";
 const STATIC_ASSETS = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./manifest.json",
-  "./src/app.js",
-  "./src/router.js",
-  "./src/config.js",
-  "./src/prefetch.js",
-  "./src/api/client.js",
-  "./src/api/endpoints.js",
-  "./src/pages/match.js",
-  "./src/pages/register.js",
-  "./src/pages/leaderboard.js",
-  "./src/pages/admin.js",
-  "./src/pages/captain.js",
-  "./assets/icons/icon-192.png",
-  "./assets/icons/icon-512.png",
-  "./assets/icons/maskable-512.png"
-
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/src/app.js",
+  "/src/router.js",
+  "/src/config.js",
+  "/src/prefetch.js",
+  "/src/api/client.js",
+  "/src/api/endpoints.js",
+  "/src/pages/match.js",
+  "/src/pages/register.js",
+  "/src/pages/leaderboard.js",
+  "/src/pages/admin.js",
+  "/src/pages/captain.js",
+  "/assets/icons/icon-192.png",
+  "/assets/icons/icon-512.png",
+  "/assets/icons/maskable-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -46,9 +44,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Only handle same-origin (your GitHub Pages files)
   if (url.origin !== self.location.origin) return;
 
+  // Always fetch fresh manifest (prevents stale icons/install metadata)
+  if (url.pathname.endsWith("/manifest.json")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Cache-first for everything else static
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
