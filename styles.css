@@ -106,9 +106,9 @@ body {
   flex-wrap: wrap;
 }
 
-/* Push Account/Login to the right on desktop (when tabs are visible) */
+/* Keep all tabs on the left (desktop) */
 .tabs .tab[href="#/login"] {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .tab {
@@ -385,6 +385,39 @@ a:hover { text-decoration: underline; }
 
 .bottomnav__icon { font-size: 18px; line-height: 1; }
 .bottomnav__label { font-size: 11px; font-weight: 900; letter-spacing: 0.2px; }
+
+/* =========================
+   Notifications badge (Account/Login)
+   ========================= */
+.tab.has-noti,
+.bottomnav__item.has-noti { position: relative; }
+
+.tab.has-noti::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ff3b30;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
+
+.bottomnav__icon { position: relative; }
+.bottomnav__item.has-noti .bottomnav__icon::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ff3b30;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
+
+
 
 /* =========================
    Nice â€œcompact action rowsâ€

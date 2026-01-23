@@ -9,7 +9,7 @@ export async function renderRegisterPage(root) {
 
     <div class="card">
       <input id="name" class="input" placeholder="Full name" />
-      <input id="phone" class="input" placeholder="Phone (optional)" style="margin-top:10px" />
+      <input id="phone" class="input" placeholder="Phone (optional)" inputmode="numeric" pattern="[0-9]*" maxlength="15" style="margin-top:10px" />
       <button id="btn" class="btn primary" style="margin-top:10px">Register</button>
       <div id="msg" class="small" style="margin-top:10px"></div>
     </div>
@@ -17,6 +17,12 @@ export async function renderRegisterPage(root) {
 
   const nameEl = root.querySelector("#name");
   const phoneEl = root.querySelector("#phone");
+
+  // Phone: allow digits only
+  phoneEl.addEventListener("input", () => {
+    const cleaned = String(phoneEl.value || "").replace(/\D+/g, "");
+    if (cleaned !== phoneEl.value) phoneEl.value = cleaned;
+  });
   const msgEl = root.querySelector("#msg");
 
   root.querySelector("#btn").onclick = async () => {

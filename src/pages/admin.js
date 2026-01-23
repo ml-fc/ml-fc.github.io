@@ -1680,9 +1680,10 @@ function renderComboList(filterText = "") {
     if (isEditLocked) return toastWarn("Match is locked. Unlock to edit.");
 
     const msg = manageBody.querySelector("#setupMsg");
+    // Requested: allow saving setup even if captains aren't selected yet.
+    // Captains can be assigned later without blocking team setup.
     if (!captainBlue || !captainOrange) {
-      msg.textContent = "Select captains for BOTH Blue and Orange.";
-      return toastWarn("Select both captains.");
+      msg.textContent = "Saving setup (captains can be selected later)…";
     }
 
     const btn = manageBody.querySelector("#saveSetup");

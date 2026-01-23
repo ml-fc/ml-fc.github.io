@@ -718,6 +718,18 @@ export async function renderCaptainPage(root, query) {
     root.querySelectorAll("[data-rating]").forEach(inp => {
       inp.addEventListener("input", () => {
         const p = decodeURIComponent(inp.getAttribute("data-rating"));
+
+        // Allow empty, but otherwise clamp to integer 1-10
+        let raw = String(inp.value ?? "");
+        raw = raw.replace(/[^0-9]/g, "");
+        if (raw === "") {
+          inp.value = "";
+        } else {
+          const n = Math.floor(Number(raw));
+          const clamped = Math.min(10, Math.max(1, Number.isFinite(n) ? n : 1));
+          inp.value = String(clamped);
+        }
+
         drafts[p] = drafts[p] || {};
         drafts[p].rating = String(inp.value ?? "");
       });

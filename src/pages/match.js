@@ -9,6 +9,7 @@ const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
 
 const LS_OPEN_CACHE_PREFIX = "mlfc_open_matches_cache_v2:";   // seasonId -> {ts,matches}
 const LS_PAST_CACHE_PREFIX = "mlfc_past_matches_cache_v2:";   // seasonId -> {ts,page,pageSize,total,hasMore,matches}
+const SS_MATCH_LIST_UI = "mlfc_match_list_ui_v1"; // session-only: {pastOpen, scrollY}
 const LS_MATCH_DETAIL_PREFIX = "mlfc_match_detail_cache_v2:"; // code -> {ts,data}
 const LS_MATCH_META_PREFIX = "mlfc_matches_meta_v2:";         // seasonId -> {ts,fingerprint,latestCode}
 const LS_PLAYERS_CACHE = "mlfc_players_cache_v2";             // {ts,players:[name...]}
@@ -83,6 +84,32 @@ function lsDel(k){ try{localStorage.removeItem(k);}catch{} }
 
 function openKey(seasonId){ return `${LS_OPEN_CACHE_PREFIX}${seasonId}`; }
 function pastKey(seasonId){ return `${LS_PAST_CACHE_PREFIX}${seasonId}`; }
+
+function ssGet(key){ try { return JSON.parse(sessionStorage.getItem(key) || "null"); } catch { return null; } }
+function ssSet(key, val){ try { sessionStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+function saveMatchListUiState(root) {
+  try {
+    const past = root.querySelector("#pastSection");
+    ssSet(SS_MATCH_LIST_UI, {
+      pastOpen: !!past?.open,
+      scrollY: Number(window.scrollY || 0),
+    });
+  } catch {}
+}
+
+function restoreMatchListUiState(root) {
+  try {
+    const s = ssGet(SS_MATCH_LIST_UI);
+    if (!s) return;
+    const past = root.querySelector("#pastSection");
+    if (past && typeof s.pastOpen === "boolean") past.open = s.pastOpen;
+    if (Number.isFinite(s.scrollY)) {
+      // Restore after the DOM has been painted.
+      setTimeout(() => window.scrollTo(0, s.scrollY), 0);
+    }
+  } catch {}
+}
 function detailKey(code){ return `${LS_MATCH_DETAIL_PREFIX}${code}`; }
 function metaKey(seasonId){ return `${LS_MATCH_META_PREFIX}${seasonId}`; }
 
@@ -381,11 +408,24 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
   const openCache = lsGet(openKey(seasonId));
   const openCodes = (openCache?.matches || []).map(m => m.publicCode);
 
+  // If we *just* refreshed open matches (common on app load / hard refresh),
+  // and the latest code is already present, don't show the banner.
+  // This fixes a race where the meta call can land before open-matches,
+  // leaving the update banner visible even though the list already updated.
+  const openWasJustRefreshed = !!(openCache?.ts && (now() - openCache.ts) < 5000);
+  const openAlreadyHasLatest = !next.latestCode || openCodes.includes(next.latestCode);
+
   // When fingerprint changes or latestCode isn't in our cached open list, show update banner
-  const isNew =
+  let isNew =
     !prev?.fingerprint ||
     prev.fingerprint !== next.fingerprint ||
     (next.latestCode && !openCodes.includes(next.latestCode));
+
+  // Race fix: if open matches were refreshed moments ago and already include latestCode,
+  // suppress the banner (even if meta fingerprint changed or prev was empty).
+  if (isNew && openWasJustRefreshed && openAlreadyHasLatest) {
+    isNew = false;
+  }
 
   if (!isNew) { renderBanner(listRoot, ""); return; }
 
@@ -532,6 +572,8 @@ function renderMatchList(root, seasonId, openMatches) {
         } catch {}
       }
 
+      // Remember UI state so that when user returns, Past section stays open and scroll position is kept.
+      saveMatchListUiState(root);
       location.hash = `#/match?code=${encodeURIComponent(code)}`;
     };
   });
@@ -551,6 +593,9 @@ function renderMatchList(root, seasonId, openMatches) {
   };
 
   renderPastArea(root, seasonId);
+
+  // Remember/restore list view UI state (Past open/closed, scroll position) when returning from a match.
+  restoreMatchListUiState(root);
 
   if (SUPPRESS_META_ONCE) {
     SUPPRESS_META_ONCE = false;
@@ -581,7 +626,10 @@ function renderPastArea(root, seasonId) {
     : `<div class="small">No past matches cached yet.</div>`;
 
   pastArea.querySelectorAll("[data-open]").forEach(btn=>{
-    btn.onclick=()=>{ location.hash = `#/match?code=${encodeURIComponent(btn.getAttribute("data-open"))}`; };
+    btn.onclick=()=>{
+      saveMatchListUiState(root);
+      location.hash = `#/match?code=${encodeURIComponent(btn.getAttribute("data-open"))}`;
+    };
   });
 }
 
