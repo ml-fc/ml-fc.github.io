@@ -107,20 +107,10 @@ async function checkNotificationsBadge(reason = "nav", { force = false } = {}) {
 }
 
 function startNotificationsTimer() {
-  try {
-    if (__mlfcNotiTimer) clearInterval(__mlfcNotiTimer);
-  } catch {}
-
-  // Requested: check every 10 minutes while the app is open (including background tabs).
-  __mlfcNotiTimer = setInterval(() => {
-    try {
-      // Check even in background tabs (browser may throttle timers, but we still attempt).
-      checkNotificationsBadge("timer", { force: true }).catch(() => {});
-    } catch {
-      // ignore
-    }
-  }, 10 * 60 * 1000);
+  // Push notifications are enabled; do not poll the notifications API in the background.
+  // (Keeping this function for backward compatibility.)
 }
+
 
 async function checkNotificationsOnce() {
   const cachedUser = getCachedUser();
@@ -214,7 +204,8 @@ function boot() {
       updateNavForUser(u);
       checkNotificationsOnce().catch(() => {});
       checkNotificationsBadge("startup", { force: true }).catch(() => {});
-      startNotificationsTimer();
+      // No 10-minute polling; push notifications update the badge.
+
     })
     .catch(() => {
       updateNavForUser(null);

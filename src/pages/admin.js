@@ -765,6 +765,12 @@ function bindHeaderButtons(root, routeToken) {
  async function renderUsers(root, opts = {}) {
   const area = root.querySelector("#usersArea");
   if (!area) return;
+  // Any admin can change admin rights for other users.
+  // The only restriction: an admin cannot remove their own admin access.
+  // Backend enforces this; we mirror it here to avoid accidental lockouts.
+  const me = getCachedUser() || (await refreshMe(false).catch(() => null));
+  const canToggleAdmin = !!(me && me.isAdmin);
+  const meNameLower = String(me?.name || "").trim().toLowerCase();
   const state = (window.__mlfcUsersState = window.__mlfcUsersState || { q: "", page: 1, pageSize: 20 });
   // Make sure Users view pulls latest at least once per page-load.
   // This also covers a browser refresh while already on the Users view.
@@ -828,18 +834,25 @@ function bindHeaderButtons(root, routeToken) {
           </tr>
         </thead>
         <tbody>
-          ${pageItems.map(u => `
+          ${pageItems.map(u => {
+            const isSelf = meNameLower && String(u.name || "").trim().toLowerCase() === meNameLower;
+            const toggleDisabled = !canToggleAdmin || isSelf;
+            const toggleTitle = !canToggleAdmin
+              ? "Only admins can change admin rights"
+              : (isSelf ? "You cannot change your own admin access" : "Toggle admin");
+            return `
             <tr style="border-top:1px solid rgba(11,18,32,0.08)">
               <td style="padding:8px; font-weight:950" data-label="Name">${u.name}</td>
               <td style="padding:8px" class="small" data-label="Phone">${u.phone || ""}</td>
               <td style="padding:8px; text-align:center" data-label="Admin">${Number(u.isAdmin)===1 ? "✅" : "—"}</td>
               <td style="padding:8px; text-align:right" data-label="Actions" class="usersActions">
-                <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
+                <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
                 <button class="btn gray" data-reset-pass="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Change password</button>
                 <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
               </td>
             </tr>
-          `).join("")}
+          `;
+          }).join("")}
         </tbody>
       </table>
     </div>
@@ -874,7 +887,11 @@ function bindHeaderButtons(root, routeToken) {
 
   area.querySelectorAll("[data-toggle-admin]").forEach(btn => {
     btn.onclick = async () => {
+      if (!canToggleAdmin) return toastError("Only admins can change admin rights");
       const name = decodeURIComponent(btn.getAttribute("data-toggle-admin") || "");
+      if (meNameLower && String(name || "").trim().toLowerCase() === meNameLower) {
+        return toastError("You cannot change your own admin access");
+      }
       const cur = users.find(x => x.name === name);
       const next = !(Number(cur?.isAdmin)===1);
       const ok = confirm(`${next ? "Grant" : "Revoke"} admin for ${name}?`);
@@ -1058,6 +1075,13 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     .filter(a => String(a.availability).toUpperCase() === "YES")
     .map(a => String(a.playerName || "").trim())
   );
+
+  const availByName = new Map((availability || []).map(a => [String(a.playerName || '').trim().toLowerCase(), a]));
+  const playerDeclaredNo = (name) => {
+    const r = availByName.get(String(name || '').trim().toLowerCase());
+    return String(r?.playerDeclared || '').trim().toUpperCase() === 'NO';
+  };
+
 
   const captains = data.captains || {};
   const teams = data.teams || [];
@@ -1565,7 +1589,7 @@ function renderComboList(filterText = "") {
         <div class="assignCard">
           <div class="assignCard__head">
             <div style="min-width:0">
-              <div class="assignCard__name">${p}</div>
+              <div class="assignCard__name">${p} ${playerDeclaredNo(p) ? '<span title="Player marked NOT available" style="margin-left:6px">⚠️</span>' : ''}</div>
               <div class="assignCard__meta">Assigned: <b>${badgeText}</b></div>
             </div>
             <div class="${badgeCls}">${badgeText}</div>
@@ -1614,7 +1638,7 @@ function renderComboList(filterText = "") {
         const disabled = isEditLocked ? "disabled" : "";
         return `
           <div class="teamMiniRow">
-            <div class="teamMiniRow__name" title="${p}">${p}</div>
+            <div class="teamMiniRow__name" title="${p}">${p}${playerDeclaredNo(p) ? ' <span title="Player marked NOT available">⚠️</span>' : ''}</div>
 
             <div class="teamMiniRow__cap">
               <label class="small" style="display:flex; gap:6px; align-items:center">
@@ -1636,6 +1660,9 @@ function renderComboList(filterText = "") {
       cb.onchange = () => {
         const teamName = cb.getAttribute("data-cap");
         const p = decodeURIComponent(cb.getAttribute("data-player"));
+        if (cb.checked && playerDeclaredNo(p)) {
+          toastWarn(`${p} marked NOT available — captain assignment allowed, but double-check.`);
+        }
         if (teamName === "BLUE") captainBlue = cb.checked ? p : "";
         if (teamName === "ORANGE") captainOrange = cb.checked ? p : "";
         renderAll();

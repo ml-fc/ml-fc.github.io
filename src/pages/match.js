@@ -118,9 +118,19 @@ function baseUrl(){ return location.href.split("#")[0]; }
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
   btn.disabled = disabled;
+
+  // Remember original label the first time we show a busy label.
+  if (busyText && !btn.dataset.origText) btn.dataset.origText = btn.textContent;
+
+  // If busyText supplied, toggle label based on disabled.
   if (busyText) {
-    if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
-    btn.textContent = disabled ? busyText : btn.dataset.origText;
+    btn.textContent = disabled ? busyText : (btn.dataset.origText || btn.textContent);
+    return;
+  }
+
+  // If caller re-enables without passing busyText, still restore original.
+  if (!disabled && btn.dataset.origText) {
+    btn.textContent = btn.dataset.origText;
   }
 }
 
