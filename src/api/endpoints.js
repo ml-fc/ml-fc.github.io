@@ -54,4 +54,11 @@ export const API = {
   adminSubmitScore: (code, mode, a, b) => apiPost({ action: "admin_submit_score", code, mode, scoreA: a, scoreB: b }),
   captainSubmitRatingsBatch: (code, rows, scope = "CAPTAIN") => apiPost({ action: "captain_submit_ratings_batch", code, rows, scope }),
   adminSubmitRatingsBatch: (code, rows) => apiPost({ action: "admin_submit_ratings_batch", code, rows }),
+
+    pushPublicKey: () => apiGet({ action: "push_public_key" }),
+  pushSubscribe: (subscription, userAgent) =>
+    apiPost({ action: "push_subscribe", subscription, userAgent }),
+  pushUnsubscribe: (endpoint) =>
+    apiPost({ action: "push_unsubscribe", endpoint }),
+
 };

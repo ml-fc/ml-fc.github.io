@@ -10,6 +10,42 @@ const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 let __mlfcNotiLastCheck = 0;
 let __mlfcNotiTimer = null;
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((ch) => ch.charCodeAt(0)));
+}
+
+async function ensurePushSubscribed() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+  const reg = await navigator.serviceWorker.ready;
+
+  // already subscribed?
+  const existing = await reg.pushManager.getSubscription();
+  // IMPORTANT: if a subscription already exists in the browser,
+  // still upsert it to the backend (prevents subs:0 after backend redeploys).
+  if (existing) {
+    await API.pushSubscribe(existing, navigator.userAgent).catch(() => {});
+    return;
+  }
+
+  const out = await API.pushPublicKey().catch(() => null);
+  if (!out?.ok?.toString && !out?.publicKey) return; // safety
+  const publicKey = out.publicKey;
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+
+  await API.pushSubscribe(sub, navigator.userAgent);
+}
+
 function notifyDesktop(title, body) {
   try {
     if (!("Notification" in window)) return;
@@ -94,6 +130,7 @@ async function checkNotificationsOnce() {
     if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission().catch(() => {});
     }
+    await ensurePushSubscribed().catch(() => {});
   } catch {
     // ignore
   }
@@ -193,6 +230,26 @@ function boot() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) checkNotificationsBadge("visible", { force: true }).catch(() => {});
   });
+
+  // When a Web Push arrives, the Service Worker will postMessage("MLFC_PUSH") to any open tabs.
+  // Use that as a trigger to refresh the in-app badge and (if currently viewing Account) the list.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (ev) => {
+      if (ev?.data?.type !== "MLFC_PUSH") return;
+
+      // Update badge immediately
+      checkNotificationsBadge("push", { force: true }).catch(() => {});
+
+      // If the user is currently on the Account/Login page, force a re-render so the list updates
+      try {
+        const hash = window.location.hash || "";
+        const path = hash.split("?")[0];
+        if (path === "#/login") {
+          window.dispatchEvent(new HashChangeEvent("hashchange"));
+        }
+      } catch {}
+    });
+  }
 
   startRouter();
   ensureInitialRouteRender();
