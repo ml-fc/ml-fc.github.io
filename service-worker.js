@@ -58,33 +58,34 @@ self.addEventListener("fetch", (event) => {
   );
 });
 self.addEventListener("push", (event) => {
-  
-  
-  
-  let data = {};
-  try { data = event.data ? event.data.json() : {}; } catch {}
-
-  const title = data.title || "MLFC";
-  const options = {
-    body: data.body || "",
-    data: { url: data.url || "https://ml-fc.github.io/" },
-    tag: data.tag,
-  };
-
   event.waitUntil((async () => {
-    // Show the system notification
-    await self.registration.showNotification(title, options);
-  let txt = "";
-    try { txt = event.data ? await event.data.text() : ""; } catch {}
-    console.log("[SW] push received:", txt);
+    let data = {};
+    try {
+      const txt = event.data ? await event.data.text() : "";
+      data = txt ? JSON.parse(txt) : {};
+      console.log("[SW] push raw:", txt);
+    } catch (e) {
+      console.log("[SW] push parse failed:", e);
+      data = {};
+    }
 
-    // Also notify any open tabs so the in-app badge/list can update immediately
+    const title = data.title || "MLFC";
+    const options = {
+      body: data.body || "",
+      data: { url: data.url || "https://ml-fc.github.io/#/match?code=" },
+      tag: data.tag,
+    };
+
+    await self.registration.showNotification(title, options);
+
+    // notify open tabs
     const wins = await clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const w of wins) {
       try { w.postMessage({ type: "MLFC_PUSH", payload: data }); } catch {}
     }
   })());
 });
+
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
