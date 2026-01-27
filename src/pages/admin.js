@@ -700,6 +700,23 @@ function bindSeasonMgmt(root, routeToken) {
 }
 
 function bindCreateMatch(root, routeToken) {
+  // Default availability limits:
+  // - OPPONENT match: 11
+  // - INTERNAL match: 22
+  try {
+    const typeEl = root.querySelector("#type");
+    const limitEl = root.querySelector("#availabilityLimit");
+    if (typeEl && limitEl) {
+      const setDefault = () => {
+        limitEl.value = (String(typeEl.value || "").toUpperCase() === "OPPONENT") ? 11 : 22;
+      };
+      // initial default
+      setDefault();
+      // update when type changes
+      typeEl.onchange = () => setDefault();
+    }
+  } catch {}
+
   root.querySelector("#createMatch").onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
 
