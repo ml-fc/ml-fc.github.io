@@ -1,7 +1,7 @@
 /* MLFC Service Worker
  * - Caches static assets for offline/instant load
  * - Does NOT cache API responses (we cache API data in localStorage/sessionStorage in JS)
- 
+
 */
 
 // Version the cache by the service-worker URL query param (?b=BUILD_ID).

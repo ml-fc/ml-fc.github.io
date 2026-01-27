@@ -665,6 +665,7 @@ async function renderMatchDetail(root, code) {
   list.style.display = "none";
   detail.style.display = "block";
 
+
   const cached = lsGet(detailKey(code))?.data;
   let data = cached;
 
@@ -700,7 +701,8 @@ async function renderMatchDetail(root, code) {
     lsSet(detailKey(code), { ts: now(), data, metaFingerprint: fp });
   }
 
-  const m = data.match;
+   const m = data.match;       
+const cap = availabilityLimitForMatch(m);
   const when = formatHumanDateTime(m.date, m.time);
   const status = String(m.status||"").toUpperCase();
   const me = getCachedUser();
@@ -713,6 +715,9 @@ async function renderMatchDetail(root, code) {
   })).filter(x=>x.playerName);
 
   function renderAvailLists() {
+    const m = data.match;              // <-- must be first
+
+
     const g = availabilityGroups(availability);
     const cap = availabilityLimitForMatch(m);
     const yesCount = Math.min(g.yes.length, cap);
