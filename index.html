@@ -142,7 +142,7 @@
           const reg = await navigator.serviceWorker.register(
             `./service-worker.js?b=${encodeURIComponent(BUILD_ID)}`
           );
-
+              
           // If a new SW takes control, prompt the user to reload.
           let prompted = false;
           navigator.serviceWorker.addEventListener("controllerchange", () => {

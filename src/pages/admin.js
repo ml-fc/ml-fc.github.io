@@ -344,6 +344,17 @@ function renderAdminShell(root, view) {
         <option value="OPPONENT">Against opponents (1 captain)</option>
       </select>
 
+      <input
+        id="availabilityLimit"
+        class="input"
+        type="number"
+        min="1"
+        max="100"
+        value="22"
+        style="margin-top:10px"
+        placeholder="Max YES availabilities (e.g., 22)"
+      />
+
       <button id="createMatch" class="btn primary" style="margin-top:10px">Create</button>
       <div id="created" class="small" style="margin-top:10px"></div>
     </details>
@@ -700,6 +711,7 @@ function bindCreateMatch(root, routeToken) {
       date: root.querySelector("#date").value,
       time: root.querySelector("#time").value || "19:00",
       type: root.querySelector("#type").value,
+      availabilityLimit: Math.max(1, Math.min(100, Math.floor(Number(root.querySelector("#availabilityLimit")?.value || 22)))),
       seasonId: MEM.selectedSeasonId
     };
 
@@ -736,6 +748,7 @@ function bindCreateMatch(root, routeToken) {
       date: payload.date,
       time: payload.time,
       type: payload.type,
+      availabilityLimit: payload.availabilityLimit,
       status: "OPEN",
       ratingsLocked: "FALSE"
     };
@@ -1099,6 +1112,75 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     .map(a => String(a.playerName || "").trim())
   );
 
+  const cap = (() => {
+    const n = Math.floor(Number(m.availabilityLimit || 22));
+    if (!Number.isFinite(n) || n <= 0) return 22;
+    return Math.min(n, 100);
+  })();
+
+  const limitEditLocked = isCompleted; // allow editing even if availability is closed, but not once completed
+
+  function availabilityLimitEditorHtml() {
+    return `
+      <details class="card" open>
+        <summary style="font-weight:950">Availability limit</summary>
+
+        <div class="small" style="margin-top:8px">
+          Max number of players who can be <b>YES</b> for this match. Extra YES requests will be placed on the <b>WAITING</b> list.
+        </div>
+
+        <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
+          <input class="input" id="availLimitInput" type="number" min="1" max="100" step="1" value="${cap}" style="max-width:140px" ${limitEditLocked ? "disabled" : ""} />
+          <button class="btn primary" id="availLimitSave" ${limitEditLocked ? "disabled" : ""}>Save</button>
+          <div class="small" id="availLimitMsg"></div>
+        </div>
+
+        ${limitEditLocked ? `<div class="small" style="margin-top:10px">This match is completed — availability limit can’t be changed.</div>` : ""}
+      </details>
+    `;
+  }
+
+  async function wireAvailabilityLimitEditor() {
+    const input = manageArea.querySelector("#availLimitInput");
+    const save = manageArea.querySelector("#availLimitSave");
+    const msg = manageArea.querySelector("#availLimitMsg");
+    if (!input || !save) return;
+
+    save.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      const n = Math.min(100, Math.max(1, Math.floor(Number(input.value || cap))));
+      input.value = String(n);
+
+      setDisabled(save, true, "Saving…");
+      if (msg) msg.textContent = "";
+
+      const out = await API.adminUpdateAvailabilityLimit(m.matchId, n);
+      setDisabled(save, false);
+      if (!out?.ok) {
+        if (msg) msg.textContent = out?.error || "Failed";
+        return toastError(out?.error || "Failed");
+      }
+
+      toastSuccess("Availability limit updated.");
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+
+      // Update MEM locally (no API)
+      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
+        ? { ...x, availabilityLimit: n }
+        : x
+      );
+      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+
+      // Fetch fresh match once to refresh the manage view (availability list might have changed)
+      const fresh = await API.getPublicMatch(m.publicCode);
+      if (stillOnAdmin(routeToken) && fresh.ok) {
+        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+      }
+    };
+  }
+
   const availByName = new Map((availability || []).map(a => [String(a.playerName || '').trim().toLowerCase(), a]));
   const playerDeclaredNo = (name) => {
     const r = availByName.get(String(name || '').trim().toLowerCase());
@@ -1267,6 +1349,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     }
 
     manageBody.innerHTML = `
+      ${availabilityLimitEditorHtml()}
       <details class="card" open>
         <summary style="font-weight:950">Opponent match setup</summary>
 
@@ -1328,6 +1411,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div class="small" id="msg" style="margin-top:10px"></div>
       </details>
     `;
+
+    wireAvailabilityLimitEditor();
 
     const capSel = manageBody.querySelector("#captainSel");
     capSel.value = cap || "";
@@ -1484,8 +1569,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         const desired = String(availEl?.value || "YES").trim().toUpperCase();
 
         if (!playerName) return toastWarn("Search and select a player");
-        if (desired === "WAITING" && yesPlayers.length < 22) {
-          return toastWarn("Waiting list is only available once 22 players are marked YES.");
+        if (desired === "WAITING" && yesPlayers.length < cap) {
+          return toastWarn(`Waiting list is only available once ${cap} players are marked YES.`);
         }
 
         setDisabled(addBtn, true, "Saving…");
@@ -1566,6 +1651,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   }
 
   manageBody.innerHTML = `
+    ${availabilityLimitEditorHtml()}
     <details class="card" open>
       <summary style="font-weight:950">Add players to this match (Admin)</summary>
 
@@ -1583,7 +1669,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <select class="input" id="adminAddAvailability" style="min-width:160px">
           <option value="YES" selected>YES (Available)</option>
           <option value="NO">NO (Not available)</option>
-          <option value="WAITING" ${yesPlayers.length >= 22 ? "" : "disabled"}>WAITING LIST</option>
+          <option value="WAITING" ${yesPlayers.length >= cap ? "" : "disabled"}>WAITING LIST</option>
         </select>
 
         <button class="btn primary" id="adminAddPlayerBtn" ${isEditLocked ? "disabled" : ""}>Add / Update</button>
@@ -1636,6 +1722,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     
   `;
+
+  wireAvailabilityLimitEditor();
 
   
 // Populate a single "search + select" combobox (registered users).
@@ -1790,9 +1878,9 @@ function renderComboList(filterText = "") {
 
       if (!playerName) return toastWarn("Search and select a player");
 
-      // Enforce UI rule: waiting list only enabled when 22 YES.
-      if (desired === "WAITING" && yesPlayers.length < 22) {
-        return toastWarn("Waiting list is only available once 22 players are marked YES.");
+      // Enforce UI rule: waiting list only enabled when the match capacity is reached.
+      if (desired === "WAITING" && yesPlayers.length < cap) {
+        return toastWarn(`Waiting list is only available once ${cap} players are marked YES.`);
       }
 
       setDisabled(addBtn, true, "Saving…");

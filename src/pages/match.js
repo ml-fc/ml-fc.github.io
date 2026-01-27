@@ -273,7 +273,13 @@ function injectSeasonSelector(root, seasons, seasonId) {
 }
 
 
-const MAX_AVAILABLE = 22;
+const DEFAULT_AVAILABILITY_LIMIT = 22;
+
+function availabilityLimitForMatch(match) {
+  const n = Math.floor(Number(match?.availabilityLimit || DEFAULT_AVAILABILITY_LIMIT));
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_AVAILABILITY_LIMIT;
+  return Math.min(n, 100);
+}
 
 function availabilityGroups(av) {
   const byTs = (a, b) => {
@@ -708,10 +714,11 @@ async function renderMatchDetail(root, code) {
 
   function renderAvailLists() {
     const g = availabilityGroups(availability);
-    const yesCount = Math.min(g.yes.length, MAX_AVAILABLE);
+    const cap = availabilityLimitForMatch(m);
+    const yesCount = Math.min(g.yes.length, cap);
 
     const yesHdr = detail.querySelector("#yesHdr");
-    if (yesHdr) yesHdr.textContent = `Available (${yesCount}/${MAX_AVAILABLE})`;
+    if (yesHdr) yesHdr.textContent = `Available (${yesCount}/${cap})`;
 
     detail.querySelector("#yesList").innerHTML = g.yes.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
     detail.querySelector("#noList").innerHTML = g.no.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
@@ -721,10 +728,10 @@ async function renderMatchDetail(root, code) {
     // Exception: after admin closes availability, people can still opt into the waiting list.
     const btnWait = detail.querySelector("#btnWait");
     if (btnWait) {
-      const quotaReached = yesCount >= MAX_AVAILABLE;
+      const quotaReached = yesCount >= cap;
       const allowWait = quotaReached || adminClosed;
       btnWait.disabled = !meName || !allowWait;
-      btnWait.title = allowWait ? "" : `Waiting list unlocks when ${MAX_AVAILABLE} players are available.`;
+      btnWait.title = allowWait ? "" : `Waiting list unlocks when ${cap} players are available.`;
     }
   }
 
@@ -844,7 +851,7 @@ async function renderMatchDetail(root, code) {
                 : (adminClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
-                        ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${MAX_AVAILABLE} available), you can join the waiting list.</div>`
+                        ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${cap} available), you can join the waiting list.</div>`
                         : `<div class="small">Login required to post availability.</div>`))}
               ${meName ? `` : `
                 <div class="small" style="margin-top:10px">Go to <b>Login</b> tab to sign in.</div>

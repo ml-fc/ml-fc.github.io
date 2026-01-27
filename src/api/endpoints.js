@@ -34,6 +34,8 @@ export const API = {
   adminUnlockMatch: (matchId) => apiPost({ action: "admin_unlock_match", matchId }),
   adminCloseAvailability: (matchId) => apiPost({ action: "admin_close_availability", matchId }),
   adminOpenAvailability: (matchId) => apiPost({ action: "admin_open_availability", matchId }),
+  adminUpdateAvailabilityLimit: (matchId, availabilityLimit) =>
+    apiPost({ action: "admin_update_availability_limit", matchId, availabilityLimit }),
   adminDeleteMatch: (matchId) => apiPost({ action: "admin_delete_match", matchId }),
   adminSetupInternal: (payload) => apiPost({ action: "admin_setup_internal", ...payload }),
   adminSetupOpponent: (payload) => apiPost({ action: "admin_setup_opponent", ...payload }),
