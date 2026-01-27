@@ -718,11 +718,13 @@ async function renderMatchDetail(root, code) {
     detail.querySelector("#waitList").innerHTML = g.waiting.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
 
     // Waiting list button is only enabled once quota is reached.
+    // Exception: after admin closes availability, people can still opt into the waiting list.
     const btnWait = detail.querySelector("#btnWait");
     if (btnWait) {
       const quotaReached = yesCount >= MAX_AVAILABLE;
-      btnWait.disabled = !meName || !quotaReached;
-      btnWait.title = quotaReached ? "" : `Waiting list unlocks when ${MAX_AVAILABLE} players are available.`;
+      const allowWait = quotaReached || adminClosed;
+      btnWait.disabled = !meName || !allowWait;
+      btnWait.title = allowWait ? "" : `Waiting list unlocks when ${MAX_AVAILABLE} players are available.`;
     }
   }
 
@@ -732,7 +734,9 @@ async function renderMatchDetail(root, code) {
   const teamsSelected = Array.isArray(data.teams) && data.teams.length > 0;
   // Availability should NOT auto-close when captains are selected.
   // Instead, admin can explicitly close availability (match.availabilityLocked=1), and ratings lock will also close it.
-  const availabilityClosed = Number(m.availabilityLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
+  const adminClosed = Number(m.availabilityLocked || 0) === 1;
+  const ratingsClosed = Number(m.ratingsLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
+  const availabilityClosed = adminClosed || ratingsClosed;
   // Captains should only proceed once availability is explicitly closed (admin button / ratings lock).
   const captainPageEnabled = !!availabilityClosed;
   // Availability visibility should depend only on availabilityClosed (admin button / ratings lock),
@@ -835,13 +839,19 @@ async function renderMatchDetail(root, code) {
         ${
           status === "OPEN"
             ? `
-              ${availabilityClosed ? `<div class="small"><b>Availability is closed.</b></div>` : (meName ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${MAX_AVAILABLE} available), you can join the waiting list.</div>` : `<div class="small">Login required to post availability.</div>`)}
+              ${ratingsClosed
+                ? `<div class="small"><b>Availability is closed.</b></div>`
+                : (adminClosed
+                    ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
+                    : (meName
+                        ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${MAX_AVAILABLE} available), you can join the waiting list.</div>`
+                        : `<div class="small">Login required to post availability.</div>`))}
               ${meName ? `` : `
                 <div class="small" style="margin-top:10px">Go to <b>Login</b> tab to sign in.</div>
               `}
-              ${availabilityClosed ? `` : `
+              ${ratingsClosed ? `` : `
                 <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-                  <button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>
+                  ${adminClosed ? `` : `<button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>`}
                   <button class="btn bad" id="btnNo" ${meName ? "" : "disabled"}>NO</button>
                   <button class="btn warn" id="btnWait" disabled>WAITING LIST</button>
                 </div>
@@ -885,16 +895,24 @@ async function renderMatchDetail(root, code) {
     renderAvailLists();
   }
 
-  if (hideAvailability || status !== "OPEN" || availabilityClosed) return;
+  // If admin closed availability, players can still change to NO/WAITING.
+  // If ratings are locked (or match isn't open), do not allow changes.
+  if (hideAvailability || status !== "OPEN" || ratingsClosed) return;
 
 
   async function submit(choice) {
     if (!meName) return toastWarn("Please login first.");
 
+    if (adminClosed && String(choice || "").toUpperCase() === "YES") {
+      return toastWarn("Availability is closed — you can only set NO or WAITING.");
+    }
+
     const y = detail.querySelector("#btnYes");
     const n = detail.querySelector("#btnNo");
     const w = detail.querySelector("#btnWait");
-    y.disabled = true; n.disabled = true; if (w) w.disabled = true;
+    if (y) y.disabled = true;
+    if (n) n.disabled = true;
+    if (w) w.disabled = true;
 
     const saveMsg = detail.querySelector("#saveMsg");
     saveMsg.textContent = "Saving…";
@@ -939,9 +957,12 @@ renderAvailLists();
     setTimeout(()=>{ y.disabled=false; n.disabled=false; renderAvailLists(); }, 900);
   }
 
-  detail.querySelector("#btnYes").onclick = () => submit("YES");
-  detail.querySelector("#btnNo").onclick = () => submit("NO");
-  detail.querySelector("#btnWait").onclick = () => submit("WAITING");
+  const btnYes = detail.querySelector("#btnYes");
+  const btnNo = detail.querySelector("#btnNo");
+  const btnWait = detail.querySelector("#btnWait");
+  if (btnYes) btnYes.onclick = () => submit("YES");
+  if (btnNo) btnNo.onclick = () => submit("NO");
+  if (btnWait) btnWait.onclick = () => submit("WAITING");
 }
 
 export async function renderMatchPage(root, query) {
