@@ -298,6 +298,13 @@ function renderAdminShell(root, view) {
       ${topNavHtml(view)}
 
       <div class="small" id="msg" style="margin-top:10px"></div>
+
+      <!-- iOS PWA ("Add to Home Screen") does not always fire a true browser reload.
+           Provide an explicit refresh button so admins can fetch latest server data reliably. -->
+      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+        <button class="btn gray" id="refreshAdminMatches">Refresh matches</button>
+        <button class="btn gray" style="display:none;" id="clearAdminCache">Clear cache</button>
+      </div>
     </div>
 
     <details class="card" id="seasonMgmt">
@@ -751,6 +758,47 @@ function bindCreateMatch(root, routeToken) {
 function bindHeaderButtons(root, routeToken) {
   // Logout is handled from the Account page; admin chrome may not include a logout button.
   const logoutBtn = root.querySelector("#logout");
+  // These buttons exist in the Admin header card.
+  const refreshBtn = root.querySelector("#refreshAdminMatches");
+  const clearBtn = root.querySelector("#clearAdminCache");
+
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      const msg = root.querySelector("#msg");
+      setDisabled(refreshBtn, true, "Refreshing…");
+      if (msg) msg.textContent = "Loading latest…";
+      const out = await refreshMatchesFromApi(MEM.selectedSeasonId, routeToken);
+      setDisabled(refreshBtn, false);
+      if (!stillOnAdmin(routeToken)) return;
+      if (!out?.ok) {
+        if (msg) msg.textContent = out?.error || "Failed to refresh";
+        return toastError(out?.error || "Failed to refresh");
+      }
+      if (msg) msg.textContent = "";
+      // Re-render current list view if we're on it.
+      const { view } = getViewParams(currentHashQuery());
+      if (view === "open" || view === "past") renderListView(root, view === "past" ? "past" : "open");
+      toastSuccess("Refreshed.");
+      setDisabled(refreshBtn, false, "Refresh Matches");
+    };
+  }
+
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      try {
+        // Clear list cache for selected season + any cached manage/match details.
+        clearAdminMatchesCache(MEM.selectedSeasonId);
+        cleanupCaches();
+      } catch {}
+      toastInfo("Admin cache cleared.");
+      const msg = root.querySelector("#msg");
+      if (msg) msg.textContent = "Cache cleared. Tap Refresh matches to load from server.";
+      MEM.matches = [];
+      renderListView(root, "open");
+    };
+  }
+
   if (!logoutBtn) return;
 
   logoutBtn.onclick = () => {
@@ -1104,6 +1152,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="shareMatch">Share match link</button>
+        <button class="btn gray" id="refreshManage">Refresh match</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
        
         <button class="btn primary" id="lockRatingsTop" ${locked ? "disabled" : ""}>Lock ratings</button>
@@ -1122,6 +1171,27 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     waOpenPrefill(`Manor Lakes FC match link:\n${matchLink(m.publicCode)}`);
     toastInfo("WhatsApp opened.");
   };
+
+  const refreshManageBtn = manageArea.querySelector("#refreshManage");
+  if (refreshManageBtn) {
+    refreshManageBtn.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      setDisabled(refreshManageBtn, true, "Refreshing…");
+      try {
+        // Clear caches first so we don't re-render stale data.
+        clearPublicMatchDetailCache(m.publicCode);
+        clearManageCache(m.publicCode);
+        const fresh = await API.getPublicMatch(m.publicCode);
+        if (!stillOnAdmin(routeToken)) return;
+        if (!fresh?.ok) return toastError(fresh?.error || "Failed to refresh");
+        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+        toastSuccess("Refreshed.");
+      } finally {
+        setDisabled(refreshManageBtn, false);
+      }
+    };
+  }
 
   const unlockBtn = manageArea.querySelector("#unlockBtn");
   if (unlockBtn) {
@@ -1514,7 +1584,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   // Links can be generated as soon as we know the captain names (no need to wait for Save setup).
   const blueUrl = captainBlue ? captainLink(m.publicCode) : "";
   const orangeUrl = captainOrange ? captainLink(m.publicCode) : "";
-  const hasSavedSetup = (blue.length + orange.length) > 0 && !!captainBlue && !!captainOrange;
+  // Sharing teams should NOT depend on captain selection.
+  const hasAnyTeams = (blue.length + orange.length) > 0;
 
   function assignedTeam(p) {
     if (blue.includes(p)) return "BLUE";
@@ -1596,7 +1667,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <!-- Requested: Save + Share after lists -->
       <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="saveSetup" ${isEditLocked ? "disabled" : ""}>Save setup</button>
-        <button class="btn primary" id="shareTeams" ${hasSavedSetup ? "" : "disabled"}>Share teams</button>
+        <button class="btn primary" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share teams</button>
          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
       </div>
 
@@ -1931,7 +2002,7 @@ function renderComboList(filterText = "") {
 
     const shareBtn = manageBody.querySelector("#shareTeams");
     if (shareBtn) {
-      const ok = (blue.length + orange.length) > 0 && captainBlue && captainOrange;
+      const ok = (blue.length + orange.length) > 0;
       shareBtn.disabled = !ok;
     }
   }
@@ -1992,8 +2063,8 @@ function renderComboList(filterText = "") {
   // Share teams (after saved)
   const shareTeamsBtn = manageBody.querySelector("#shareTeams");
   shareTeamsBtn.onclick = () => {
-    const ok = (blue.length + orange.length) > 0 && captainBlue && captainOrange;
-    if (!ok) return toastWarn("Save setup first.");
+    const ok = (blue.length + orange.length) > 0;
+    if (!ok) return toastWarn("Assign players to Blue/Orange first.");
 
     setDisabled(shareTeamsBtn, true, "Opening…");
 
@@ -2002,6 +2073,9 @@ function renderComboList(filterText = "") {
   lines.push(`When: ${when}`);
   lines.push(`Type: INTERNAL`);
   lines.push(`Link: ${matchLink(m.publicCode)}`);
+  lines.push("");
+  lines.push(`⚠️ Shared from Admin portal. Please do NOT edit or re-share this message.`);
+  lines.push(`Post your availability from your Match home screen.`);
   lines.push("");
   lines.push(`Captain remains anonymous.`);
   lines.push(`Captain for each match will receive notification. Please check and provide genuine ratings.`);

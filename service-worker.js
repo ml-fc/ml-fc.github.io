@@ -3,7 +3,7 @@
  * - Does NOT cache API responses (we cache API data in localStorage/sessionStorage in JS)
  */
 
-const CACHE_NAME = "mlfc-static-v2";
+const CACHE_NAME = "mlfc-static-v3";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -46,16 +46,30 @@ self.addEventListener("fetch", (event) => {
 
   if (url.origin !== self.location.origin) return;
 
+  // Only handle GET requests. Never cache POST/PUT/etc.
+  if (event.request.method !== "GET") return;
+
   // Always fetch fresh manifest (prevents stale icons/install metadata)
   if (url.pathname.endsWith("/manifest.json")) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Cache-first for everything else static
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+  // Avoid caching anything with a query string (likely dynamic).
+  if (url.search) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Cache-first only for our known static asset list.
+  // This prevents accidental caching of API responses or other dynamic routes.
+  const path = url.pathname === "/" ? "/" : url.pathname;
+  if (!STATIC_ASSETS.includes(path)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
 });
 self.addEventListener("push", (event) => {
   event.waitUntil((async () => {

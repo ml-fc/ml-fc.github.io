@@ -313,12 +313,22 @@ function whatsappAvailabilityMessage(match, availability) {
   lines.push(`type : ${match.type}`);
   lines.push(`status : ${match.status}`);
   lines.push("");
-  lines.push("avaialbilty");
-  (yes.length ? yes : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
-  lines.push("not available");
-  (no.length ? no : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
-  lines.push("waiting list");
-  (waiting.length ? waiting : ["-"]).forEach((n,i)=>lines.push(`${i+1}.${n}`));
+  // WhatsApp formatting:
+  // - *text* => bold
+  // - keep a blank line between headings and lists for readability
+  lines.push("*AVAILABILITY*");
+  lines.push("");
+  (yes.length ? yes : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
+  lines.push("");
+
+  lines.push("*NOT AVAILABLE*");
+  lines.push("");
+  (no.length ? no : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
+  lines.push("");
+
+  lines.push("*WAITING LIST*");
+  lines.push("");
+  (waiting.length ? waiting : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
   lines.push("");
   lines.push(`link : ${baseUrl()}#/match?code=${match.publicCode}`);
   return lines.join("\n");
