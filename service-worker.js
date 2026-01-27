@@ -3,7 +3,12 @@
  * - Does NOT cache API responses (we cache API data in localStorage/sessionStorage in JS)
  */
 
-const CACHE_NAME = "mlfc-static-v3";
+// Version the cache by the service-worker URL query param (?b=BUILD_ID).
+// This prevents the app getting "stuck" on an old cached index.html.
+const SW_URL = new URL(self.location);
+const BUILD_ID = SW_URL.searchParams.get("b") || "dev";
+const CACHE_NAME = `mlfc-static-${BUILD_ID}`;
+
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -26,32 +31,76 @@ const STATIC_ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      // Force a network revalidation when (re)building the cache.
+      // Otherwise the browser HTTP cache can hand us stale content.
+      const requests = STATIC_ASSETS.map(
+        (u) => new Request(u, { cache: "reload" })
+      );
+      await cache.addAll(requests);
+    })()
   );
+
+  // Activate immediately.
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => (k === CACHE_NAME ? null : caches.delete(k))))
-    )
+    (async () => {
+      // Remove ALL older caches.
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.map((k) => (k === CACHE_NAME ? null : caches.delete(k)))
+      );
+
+      // Ensure all tabs are controlled right away.
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-// Cache-first for same-origin static requests
+// Cache-first for same-origin static requests (but HTML navigations are network-first)
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   if (url.origin !== self.location.origin) return;
-
-  // Only handle GET requests. Never cache POST/PUT/etc.
   if (event.request.method !== "GET") return;
 
   // Always fetch fresh manifest (prevents stale icons/install metadata)
   if (url.pathname.endsWith("/manifest.json")) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // HTML navigations must be network-first.
+  // If we serve cached /index.html forever, users never see the new BUILD_ID
+  // and the new service-worker is never registered.
+  if (
+    event.request.mode === "navigate" ||
+    (event.request.headers.get("accept") || "").includes("text/html")
+  ) {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(
+            new Request(event.request, { cache: "no-store" })
+          );
+
+          // Keep a copy for offline fallback.
+          const cache = await caches.open(CACHE_NAME);
+          const key = url.pathname === "/" ? "/" : "/index.html";
+          cache.put(key, fresh.clone());
+
+          return fresh;
+        } catch {
+          const cached = await caches.match(url.pathname === "/" ? "/" : "/index.html");
+          return cached || Response.error();
+        }
+      })()
+    );
     return;
   }
 
@@ -62,58 +111,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Cache-first only for our known static asset list.
-  // This prevents accidental caching of API responses or other dynamic routes.
   const path = url.pathname === "/" ? "/" : url.pathname;
   if (!STATIC_ASSETS.includes(path)) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
-});
-self.addEventListener("push", (event) => {
-  event.waitUntil((async () => {
-    let data = {};
-    try {
-      const txt = event.data ? await event.data.text() : "";
-      data = txt ? JSON.parse(txt) : {};
-      console.log("[SW] push raw:", txt);
-    } catch (e) {
-      console.log("[SW] push parse failed:", e);
-      data = {};
-    }
-
-    const title = data.title || "MLFC";
-    const options = {
-      body: data.body || "",
-      data: { url: data.url || "https://ml-fc.github.io/#/match?code=" },
-      tag: data.tag,
-    };
-
-    await self.registration.showNotification(title, options);
-
-    // notify open tabs
-    const wins = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const w of wins) {
-      try { w.postMessage({ type: "MLFC_PUSH", payload: data }); } catch {}
-    }
-  })());
-});
-
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = event.notification?.data?.url || "https://ml-fc.github.io/";
-
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
-      for (const w of wins) {
-        if ("focus" in w) {
-          w.navigate(url);
-          return w.focus();
-        }
-      }
-      return clients.openWindow(url);
-    })
+  event.respondWith(
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
