@@ -333,7 +333,7 @@ function renderAdminShell(root, view) {
       <div id="seasonList" class="small" style="margin-top:8px"></div>
     </details>
 
-    <details class="card" id="createMatchCard" open>
+    <details class="card" id="createMatchCard" >
       <summary style="font-weight:950">Create match</summary>
 
       <input id="title" class="input" placeholder="Title" style="margin-top:10px" />
