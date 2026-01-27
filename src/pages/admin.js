@@ -2,7 +2,7 @@
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { cleanupCaches } from "../cache_cleanup.js";
-import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor } from "../nav_state.js";
+import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
@@ -299,10 +299,7 @@ function renderAdminShell(root, view) {
 
       <div class="small" id="msg" style="margin-top:10px"></div>
 
-      <!-- iOS PWA ("Add to Home Screen") does not always fire a true browser reload.
-           Provide an explicit refresh button so admins can fetch latest server data reliably. -->
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" id="refreshAdminMatches">Refresh matches</button>
         <button class="btn gray" style="display:none;" id="clearAdminCache">Clear cache</button>
       </div>
     </div>
@@ -419,8 +416,9 @@ async function openManageView(root, code, routeToken, prevView) {
   if (cached?.data?.ok) {
     renderManageUI(root, cached.data, routeToken, { fromCache: true, prevView });
 
-    // Per requirement: reload match details from API only on a browser refresh.
-    if (isReloadForAdminMatchCode(code)) {
+    // Reload match details from API only on a browser refresh.
+    // In iOS installed app (Add to Home Screen), treat this as always-fresh.
+    if (isIOSStandalone() || isReloadForAdminMatchCode(code)) {
       API.getPublicMatch(code)
         .then(fresh => {
           if (!stillOnAdmin(routeToken)) return;
@@ -759,30 +757,7 @@ function bindHeaderButtons(root, routeToken) {
   // Logout is handled from the Account page; admin chrome may not include a logout button.
   const logoutBtn = root.querySelector("#logout");
   // These buttons exist in the Admin header card.
-  const refreshBtn = root.querySelector("#refreshAdminMatches");
   const clearBtn = root.querySelector("#clearAdminCache");
-
-  if (refreshBtn) {
-    refreshBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      const msg = root.querySelector("#msg");
-      setDisabled(refreshBtn, true, "Refreshing…");
-      if (msg) msg.textContent = "Loading latest…";
-      const out = await refreshMatchesFromApi(MEM.selectedSeasonId, routeToken);
-      setDisabled(refreshBtn, false);
-      if (!stillOnAdmin(routeToken)) return;
-      if (!out?.ok) {
-        if (msg) msg.textContent = out?.error || "Failed to refresh";
-        return toastError(out?.error || "Failed to refresh");
-      }
-      if (msg) msg.textContent = "";
-      // Re-render current list view if we're on it.
-      const { view } = getViewParams(currentHashQuery());
-      if (view === "open" || view === "past") renderListView(root, view === "past" ? "past" : "open");
-      toastSuccess("Refreshed.");
-      setDisabled(refreshBtn, false, "Refresh Matches");
-    };
-  }
 
   if (clearBtn) {
     clearBtn.onclick = () => {
@@ -793,7 +768,7 @@ function bindHeaderButtons(root, routeToken) {
       } catch {}
       toastInfo("Admin cache cleared.");
       const msg = root.querySelector("#msg");
-      if (msg) msg.textContent = "Cache cleared. Tap Refresh matches to load from server.";
+      if (msg) msg.textContent = "Cache cleared.";
       MEM.matches = [];
       renderListView(root, "open");
     };
@@ -1143,7 +1118,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           <div class="h1" style="margin:0">Manage: ${m.title}</div>
           <div class="small" style="margin-top:6px">${when} • ${m.type} • ${m.status}</div>
           <div class="small" style="margin-top:6px">${fromCache ? "Loaded from device cache." : "Loaded from API."}</div>
-          <div class="small" style="margin-top:6px">Refresh your browser to reload latest match details.</div>
+          <div class="small" style="margin-top:6px">${isIOSStandalone() ? "(iPhone app loads fresh from server.)" : ""}</div>
         </div>
       </div>
 
@@ -1152,7 +1127,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="shareMatch">Share match link</button>
-        <button class="btn gray" id="refreshManage">Refresh match</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
        
         <button class="btn primary" id="lockRatingsTop" ${locked ? "disabled" : ""}>Lock ratings</button>
@@ -1164,34 +1138,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     <div id="manageBody"></div>
   `;
 
-  // Per requirement: no in-page Back/Refresh buttons.
-  // Use browser back/forward and browser refresh when needed.
+  // Admin manage view
 
   manageArea.querySelector("#shareMatch").onclick = () => {
     waOpenPrefill(`Manor Lakes FC match link:\n${matchLink(m.publicCode)}`);
     toastInfo("WhatsApp opened.");
   };
-
-  const refreshManageBtn = manageArea.querySelector("#refreshManage");
-  if (refreshManageBtn) {
-    refreshManageBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      setDisabled(refreshManageBtn, true, "Refreshing…");
-      try {
-        // Clear caches first so we don't re-render stale data.
-        clearPublicMatchDetailCache(m.publicCode);
-        clearManageCache(m.publicCode);
-        const fresh = await API.getPublicMatch(m.publicCode);
-        if (!stillOnAdmin(routeToken)) return;
-        if (!fresh?.ok) return toastError(fresh?.error || "Failed to refresh");
-        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-        toastSuccess("Refreshed.");
-      } finally {
-        setDisabled(refreshManageBtn, false);
-      }
-    };
-  }
 
   const unlockBtn = manageArea.querySelector("#unlockBtn");
   if (unlockBtn) {
@@ -2174,13 +2126,16 @@ export async function renderAdminPage(root, query) {
 
   const msg = root.querySelector("#msg");
   msg.textContent = MEM.matches.length
-    ? "Loaded from device cache. Refresh your browser to fetch the latest."
-    : "No cached matches for this season yet. Refresh your browser to load from server.";
+    ? "Loaded from device cache."
+    : "No cached matches for this season yet.";
 
   // Per requirement: fetch admin matches from API ONLY on browser refresh (or first time with empty cache).
   const viewNow = view;
   const hasCache = !!lsGet(matchesKey(MEM.selectedSeasonId));
-  const shouldReloadFetch = (viewNow === "open" || viewNow === "past") && (isReloadForAdminList() || !hasCache);
+  // In iOS installed app (Add to Home Screen), reload semantics are unreliable.
+  // Requirement: always load admin lists from API in the installed iPhone app,
+  // but keep cache-first behavior in normal browsers.
+  const shouldReloadFetch = (viewNow === "open" || viewNow === "past") && (isIOSStandalone() || isReloadForAdminList() || !hasCache);
   if (shouldReloadFetch) {
     msg.textContent = "Loading latest…";
     const out = await refreshMatchesFromApi(MEM.selectedSeasonId, routeToken);

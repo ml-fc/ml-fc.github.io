@@ -63,6 +63,21 @@
     </div>
   </main>
 
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <span>Build: <span id="buildId">—</span></span>
+    </div>
+  </footer>
+
+  <!-- Update available banner -->
+  <div id="updateBanner" class="updateBanner" hidden>
+    <div class="updateBanner__inner">
+      <div class="updateBanner__text">Update available</div>
+      <button id="updateReload" class="btn primary" type="button">Reload</button>
+    </div>
+  </div>
+
   <!-- Bottom Nav (mobile) -->
   <nav class="bottomnav" aria-label="Bottom navigation">
     <a class="bottomnav__item" href="#/match">
@@ -105,13 +120,56 @@
     window.addEventListener("hashchange", setActive);
     setActive();
   </script>
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js").catch(() => {});
-    });
-  }
-</script>
+  <script type="module">
+    import { BUILD_ID } from "./src/config.js";
+
+    // Footer build id
+    const bid = document.getElementById("buildId");
+    if (bid) bid.textContent = BUILD_ID;
+
+    // Update banner helpers
+    const banner = document.getElementById("updateBanner");
+    const reloadBtn = document.getElementById("updateReload");
+    const showBanner = () => {
+      if (banner) banner.hidden = false;
+    };
+    if (reloadBtn) reloadBtn.addEventListener("click", () => window.location.reload());
+
+    // Service worker registration (cache-busted by BUILD_ID for GitHub Pages)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          const reg = await navigator.serviceWorker.register(
+            `./service-worker.js?b=${encodeURIComponent(BUILD_ID)}`
+          );
+
+          // If a new SW takes control, prompt the user to reload.
+          let prompted = false;
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (prompted) return;
+            prompted = true;
+            showBanner();
+          });
+
+          // If an update is found but control doesn't change immediately (platform quirks),
+          // show the banner when an installing worker reaches "installed" and there's an existing controller.
+          const maybeTrack = (sw) => {
+            if (!sw) return;
+            sw.addEventListener("statechange", () => {
+              if (sw.state === "installed" && navigator.serviceWorker.controller) {
+                showBanner();
+              }
+            });
+          };
+
+          maybeTrack(reg.installing);
+          reg.addEventListener("updatefound", () => maybeTrack(reg.installing));
+        } catch {
+          // ignore
+        }
+      });
+    }
+  </script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

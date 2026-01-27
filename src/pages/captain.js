@@ -266,9 +266,7 @@ export async function renderCaptainPage(root, query) {
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">Open match</button>
-        <button class="btn gray" id="refreshMatch">Refresh match data</button>
       </div>
-      <div class="small" id="refreshMsg" style="margin-top:10px"></div>
     </div>
 
     <div class="card">
@@ -391,26 +389,6 @@ export async function renderCaptainPage(root, query) {
 
   root.querySelector("#openMatch").onclick = () => {
     location.hash = `#/match?code=${encodeURIComponent(code)}`;
-  };
-
-  root.querySelector("#refreshMatch").onclick = async () => {
-    const btn = root.querySelector("#refreshMatch");
-    const msg = root.querySelector("#refreshMsg");
-    setDisabled(btn, true, "Refreshing…");
-    msg.textContent = "Refreshing…";
-    try {
-      const res = await API.getPublicMatch(code);
-      if (!res.ok) {
-        msg.textContent = res.error || "Failed";
-        toastError(res.error || "Failed to refresh");
-        return;
-      }
-      msg.textContent = "Refreshed ✅";
-      toastSuccess("Match refreshed");
-      await renderCaptainPage(root, query);
-    } finally {
-      setDisabled(btn, false);
-    }
   };
 
   root.querySelector("#submitScore").onclick = async () => {

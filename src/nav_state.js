@@ -90,3 +90,20 @@ export function isReloadForAdminMatchCode(code) {
   const c = query.get("code") || "";
   return !!c && c === String(code || "");
 }
+
+// iOS "Add to Home Screen" (standalone/PWA) detection.
+// When installed, iOS often does not behave like a normal browser reload,
+// so we use this to selectively force fresh API loads for admin.
+export function isIOSStandalone() {
+  try {
+    const ua = navigator.userAgent || "";
+    const isIOS = /iP(hone|od|ad)/.test(ua) && !/Windows Phone/.test(ua);
+    if (!isIOS) return false;
+
+    const navStandalone = typeof navigator.standalone === "boolean" && navigator.standalone;
+    const mmStandalone = !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    return navStandalone || mmStandalone;
+  } catch {
+    return false;
+  }
+}
