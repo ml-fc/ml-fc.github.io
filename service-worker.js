@@ -5,7 +5,9 @@
 */
 
 // Version the cache by the service-worker URL query param (?b=BUILD_ID).
-// This prevents the app getting "stuck" on an old cached index.html.
+// This prevents the app getting  "stuck" on an old cached index.html.
+
+
 const SW_URL = new URL(self.location);
 const BUILD_ID = SW_URL.searchParams.get("b") || "dev";
 const CACHE_NAME = `mlfc-static-${BUILD_ID}`;
@@ -138,6 +140,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(event.request));
     return;
   }
+
+
 
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
