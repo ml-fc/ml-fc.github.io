@@ -2,7 +2,7 @@
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
-import { getCachedUser } from "../auth.js";
+import { getCachedUser, refreshMe } from "../auth.js";
 
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
@@ -77,7 +77,14 @@ function getScopeFromHash() {
 
 export async function renderCaptainPage(root, query) {
   const code = query.get("code");
-  const me = getCachedUser();
+
+  // IMPORTANT: don't rely only on cached user, because admin status might change after login.
+  let me = getCachedUser();
+  try {
+    const fresh = await refreshMe(true); // force server truth (if available)
+    if (fresh) me = fresh;
+  } catch {}
+
   const captain = String(me?.name || "").trim();
   const isAdmin = !!me?.isAdmin;
   const src = (query.get("src") || "match").toLowerCase();
@@ -146,9 +153,16 @@ export async function renderCaptainPage(root, query) {
     if (p && tm) teamMap[p] = tm;
   });
 
-  if (!roster.some(x => x.toLowerCase() === captain.toLowerCase())) {
+  // Admin: roster must match actual teams (Blue/Orange). Do NOT inject the logged-in admin.
+  // Captain flow: roster can start from availability / cached roster and can include the captain.
+  if (adminMode && Object.keys(teamMap).length) {
+    roster = uniqueSorted(Object.keys(teamMap));
+  }
+
+  if (!adminMode && !roster.some(x => x.toLowerCase() === captain.toLowerCase())) {
     roster = uniqueSorted([...roster, captain]);
   }
+
   roster.forEach(p => { if (!teamMap[p]) teamMap[p] = "BLUE"; });
 
   const capt = data.captains || {};
@@ -412,10 +426,10 @@ export async function renderCaptainPage(root, query) {
 
         // Partial update: send only opponent side (backend supports COALESCE)
         if (captainTeam === "BLUE") {
-          out = await API.captainSubmitScore(code, "INTERNAL", "", String(oppVal));
+          out = await API.captainSubmitScore(code, "INTERNAL", "", String(oppVal), getScopeFromHash());
           m.scoreAway = String(oppVal);
         } else {
-          out = await API.captainSubmitScore(code, "INTERNAL", String(oppVal), "");
+          out = await API.captainSubmitScore(code, "INTERNAL", String(oppVal), "", getScopeFromHash());
           m.scoreHome = String(oppVal);
         }
 
@@ -444,7 +458,7 @@ export async function renderCaptainPage(root, query) {
           return;
         }
 
-        out = await API.captainSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b));
+        out = await API.captainSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b), getScopeFromHash());
 
         if (!out.ok) {
           msg.textContent = out.error || "Failed";

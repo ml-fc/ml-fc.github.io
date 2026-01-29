@@ -1,6 +1,6 @@
 import { API } from "../api/endpoints.js";
 import { clearAuth, setCachedUser, setToken, getToken, getCachedUser, refreshMe, updateNavForUser } from "../auth.js";
-import { toastSuccess, toastError } from "../ui/toast.js";
+import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 
@@ -20,6 +20,7 @@ export async function renderLoginPage(root) {
         <div class="small">Logged in as <b>${me.name}</b>${me.isAdmin ? " • <span class=\"badge\">ADMIN</span>" : ""}</div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
+          <button class="btn gray" id="updateApp">Update app</button>
           <button class="btn gray" id="logout">Logout</button>
         </div>
       </div>
@@ -42,6 +43,83 @@ export async function renderLoginPage(root) {
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
+
+    // Force update: clear SW + browser Cache Storage + most local caches, then reload.
+    root.querySelector("#updateApp").onclick = async () => {
+      try {
+        toastInfo("Updating… clearing cached assets and refreshing.");
+
+        // Preserve auth token, but force refetch of user + all cached API/UI state.
+        const keepToken = getToken();
+
+        // Clear app local caches (keep token, drop cached user so /me refetches)
+        try {
+          const keys = Object.keys(localStorage || {});
+          for (const k of keys) {
+            if (k === "mlfc_token_v1") continue;
+            // Clear all app caches (rosters, teams, notifications, leaderboard, etc.)
+            if (String(k).startsWith("mlfc_")) localStorage.removeItem(k);
+          }
+          if (keepToken) setToken(keepToken);
+        } catch {}
+
+        // Best-effort clear sessionStorage too
+        try { sessionStorage.clear(); } catch {}
+
+        // Clear IndexedDB databases if supported (best-effort)
+        try {
+          if (indexedDB?.databases) {
+            const dbs = await indexedDB.databases();
+            await Promise.all((dbs || []).map(d => d?.name ? new Promise(res => {
+              const req = indexedDB.deleteDatabase(d.name);
+              req.onsuccess = req.onerror = req.onblocked = () => res();
+            }) : Promise.resolve()));
+          }
+        } catch {}
+
+        // Clear Cache Storage from the page context
+        try {
+          if ("caches" in window) {
+            const ckeys = await caches.keys();
+            await Promise.all(ckeys.map(k => caches.delete(k)));
+          }
+        } catch {}
+
+        // Tell the SW to clear caches and activate any waiting update
+        try {
+          if (navigator.serviceWorker?.getRegistrations) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) {
+              try { reg.active?.postMessage({ type: "CLEAR_CACHES" }); } catch {}
+              try { reg.waiting?.postMessage({ type: "SKIP_WAITING" }); } catch {}
+              try { await reg.update(); } catch {}
+            }
+          }
+        } catch {}
+
+        // Force fresh user info from API after caches cleared (token preserved)
+        try { await refreshMe(true); } catch {}
+
+        // Reload under the newest SW/controller
+        let reloaded = false;
+        const onCtrl = () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        };
+        try { navigator.serviceWorker?.addEventListener("controllerchange", onCtrl); } catch {}
+
+        // Fallback reload (if controllerchange doesn't fire)
+        setTimeout(() => {
+          if (!reloaded) {
+            toastWarn("Reloading…");
+            window.location.reload();
+          }
+        }, 800);
+      } catch (e) {
+        toastError(e?.message || "Update failed");
+      }
+    };
     root.querySelector("#logout").onclick = async () => {
       await API.logout().catch(() => {});
       clearAuth();

@@ -63,6 +63,27 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Allow the page to force-activate a newly installed worker and/or clear caches.
+// Useful for a "Update app" button.
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  const type = String(data.type || "").toUpperCase();
+
+  if (type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
+
+  if (type === "CLEAR_CACHES" || type === "CLEAR_ALL") {
+    event.waitUntil(
+      (async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      })()
+    );
+  }
+});
+
 // Cache-first for same-origin static requests (but HTML navigations are network-first)
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);

@@ -142,13 +142,16 @@
           const reg = await navigator.serviceWorker.register(
             `./service-worker.js?b=${encodeURIComponent(BUILD_ID)}`
           );
-              
-          // If a new SW takes control, prompt the user to reload.
-          let prompted = false;
+
+          // If a new SW takes control, reload once so users immediately get the new release.
+          // Guard against reload loops.
+          let didReload = false;
           navigator.serviceWorker.addEventListener("controllerchange", () => {
-            if (prompted) return;
-            prompted = true;
+            if (didReload) return;
+            didReload = true;
+            // Show banner briefly in case reload is blocked.
             showBanner();
+            window.location.reload();
           });
 
           // If an update is found but control doesn't change immediately (platform quirks),
@@ -157,6 +160,10 @@
             if (!sw) return;
             sw.addEventListener("statechange", () => {
               if (sw.state === "installed" && navigator.serviceWorker.controller) {
+                // Tell the new SW to activate immediately, then controllerchange will reload.
+                try {
+                  if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+                } catch {}
                 showBanner();
               }
             });
@@ -164,6 +171,13 @@
 
           maybeTrack(reg.installing);
           reg.addEventListener("updatefound", () => maybeTrack(reg.installing));
+
+          // Opportunistic update checks (helps if the tab stays open for days).
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+              try { reg.update(); } catch {}
+            }
+          });
         } catch {
           // ignore
         }
