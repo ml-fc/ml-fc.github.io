@@ -5,10 +5,14 @@ import { cleanupCaches } from "../cache_cleanup.js";
 import { getRouteToken } from "../router.js";
 import { lsGet, lsSet, lsDel } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
+import { refreshMe } from "../auth.js";
 
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
+
+// Admin-only preference: show/hide ratings on leaderboard
+const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
 
 function now(){ return Date.now(); }
 
@@ -43,35 +47,59 @@ function pickSelectedSeason(seasonsRes) {
   return { seasons, selected };
 }
 
-function sortRows(rows, mode) {
+function sortRows(rows, mode, showRating) {
   const r = (rows||[]).slice();
   if (mode === "goals") r.sort((a,b)=>(b.goals||0)-(a.goals||0));
   else if (mode === "assists") r.sort((a,b)=>(b.assists||0)-(a.assists||0));
-  else r.sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
+  else if (showRating) r.sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
+  else r.sort((a,b)=>(b.goals||0)-(a.goals||0));
   return r;
 }
 
-function renderTable(root, rows, sortMode) {
+function renderTable(root, rows, sortMode, showRating) {
   const body = root.querySelector("#lbBody");
-  const sorted = sortRows(rows, sortMode);
+  const sorted = sortRows(rows, sortMode, showRating);
 
-  body.innerHTML = sorted.map((x, i) => `
-    <tr style="border-top:1px solid rgba(11,18,32,0.06)">
-      <td style="padding:10px; font-weight:950">${i+1}</td>
-      <td style="padding:10px; font-weight:950">${x.playerName}</td>
-      <td style="padding:10px; text-align:center">${x.goals || 0}</td>
-      <td style="padding:10px; text-align:center">${x.assists || 0}</td>
-      <td style="padding:10px; text-align:center">${(x.avgRating || 0).toFixed(2)}</td>
-      <td style="padding:10px; text-align:center" class="small">${x.matchesRated || 0}</td>
-    </tr>
-  `).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No data.</td></tr>`;
+  const cols = showRating ? 6 : 4;
+  body.innerHTML = sorted.map((x, i) => {
+    const ratingCols = showRating ? `
+      <td class="lb__cell lb__num">${(x.avgRating || 0).toFixed(2)}</td>
+      <td class="lb__cell lb__num small">${x.matchesRated || 0}</td>
+    ` : "";
+    return `
+      <tr class="lb__row">
+        <td class="lb__cell lb__rank">${i+1}</td>
+        <td class="lb__cell lb__player" title="${x.playerName}">${x.playerName}</td>
+        <td class="lb__cell lb__num">${x.goals || 0}</td>
+        <td class="lb__cell lb__num">${x.assists || 0}</td>
+        ${ratingCols}
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No data.</td></tr>`;
 }
 
 export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   cleanupCaches();
   const token = tokenFromRouter || getRouteToken();
 
-  let sortMode = "rating";
+  // Leaderboard is public, but ratings are admin-only.
+  const user = await refreshMe(false);
+  const isAdmin = !!user?.isAdmin;
+  let showRating = false;
+  if (isAdmin) {
+    showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
+  }
+
+  let sortMode = showRating ? "rating" : "goals";
+
+  const ratingToggleHtml = isAdmin ? `
+    <label class="row" style="gap:10px; align-items:center; margin-top:12px">
+      <input type="checkbox" id="toggleRating" ${showRating ? "checked" : ""} />
+      <div class="small"><b>Show rating</b> <span style="opacity:.7">(admin only)</span></div>
+    </label>
+  ` : "";
+
+  const sortRatingBtnHtml = (isAdmin && showRating) ? `<button class="btn gray" id="sortRating">Sort Rating</button>` : "";
 
   root.innerHTML = `
     <div class="card">
@@ -80,27 +108,30 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="refresh">Refresh</button>
       </div>
+      ${ratingToggleHtml}
       <div class="small" id="msg" style="margin-top:8px"></div>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="sortGoals">Sort Goals</button>
         <button class="btn gray" id="sortAssists">Sort Assists</button>
-        <button class="btn gray" id="sortRating">Sort Rating</button>
+        ${sortRatingBtnHtml}
       </div>
     </div>
 
     <div class="card">
       <div class="h1">Season Stats</div>
-      <div style="margin-top:10px; overflow:auto; border-radius:14px; border:1px solid rgba(11,18,32,0.10)">
-        <table style="width:100%; border-collapse:collapse; min-width:620px">
+      <div class="lb__tableWrap">
+        <table class="lb__table">
           <thead>
             <tr style="background: rgba(11,18,32,0.04)">
-              <th style="text-align:left; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">#</th>
-              <th style="text-align:left; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Player</th>
-              <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Goals</th>
-              <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Assists</th>
-              <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Avg Rating</th>
-              <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Rated</th>
+              <th class="lb__th lb__rank">#</th>
+              <th class="lb__th lb__player">Player</th>
+              <th class="lb__th lb__num">G</th>
+              <th class="lb__th lb__num">A</th>
+              ${ (isAdmin && showRating) ? `
+                <th class="lb__th lb__num">R</th>
+                <th class="lb__th lb__num">Rated</th>
+              ` : "" }
             </tr>
           </thead>
           <tbody id="lbBody"></tbody>
@@ -130,7 +161,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   } else {
     msg.textContent = "No cached data. Tap Refresh (or refresh your browser).";
   }
-  renderTable(root, rows, sortMode);
+  renderTable(root, rows, sortMode, isAdmin && showRating);
 
   root.querySelector("#seasonSelect").onchange = () => {
     seasonId = root.querySelector("#seasonSelect").value;
@@ -139,12 +170,23 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const c = lsGet(lbKey(seasonId));
     rows = c?.data?.ok ? (c.data.rows || []) : [];
     msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Tap Refresh (or refresh your browser).";
-    renderTable(root, rows, sortMode);
+    renderTable(root, rows, sortMode, isAdmin && showRating);
   };
 
-  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode); };
-  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode); };
-  root.querySelector("#sortRating").onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode); };
+  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, isAdmin && showRating); };
+  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, isAdmin && showRating); };
+  const sortRatingBtn = root.querySelector("#sortRating");
+  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, isAdmin && showRating); };
+
+  const toggle = root.querySelector("#toggleRating");
+  if (toggle) {
+    toggle.onchange = () => {
+      showRating = !!toggle.checked;
+      localStorage.setItem(LS_SHOW_RATING, showRating ? "1" : "0");
+      // Re-render page quickly to update columns/buttons.
+      renderLeaderboardPage(root, query, tokenFromRouter).catch(() => {});
+    };
+  }
 
   async function refreshLeaderboard() {
     const btn = root.querySelector("#refresh");
@@ -166,7 +208,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
     lsSet(lbKey(seasonId), { ts: now(), data: res });
     rows = res.rows || [];
-    renderTable(root, rows, sortMode);
+    renderTable(root, rows, sortMode, isAdmin && showRating);
     msg.textContent = "";
     toastSuccess("Leaderboard refreshed.");
   }

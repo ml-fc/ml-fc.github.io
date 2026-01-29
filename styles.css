@@ -1023,3 +1023,53 @@ a:hover { text-decoration: underline; }
 @media (min-width: 820px) {
   .updateBanner { bottom: 18px; }
 }
+
+/* Leaderboard (compact table that fits on mobile without horizontal scrolling) */
+.lb__tableWrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(11,18,32,0.10);
+}
+
+.lb__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.lb__th {
+  text-align: left;
+  padding: 10px;
+  font-size: 12px;
+  color: rgba(11,18,32,0.72);
+}
+
+.lb__row { border-top: 1px solid rgba(11,18,32,0.06); }
+
+.lb__cell {
+  padding: 10px;
+  font-weight: 900;
+}
+
+.lb__rank { width: 34px; }
+
+.lb__player {
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb__num {
+  text-align: center;
+  width: 64px;
+  font-weight: 900;
+}
+
+@media (max-width: 420px) {
+  .lb__th { padding: 8px; }
+  .lb__cell { padding: 8px; }
+  .lb__rank { width: 30px; }
+  .lb__num { width: 54px; }
+}
