@@ -1,6 +1,6 @@
 // src/pages/leaderboard.js
 import { API } from "../api/endpoints.js";
-import { toastError, toastSuccess, toastInfo } from "../ui/toast.js";
+import { toastError, toastSuccess } from "../ui/toast.js";
 import { cleanupCaches } from "../cache_cleanup.js";
 import { getRouteToken } from "../router.js";
 import { lsGet, lsSet, lsDel } from "../storage.js";
@@ -13,6 +13,14 @@ const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
 // Admin-only preference: show/hide ratings on leaderboard
 const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
+
+const LB_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
+const LB_REFRESH_COOLDOWN_MS = 20 * 1000;
+
+let ACTIVE_LB = { root: null, seasonId: "", refresh: null };
+let LB_AUTO_REFRESH_LISTENERS = false;
+let LB_LAST_REFRESH_TS = 0;
+let LB_REFRESH_INFLIGHT = false;
 
 function now(){ return Date.now(); }
 
@@ -78,9 +86,45 @@ function renderTable(root, rows, sortMode, showRating) {
   }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No data.</td></tr>`;
 }
 
+function isLeaderboardRouteActive() {
+  const hash = window.location.hash || "#/match";
+  return hash.startsWith("#/leaderboard");
+}
+
+function shouldAutoRefreshLeaderboard(seasonId) {
+  if (!isLeaderboardRouteActive()) return false;
+  if (!seasonId) return false;
+  const cache = lsGet(lbKey(seasonId));
+  const age = now() - Number(cache?.ts || 0);
+  return !cache?.data?.ok || age > LB_CACHE_MAX_AGE_MS;
+}
+
+function ensureLeaderboardAutoRefreshListeners() {
+  if (LB_AUTO_REFRESH_LISTENERS) return;
+  LB_AUTO_REFRESH_LISTENERS = true;
+
+  const trigger = () => {
+    if (!ACTIVE_LB.refresh || !ACTIVE_LB.seasonId) return;
+    if (!shouldAutoRefreshLeaderboard(ACTIVE_LB.seasonId)) return;
+    ACTIVE_LB.refresh({ silent: true, reason: "auto" }).catch(() => {});
+  };
+
+  window.addEventListener("hashchange", () => {
+    if (isLeaderboardRouteActive()) trigger();
+  });
+
+  window.addEventListener("focus", trigger);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) trigger();
+  });
+}
+
 export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   cleanupCaches();
   const token = tokenFromRouter || getRouteToken();
+
+  ensureLeaderboardAutoRefreshListeners();
 
   // Leaderboard is public, but ratings are admin-only.
   const user = await refreshMe(false);
@@ -159,9 +203,56 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     rows = cached.data.rows || [];
     msg.textContent = "Loaded from device cache.";
   } else {
-    msg.textContent = "No cached data. Tap Refresh (or refresh your browser).";
+    msg.textContent = "No cached data. Refreshing latest…";
   }
   renderTable(root, rows, sortMode, isAdmin && showRating);
+
+  async function refreshLeaderboard(opts = {}) {
+    const silent = !!opts.silent;
+    const force = !!opts.force;
+
+    const t = now();
+    if (LB_REFRESH_INFLIGHT) return;
+    if (!force && t - LB_LAST_REFRESH_TS < LB_REFRESH_COOLDOWN_MS) return;
+    LB_LAST_REFRESH_TS = t;
+
+    const btn = root.querySelector("#refresh");
+    if (!silent && btn) {
+      btn.disabled = true;
+      btn.textContent = "Refreshing…";
+      msg.textContent = "Loading…";
+    }
+
+    LB_REFRESH_INFLIGHT = true;
+    try {
+      if (!silent) lsDel(lbKey(seasonId));
+
+      const res = await API.leaderboardSeason(seasonId);
+      if (getRouteToken() !== token) return;
+
+      if (!res.ok) {
+        if (!silent) {
+          msg.textContent = res.error || "Failed";
+          toastError(res.error || "Failed leaderboard");
+        }
+        return;
+      }
+
+      lsSet(lbKey(seasonId), { ts: now(), data: res });
+      rows = res.rows || [];
+      renderTable(root, rows, sortMode, isAdmin && showRating);
+      msg.textContent = silent ? "Updated just now." : "";
+      if (!silent) toastSuccess("Leaderboard refreshed.");
+    } finally {
+      LB_REFRESH_INFLIGHT = false;
+      if (!silent && btn) {
+        btn.disabled = false;
+        btn.textContent = "Refresh";
+      }
+    }
+  }
+
+  ACTIVE_LB = { root, seasonId, refresh: refreshLeaderboard };
 
   root.querySelector("#seasonSelect").onchange = () => {
     seasonId = root.querySelector("#seasonSelect").value;
@@ -169,8 +260,13 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
     const c = lsGet(lbKey(seasonId));
     rows = c?.data?.ok ? (c.data.rows || []) : [];
-    msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Tap Refresh (or refresh your browser).";
+    msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Refreshing latest…";
     renderTable(root, rows, sortMode, isAdmin && showRating);
+
+    ACTIVE_LB.seasonId = seasonId;
+    if (!rows.length || shouldAutoRefreshLeaderboard(seasonId)) {
+      refreshLeaderboard({ silent: true, force: true }).catch(() => {});
+    }
   };
 
   root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, isAdmin && showRating); };
@@ -188,36 +284,9 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     };
   }
 
-  async function refreshLeaderboard() {
-    const btn = root.querySelector("#refresh");
-    btn.disabled = true; btn.textContent = "Refreshing…";
-    msg.textContent = "Loading…";
+  root.querySelector("#refresh").onclick = () => refreshLeaderboard({ force: true });
 
-    // Refresh should clear cache and then fetch fresh.
-    lsDel(lbKey(seasonId));
-
-    const res = await API.leaderboardSeason(seasonId);
-
-    btn.disabled = false; btn.textContent = "Refresh";
-    if (getRouteToken() !== token) return;
-
-    if (!res.ok) {
-      msg.textContent = res.error || "Failed";
-      return toastError(res.error || "Failed leaderboard");
-    }
-
-    lsSet(lbKey(seasonId), { ts: now(), data: res });
-    rows = res.rows || [];
-    renderTable(root, rows, sortMode, isAdmin && showRating);
-    msg.textContent = "";
-    toastSuccess("Leaderboard refreshed.");
-  }
-
-  root.querySelector("#refresh").onclick = refreshLeaderboard;
-
-  // Auto-refresh only on browser reload (or first load with empty cache)
-  if (isReloadFor("#/leaderboard") || !cached?.data?.ok) {
-    // Run without blocking initial render
-    refreshLeaderboard().catch(() => {});
-  }
+  // Auto-refresh on reload, empty cache, or stale cache.
+  const shouldFetchNow = isReloadFor("#/leaderboard") || !cached?.data?.ok || shouldAutoRefreshLeaderboard(seasonId);
+  if (shouldFetchNow) refreshLeaderboard({ silent: !isReloadFor("#/leaderboard"), force: true }).catch(() => {});
 }

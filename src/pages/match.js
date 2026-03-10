@@ -26,6 +26,14 @@ let SUPPRESS_META_ONCE = false;
 let ACTIVE_MATCH = { pageRoot: null, listRoot: null, seasonId: "", seasons: [], captainCodes: [] };
 let MATCH_META_LAST_CHECK = 0;
 let MATCH_META_LISTENERS_INSTALLED = false;
+let MATCH_OPEN_AUTO_REFRESH_INSTALLED = false;
+let MATCH_OPEN_REFRESH_INFLIGHT = false;
+let MATCH_OPEN_LAST_REFRESH_TS = 0;
+let MATCH_OPEN_REFRESH_TIMER = null;
+
+const MATCH_OPEN_CACHE_MAX_AGE_MS = 60 * 1000;
+const MATCH_OPEN_REFRESH_COOLDOWN_MS = 15 * 1000;
+const MATCH_OPEN_REFRESH_INTERVAL_MS = 45 * 1000;
 
 function matchTeamLabel(m, side) {
   const t = String(m?.type || "").toUpperCase();
@@ -74,6 +82,76 @@ function ensureMatchMetaActivationListeners() {
     // Only treat this as a "tab enter" when the match route is active.
     if (isMatchRouteActive()) setTimeout(() => scheduleMatchMetaCheck("tab"), 0);
   });
+}
+
+function shouldRefreshOpenMatches(seasonId, { force = false } = {}) {
+  if (force) return true;
+  if (!isMatchRouteActive()) return false;
+  if (!ACTIVE_MATCH.pageRoot || !ACTIVE_MATCH.listRoot) return false;
+
+  const listEl = ACTIVE_MATCH.pageRoot.querySelector("#matchListView");
+  if (!listEl || listEl.style.display === "none") return false;
+
+  const cache = lsGet(openKey(seasonId));
+  const age = now() - Number(cache?.ts || 0);
+  return !cache?.matches || age > MATCH_OPEN_CACHE_MAX_AGE_MS;
+}
+
+async function refreshOpenMatches(root, seasons, seasonId, { force = false } = {}) {
+  if (MATCH_OPEN_REFRESH_INFLIGHT) return;
+  if (!shouldRefreshOpenMatches(seasonId, { force })) return;
+
+  const t = now();
+  if (!force && t - MATCH_OPEN_LAST_REFRESH_TS < MATCH_OPEN_REFRESH_COOLDOWN_MS) return;
+
+  MATCH_OPEN_REFRESH_INFLIGHT = true;
+  MATCH_OPEN_LAST_REFRESH_TS = t;
+  try {
+    const res = await API.publicOpenMatches(seasonId);
+    if (!res?.ok) return;
+
+    lsSet(openKey(seasonId), { ts: now(), matches: res.matches || [] });
+    if (!isMatchRouteActive()) return;
+
+    const activeSeason = ACTIVE_MATCH?.seasonId;
+    const listVisible = ACTIVE_MATCH.pageRoot?.querySelector("#matchListView")?.style?.display !== "none";
+    if (!listVisible || activeSeason !== seasonId) return;
+
+    renderMatchList(root, seasonId, res.matches || []);
+    injectSeasonSelector(root, seasons || ACTIVE_MATCH.seasons || [], seasonId);
+    prefetchOpenMatchDetails(res.matches || []);
+  } catch {
+    // silent background refresh
+  } finally {
+    MATCH_OPEN_REFRESH_INFLIGHT = false;
+  }
+}
+
+function ensureMatchOpenAutoRefresh() {
+  if (MATCH_OPEN_AUTO_REFRESH_INSTALLED) return;
+  MATCH_OPEN_AUTO_REFRESH_INSTALLED = true;
+
+  const trigger = (force = false) => {
+    const root = ACTIVE_MATCH.pageRoot;
+    const seasonId = ACTIVE_MATCH.seasonId;
+    if (!root || !seasonId) return;
+    refreshOpenMatches(root, ACTIVE_MATCH.seasons || [], seasonId, { force }).catch(() => {});
+  };
+
+  window.addEventListener("hashchange", () => {
+    if (isMatchRouteActive()) trigger(false);
+  });
+
+  window.addEventListener("focus", () => trigger(false));
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) trigger(false);
+  });
+
+  MATCH_OPEN_REFRESH_TIMER = window.setInterval(() => {
+    if (!isMatchRouteActive()) return;
+    trigger(false);
+  }, MATCH_OPEN_REFRESH_INTERVAL_MS);
 }
 
 
@@ -543,7 +621,7 @@ function renderMatchList(root, seasonId, openMatches) {
   list.innerHTML = `
     <div class="card">
       <div class="h1">Matches</div>
-      <div class="small">Open matches load from cache. Refresh your browser to fetch the latest (or tap Update in the banner).</div>
+      <div class="small">Open matches auto-refresh in the background when this page is active.</div>
 
       <div id="seasonBlock"></div>
 
@@ -993,7 +1071,7 @@ export async function renderMatchPage(root, query) {
     return;
   }
 
-  const { seasons, selected, defaulted } = pickSelectedSeason(seasonsRes);
+  const { seasons, selected } = pickSelectedSeason(seasonsRes);
   const seasonId = selected;
 
   const openCached = lsGet(openKey(seasonId));
@@ -1003,32 +1081,11 @@ export async function renderMatchPage(root, query) {
   renderMatchList(root, seasonId, openMatches);
   injectSeasonSelector(root, seasons, seasonId);
 
-  // Re-fetch open matches ONLY when the user does a browser reload.
-  // (Or when cache is empty for the first time.)
   const needInitial = !openMatches.length;
-  // Reload open matches from API ONLY if the browser reload happened on the list view
-  // (not when navigating back from a match detail).
-  // If user never selected a season, default to latest season and fetch open matches once.
-  // Also fetch when cache is empty, or when browser reload happened on list.
-  const shouldReloadFetch = isReloadForMatchList() || needInitial;
+  const staleOpenCache = (now() - Number(openCached?.ts || 0)) > MATCH_OPEN_CACHE_MAX_AGE_MS;
+  const shouldReloadFetch = isReloadForMatchList() || needInitial || staleOpenCache;
   if (shouldReloadFetch) {
-    // If we already rendered cached data, refresh in the background.
-    // If no cache, this will populate the list once it returns.
-    API.publicOpenMatches(seasonId)
-      .then(res => {
-        if (!res?.ok) return;
-        lsSet(openKey(seasonId), { ts: now(), matches: res.matches || [] });
-        // Only update UI if we're still on list view for this season.
-        if (!isMatchRouteActive()) return;
-        const currentListVisible = root.querySelector("#matchListView")?.style?.display !== "none";
-        const currentSeason = ACTIVE_MATCH?.seasonId || seasonId;
-        if (currentListVisible && currentSeason === seasonId) {
-          renderMatchList(root, seasonId, res.matches || []);
-          injectSeasonSelector(root, seasons, seasonId);
-          prefetchOpenMatchDetails(res.matches || []);
-        }
-      })
-      .catch(() => {});
+    refreshOpenMatches(root, seasons, seasonId, { force: true }).catch(() => {});
   }
 
   // Save active refs for activation meta checks
@@ -1036,6 +1093,7 @@ export async function renderMatchPage(root, query) {
   ACTIVE_MATCH.pageRoot = root;
   ACTIVE_MATCH.listRoot = root.querySelector('#matchListView');
   ACTIVE_MATCH.seasonId = seasonId;
+  ensureMatchOpenAutoRefresh();
   // Meta check only on initial load / tab enter (backend-friendly)
   setTimeout(() => scheduleMatchMetaCheck("load"), 0);
 

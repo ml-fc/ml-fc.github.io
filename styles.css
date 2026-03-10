@@ -1073,3 +1073,25 @@ a:hover { text-decoration: underline; }
   .lb__rank { width: 30px; }
   .lb__num { width: 54px; }
 }
+
+
+/* =========================
+   Responsive polish (all pages)
+   ========================= */
+@media (max-width: 640px) {
+  .shell { padding-left: 10px; padding-right: 10px; }
+  .card { padding: 12px; border-radius: 14px; }
+  .brand__title { font-size: 13px; }
+  .brand__subtitle { font-size: 11px; }
+  .row { gap: 8px; }
+  .h1 { font-size: 17px; }
+}
+
+@media (max-width: 420px) {
+  .brand { gap: 8px; }
+  .brand__mark { width: 34px; height: 34px; border-radius: 10px; }
+  .bottomnav { left: 6px; right: 6px; gap: 6px; }
+  .bottomnav__item { min-width: 62px; padding: 8px 6px; }
+  .bottomnav__icon { font-size: 16px; }
+  .bottomnav__label { font-size: 10px; }
+}

@@ -16,6 +16,8 @@ const LS_USERS_CACHE = "mlfc_admin_users_cache_v1"; // {ts, users}
    // shared with match page
 
 const SEASONS_TTL_MS = 60 * 10000;
+const ADMIN_MATCH_CACHE_MAX_AGE_MS = 60 * 1000;
+const ADMIN_MATCH_REFRESH_COOLDOWN_MS = 15 * 1000;
 
 let MEM = {
   adminKey: null,
@@ -25,11 +27,59 @@ let MEM = {
   editSeasonId: "",
 };
 
+let ADMIN_AUTO_REFRESH_INSTALLED = false;
+let ADMIN_LAST_REFRESH_TS = 0;
+let ADMIN_REFRESH_INFLIGHT = false;
+let ACTIVE_ADMIN = { root: null, routeToken: "", view: "", refreshList: null };
+
 function now() { return Date.now(); }
 function currentHashPath() { return (location.hash || "#/match").split("?")[0]; }
 function currentHashQuery() { return new URLSearchParams(location.hash.split("?")[1] || ""); }
 function stillOnAdmin(routeToken) {
   return currentHashPath() === "#/admin" && window.__mlfcAdminToken === routeToken;
+}
+
+
+
+function isAdminRouteActive() {
+  const hash = window.location.hash || "#/match";
+  return hash.startsWith("#/admin");
+}
+
+function isAdminListViewActive() {
+  const q = currentHashQuery();
+  const view = (q.get("view") || "open").toLowerCase();
+  return isAdminRouteActive() && (view === "open" || view === "past");
+}
+
+function shouldRefreshAdminMatches(seasonId, { force = false } = {}) {
+  if (force) return true;
+  if (!isAdminListViewActive()) return false;
+  const cache = lsGet(matchesKey(seasonId));
+  const age = now() - Number(cache?.ts || 0);
+  return !cache?.matches || age > ADMIN_MATCH_CACHE_MAX_AGE_MS;
+}
+
+function ensureAdminAutoRefresh() {
+  if (ADMIN_AUTO_REFRESH_INSTALLED) return;
+  ADMIN_AUTO_REFRESH_INSTALLED = true;
+
+  const trigger = () => {
+    if (!ACTIVE_ADMIN.refreshList) return;
+    ACTIVE_ADMIN.refreshList({ silent: true }).catch(() => {});
+  };
+
+  window.addEventListener("hashchange", () => {
+    if (isAdminListViewActive()) trigger();
+  });
+
+  window.addEventListener("focus", () => {
+    if (isAdminListViewActive()) trigger();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && isAdminListViewActive()) trigger();
+  });
 }
 
 function baseUrl() { return location.href.split("#")[0]; }
@@ -156,7 +206,7 @@ function seasonsSelectHtml(seasons, selected) {
   `;
 }
 
-// Only called when user presses Refresh (no auto calls)
+// Shared by manual + background refresh paths
 async function refreshMatchesFromApi(seasonId, routeToken) {
   const res = await API.adminListMatches(seasonId);
   if (!stillOnAdmin(routeToken)) return { ok: false, error: "Route changed" };
@@ -2234,22 +2284,47 @@ export async function renderAdminPage(root, query) {
     ? "Loaded from device cache."
     : "No cached matches for this season yet.";
 
-  // Per requirement: fetch admin matches from API ONLY on browser refresh (or first time with empty cache).
+  async function refreshAdminList(opts = {}) {
+    const force = !!opts.force;
+    const silent = !!opts.silent;
+    const seasonId = MEM.selectedSeasonId;
+
+    if (!shouldRefreshAdminMatches(seasonId, { force })) return;
+    if (ADMIN_REFRESH_INFLIGHT) return;
+
+    const t = now();
+    if (!force && t - ADMIN_LAST_REFRESH_TS < ADMIN_MATCH_REFRESH_COOLDOWN_MS) return;
+    ADMIN_LAST_REFRESH_TS = t;
+
+    if (!silent) msg.textContent = "Loading latest…";
+
+    ADMIN_REFRESH_INFLIGHT = true;
+    try {
+      const out = await refreshMatchesFromApi(seasonId, routeToken);
+      if (!stillOnAdmin(routeToken)) return;
+      if (!out.ok) {
+        if (!silent) msg.textContent = out.error || "Failed to load";
+        return;
+      }
+
+      msg.textContent = silent ? "Updated just now." : "";
+      renderListView(root, (view === "past") ? "past" : "open");
+    } finally {
+      ADMIN_REFRESH_INFLIGHT = false;
+    }
+  }
+
+  ACTIVE_ADMIN = { root, routeToken, view, refreshList: refreshAdminList };
+  ensureAdminAutoRefresh();
+
   const viewNow = view;
   const hasCache = !!lsGet(matchesKey(MEM.selectedSeasonId));
+  const cacheStale = (now() - Number(lsGet(matchesKey(MEM.selectedSeasonId))?.ts || 0)) > ADMIN_MATCH_CACHE_MAX_AGE_MS;
   // In iOS installed app (Add to Home Screen), reload semantics are unreliable.
-  // Requirement: always load admin lists from API in the installed iPhone app,
-  // but keep cache-first behavior in normal browsers.
-  const shouldReloadFetch = (viewNow === "open" || viewNow === "past") && (isIOSStandalone() || isReloadForAdminList() || !hasCache);
+  const shouldReloadFetch = (viewNow === "open" || viewNow === "past") && (isIOSStandalone() || isReloadForAdminList() || !hasCache || cacheStale);
   if (shouldReloadFetch) {
-    msg.textContent = "Loading latest…";
-    const out = await refreshMatchesFromApi(MEM.selectedSeasonId, routeToken);
+    await refreshAdminList({ force: true, silent: false });
     if (!stillOnAdmin(routeToken)) return;
-    if (!out.ok) {
-      msg.textContent = out.error || "Failed to load";
-    } else {
-      msg.textContent = "";
-    }
   }
 
   // Render view without API
