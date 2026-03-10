@@ -11,7 +11,7 @@ const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
-// Admin-only preference: show/hide ratings on leaderboard
+// Preference: show/hide ratings on leaderboard
 const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
 
 const LB_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
@@ -126,24 +126,20 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
   ensureLeaderboardAutoRefreshListeners();
 
-  // Leaderboard is public, but ratings are admin-only.
-  const user = await refreshMe(false);
-  const isAdmin = !!user?.isAdmin;
-  let showRating = false;
-  if (isAdmin) {
-    showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
-  }
+  // Leaderboard is public, including ratings view.
+  await refreshMe(false);
+  let showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
 
   let sortMode = showRating ? "rating" : "goals";
 
-  const ratingToggleHtml = isAdmin ? `
+  const ratingToggleHtml = `
     <label class="row" style="gap:10px; align-items:center; margin-top:12px">
       <input type="checkbox" id="toggleRating" ${showRating ? "checked" : ""} />
-      <div class="small"><b>Show rating</b> <span style="opacity:.7">(admin only)</span></div>
+      <div class="small"><b>Show rating</b></div>
     </label>
-  ` : "";
+  `;
 
-  const sortRatingBtnHtml = (isAdmin && showRating) ? `<button class="btn gray" id="sortRating">Sort Rating</button>` : "";
+  const sortRatingBtnHtml = showRating ? `<button class="btn gray" id="sortRating">Sort Rating</button>` : "";
 
   root.innerHTML = `
     <div class="card">
@@ -172,7 +168,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
               <th class="lb__th lb__player">Player</th>
               <th class="lb__th lb__num">G</th>
               <th class="lb__th lb__num">A</th>
-              ${ (isAdmin && showRating) ? `
+              ${ showRating ? `
                 <th class="lb__th lb__num">R</th>
                 <th class="lb__th lb__num">Rated</th>
               ` : "" }
@@ -205,7 +201,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   } else {
     msg.textContent = "No cached data. Refreshing latest…";
   }
-  renderTable(root, rows, sortMode, isAdmin && showRating);
+  renderTable(root, rows, sortMode, showRating);
 
   async function refreshLeaderboard(opts = {}) {
     const silent = !!opts.silent;
@@ -240,7 +236,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
       lsSet(lbKey(seasonId), { ts: now(), data: res });
       rows = res.rows || [];
-      renderTable(root, rows, sortMode, isAdmin && showRating);
+      renderTable(root, rows, sortMode, showRating);
       msg.textContent = silent ? "Updated just now." : "";
       if (!silent) toastSuccess("Leaderboard refreshed.");
     } finally {
@@ -261,7 +257,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const c = lsGet(lbKey(seasonId));
     rows = c?.data?.ok ? (c.data.rows || []) : [];
     msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Refreshing latest…";
-    renderTable(root, rows, sortMode, isAdmin && showRating);
+    renderTable(root, rows, sortMode, showRating);
 
     ACTIVE_LB.seasonId = seasonId;
     if (!rows.length || shouldAutoRefreshLeaderboard(seasonId)) {
@@ -269,10 +265,10 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     }
   };
 
-  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, isAdmin && showRating); };
-  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, isAdmin && showRating); };
+  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, showRating); };
+  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, showRating); };
   const sortRatingBtn = root.querySelector("#sortRating");
-  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, isAdmin && showRating); };
+  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, showRating); };
 
   const toggle = root.querySelector("#toggleRating");
   if (toggle) {
