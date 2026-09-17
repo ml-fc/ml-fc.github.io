@@ -35,7 +35,7 @@ function seasonSelectHtml(seasons, selectedId) {
   ).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">
-      <div class="small" style="min-width:64px"><b>Season</b></div>
+      <label class="field__label" for="seasonSelect" style="min-width:64px">Season</label>
       <select class="input" id="seasonSelect" style="flex:1">${opts}</select>
     </div>
   `;

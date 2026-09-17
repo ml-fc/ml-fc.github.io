@@ -301,7 +301,7 @@ function seasonsSelectHtml(seasons, selected) {
   const opts = (seasons||[]).map(s => `<option value="${s.seasonId}" ${s.seasonId===selected?"selected":""}>${s.name}</option>`).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">
-      <div class="small" style="min-width:64px"><b>Season</b></div>
+      <label class="field__label" for="seasonSelect" style="min-width:64px">Season</label>
       <select class="input" id="seasonSelect" style="flex:1">${opts}</select>
     </div>
   `;
@@ -544,7 +544,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
         <div class="row" style="gap:10px; align-items:center">
           <button class="btn primary" id="metaUpdateBtn">Update</button>
           ${next.latestCode ? `<button class="btn gray" id="metaOpenBtn">Open</button>` : ""}
-          <button class="btn gray" id="metaCloseBtn" title="Dismiss" style="padding:8px 10px; border-radius:12px">×</button>
+          <button class="btn gray iconButton" id="metaCloseBtn" aria-label="Dismiss update notice">×</button>
         </div>
       </div>
     </div>

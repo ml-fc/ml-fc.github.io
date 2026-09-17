@@ -28,6 +28,7 @@ export function toast({ type = "info", title = "", message = "", timeoutMs = 260
   const close = el("button", "toast__close");
   close.type = "button";
   close.textContent = "×";
+  close.setAttribute("aria-label", "Dismiss notification");
   close.onclick = () => {
     root.remove();
   };

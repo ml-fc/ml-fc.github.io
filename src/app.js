@@ -62,8 +62,8 @@ async function ensurePushSubscribed() {
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
 
-  const out = await API.pushSubscribe(sub, navigator.userAgent);
-  if (out?.ok) {
+  const subscribeResult = await API.pushSubscribe(sub, navigator.userAgent);
+  if (subscribeResult?.ok) {
     try {
       localStorage.setItem(LS_PUSH_SYNC, JSON.stringify({
         endpoint: String(sub.endpoint || ""),

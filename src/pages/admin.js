@@ -204,7 +204,7 @@ function seasonsSelectHtml(seasons, selected) {
   ).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">
-      <div class="small" style="min-width:64px"><b>Season</b></div>
+      <label class="field__label" for="seasonSelect" style="min-width:64px">Season</label>
       <select class="input" id="seasonSelect" style="flex:1">${opts}</select>
     </div>
   `;
@@ -237,12 +237,12 @@ function renderLogin(root) {
     <details class="card" open>
       <summary style="font-weight:950">Admin Login</summary>
       <div class="small" style="margin-top:8px">Enter admin key once. It will be remembered on this device.</div>
-      <input id="key" class="input" placeholder="Admin key" style="margin-top:10px" />
+      <div class="field"><label class="field__label" for="key">Admin key</label><input id="key" class="input" type="password" autocomplete="current-password" aria-describedby="msg" /></div>
       <div class="row" style="margin-top:10px">
         <button id="login" class="btn primary">Login</button>
         <button id="clear" class="btn gray">Clear key</button>
       </div>
-      <div id="msg" class="small" style="margin-top:10px"></div>
+      <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </details>
   `;
 
@@ -258,7 +258,13 @@ function renderLogin(root) {
 
   root.querySelector("#login").onclick = async () => {
     const adminKey = keyEl.value.trim();
-    if (!adminKey) return toastWarn("Enter admin key");
+    keyEl.removeAttribute("aria-invalid");
+    if (!adminKey) {
+      keyEl.setAttribute("aria-invalid", "true");
+      msgEl.textContent = "Enter the admin key to open the club desk.";
+      keyEl.focus();
+      return toastWarn("Enter admin key");
+    }
 
     setDisabled(root.querySelector("#login"), true, "Logging…");
     msgEl.textContent = "Logging in…";
@@ -367,13 +373,13 @@ function renderAdminShell(root, view) {
         Create seasons like: <b>24 Winter</b>, <b>24-25 Summer</b>, <b>25 Winter</b>, <b>25-26 Summer</b>.
       </div>
 
-      <input id="seasonName" class="input" placeholder="Season name (e.g., 25-26 Summer)" style="margin-top:10px" />
-      <div class="row" style="margin-top:10px">
-        <input id="seasonStart" class="input" type="date" style="flex:1" />
-        <input id="seasonEnd" class="input" type="date" style="flex:1" />
+      <div class="field"><label class="field__label" for="seasonName">Season name</label><input id="seasonName" class="input" placeholder="For example, 25-26 Summer" /></div>
+      <div class="formGrid formGrid--two">
+        <div class="field"><label class="field__label" for="seasonStart">Start date</label><input id="seasonStart" class="input" type="date" /></div>
+        <div class="field"><label class="field__label" for="seasonEnd">End date</label><input id="seasonEnd" class="input" type="date" /></div>
       </div>
-      <div class="row" style="margin-top:10px">
-        <select id="seasonStatus" class="input" style="flex:1">
+      <div class="field"><label class="field__label" for="seasonStatus">Season status</label>
+        <select id="seasonStatus" class="input">
           <option value="OPEN" selected>OPEN</option>
           <option value="CLOSED">CLOSED</option>
         </select>
@@ -392,15 +398,14 @@ function renderAdminShell(root, view) {
     <details class="card" id="createMatchCard" >
       <summary style="font-weight:950">Create match</summary>
 
-      <input id="title" class="input" placeholder="Title" style="margin-top:10px" />
-      <input id="date" class="input" type="date" style="margin-top:10px" />
-      <input id="time" class="input" type="time" value="19:00" style="margin-top:10px" />
-      <select id="type" class="input" style="margin-top:10px">
+      <div class="field"><label class="field__label" for="title">Match title</label><input id="title" class="input" placeholder="For example, Friday night football" /></div>
+      <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
+      <div class="field"><label class="field__label" for="type">Match type</label><select id="type" class="input">
         <option value="INTERNAL" selected>Internal (Blue vs Orange)</option>
         <option value="OPPONENT">Against opponents (1 captain)</option>
-      </select>
+      </select></div>
 
-      <input
+      <div class="field"><label class="field__label" for="availabilityLimit">Maximum confirmed players</label><input
         id="availabilityLimit"
         class="input"
         type="number"
@@ -408,8 +413,8 @@ function renderAdminShell(root, view) {
         max="100"
         value="22"
         style="margin-top:10px"
-        placeholder="Max YES availabilities (e.g., 22)"
-      />
+        aria-describedby="availabilityHelp"
+      /><div class="field__help" id="availabilityHelp">Extra Yes responses move to the waiting list.</div></div>
 
       <button id="createMatch" class="btn primary" style="margin-top:10px">Create</button>
       <div id="created" class="small" style="margin-top:10px"></div>
@@ -919,7 +924,7 @@ function bindHeaderButtons(root, routeToken) {
       <div class="row" style="gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between">
         <div style="min-width:240px; flex:1">
           <div class="small"><b>Search</b></div>
-          <input id="userSearch" class="input" placeholder="Search by name/phone" value="${state.q || ""}" />
+          <input id="userSearch" class="input" type="search" aria-label="Search users by name or phone" placeholder="Search by name or phone" value="${state.q || ""}" />
         </div>
         ${showPager ? `
           <div class="row" style="gap:10px; align-items:flex-end">
@@ -1216,7 +1221,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         </div>
 
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
-          <input class="input" id="availLimitInput" type="number" min="1" max="100" step="1" value="${cap}" style="max-width:140px" ${limitEditLocked ? "disabled" : ""} />
+          <input class="input" id="availLimitInput" type="number" min="1" max="100" step="1" value="${cap}" aria-label="Maximum confirmed players" style="max-width:140px" ${limitEditLocked ? "disabled" : ""} />
           <button class="btn primary" id="availLimitSave" ${limitEditLocked ? "disabled" : ""}>Save</button>
           <div class="small" id="availLimitMsg"></div>
         </div>
@@ -1447,7 +1452,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
         <div class="h1">Captain</div>
         <div class="small">Select captain from available (YES) players.</div>
-        <select id="captainSel" class="input" style="margin-top:10px" ${isEditLocked ? "disabled" : ""}>
+        <select id="captainSel" class="input" aria-label="Select captain" style="margin-top:10px" ${isEditLocked ? "disabled" : ""}>
           <option value="">Select captain</option>
           ${opts}
         </select>
@@ -1479,11 +1484,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div class="h1">Availability (admin)</div>
         <div class="small">Add/update any player’s availability (including people without the app).</div>
 
-        <input id="adminPlayerCombo" class="input" placeholder="Search player name" autocomplete="off" style="margin-top:10px" ${isEditLocked ? "disabled" : ""} />
+        <input id="adminPlayerCombo" class="input" type="search" aria-label="Search player name" placeholder="Search player name" autocomplete="off" style="margin-top:10px" ${isEditLocked ? "disabled" : ""} />
         <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
 
         <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-          <select id="adminAddAvailability" class="input" style="width:200px" ${isEditLocked ? "disabled" : ""}>
+          <select id="adminAddAvailability" class="input" aria-label="Player availability" style="width:200px" ${isEditLocked ? "disabled" : ""}>
             <option value="YES" selected>YES</option>
             <option value="WAITING">WAITING</option>
             <option value="NO">NO</option>
@@ -1754,11 +1759,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
         <div class="comboWrap" style="flex:1; min-width:220px; position:relative">
-          <input class="input" id="adminPlayerCombo" placeholder="Search & select player…" autocomplete="off" style="width:100%" />
+          <input class="input" id="adminPlayerCombo" type="search" aria-label="Search and select player" placeholder="Search and select player…" autocomplete="off" style="width:100%" />
           <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
         </div>
 
-        <select class="input" id="adminAddAvailability" style="min-width:160px">
+        <select class="input" id="adminAddAvailability" aria-label="Player availability" style="min-width:160px">
           <option value="YES" selected>YES (Available)</option>
           <option value="NO">NO (Not available)</option>
           <option value="WAITING" ${yesPlayers.length >= cap ? "" : "disabled"}>WAITING LIST</option>
@@ -2090,7 +2095,7 @@ function renderComboList(filterText = "") {
 
             <div class="teamMiniRow__cap">
               <label class="small" style="display:flex; gap:6px; align-items:center">
-                <input type="checkbox" data-cap="${teamName}" data-player="${encodeURIComponent(p)}" ${isCap ? "checked" : ""} ${disabled}/>
+                <input type="checkbox" data-cap="${teamName}" data-player="${encodeURIComponent(p)}" aria-label="Make ${p} ${teamName} captain" ${isCap ? "checked" : ""} ${disabled}/>
                 Captain
               </label>
             </div>

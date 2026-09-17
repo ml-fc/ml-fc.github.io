@@ -329,14 +329,14 @@ export async function renderCaptainPage(root, query) {
             </div>
             <div class="scoreBox">
               <div class="scoreLabel">Opponent (${opponentTeam}) score (editable)</div>
-              <input id="oppScoreInput" class="input" type="number" min="0" placeholder="Opponent score" style="margin-top:8px" />
+              <input id="oppScoreInput" class="input" type="number" min="0" inputmode="numeric" aria-label="${opponentTeam} score" placeholder="Opponent score" style="margin-top:8px" />
               <div class="small muted">You can only edit opponent score</div>
             </div>
           </div>
         ` : `
           <div class="row" style="margin-top:10px">
-            <input id="scoreA" class="input" type="number" min="0" placeholder="${type === "INTERNAL" ? "Blue score" : "MLFC score"}" style="flex:1" />
-            <input id="scoreB" class="input" type="number" min="0" placeholder="${type === "INTERNAL" ? "Orange score" : "Opponent score"}" style="flex:1" />
+            <input id="scoreA" class="input" type="number" min="0" inputmode="numeric" aria-label="${type === "INTERNAL" ? "Blue score" : "MLFC score"}" placeholder="${type === "INTERNAL" ? "Blue score" : "MLFC score"}" style="flex:1" />
+            <input id="scoreB" class="input" type="number" min="0" inputmode="numeric" aria-label="${type === "INTERNAL" ? "Orange score" : "Opponent score"}" placeholder="${type === "INTERNAL" ? "Orange score" : "Opponent score"}" style="flex:1" />
           </div>
         `
       }
@@ -360,7 +360,7 @@ export async function renderCaptainPage(root, query) {
       </details>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <select id="addFromAll" class="input" style="flex:1">
+        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1">
           <option value="">Add player from full list…</option>
           ${(allPlayers||[]).map(p => `<option value="${p}">${p}</option>`).join("")}
         </select>
@@ -368,7 +368,7 @@ export async function renderCaptainPage(root, query) {
       </div>
 
       <div class="row" style="margin-top:10px">
-        <input id="search" class="input" placeholder="Search roster…" />
+        <input id="search" class="input" type="search" aria-label="Search roster" placeholder="Search roster…" />
       </div>
 
       <div id="ratingsGate" class="small" style="margin-top:12px">
@@ -422,7 +422,10 @@ export async function renderCaptainPage(root, query) {
     root.querySelector("#rosterSetup").style.display = stage === 2 ? "block" : "none";
     root.querySelector("#ratingsSection").style.display = stage === 3 ? "block" : "none";
     root.querySelectorAll("[data-step-dot]").forEach(el => el.classList.toggle("isActive", Number(el.dataset.stepDot) === stage));
-    if (stage > 1) root.querySelector("#stepRoster")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (stage > 1) {
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      root.querySelector("#stepRoster")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }
   }
   showStage(ratingsEnabled ? 2 : 1);
   root.querySelector("#continueToRatings").onclick = () => showStage(3);

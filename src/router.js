@@ -52,7 +52,7 @@ function ensureContainer(route) {
   if (!PAGE_CONTAINERS[route]) {
     const div = document.createElement("div");
     div.dataset.route = route;
-    div.style.display = "none";
+    div.hidden = true;
     root.appendChild(div);
     PAGE_CONTAINERS[route] = div;
   }
@@ -61,7 +61,9 @@ function ensureContainer(route) {
 
 function showOnly(route) {
   Object.entries(PAGE_CONTAINERS).forEach(([r, el]) => {
-    el.style.display = (r === route) ? "block" : "none";
+    const active = r === route;
+    el.hidden = !active;
+    el.classList.toggle("route--active", active);
   });
 }
 

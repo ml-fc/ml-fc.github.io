@@ -28,12 +28,19 @@ export async function renderLoginPage(root) {
       <div class="card">
         <div class="h1">Change password</div>
         <div class="small">Use at least 8 characters. Updating it signs in securely on this device.</div>
-        <input id="oldPass" type="password" class="input" placeholder="Current password" style="margin-top:10px" />
-        <input id="newPass" type="password" class="input" placeholder="New password" style="margin-top:10px" />
+        <div class="field">
+          <label class="field__label" for="oldPass">Current password</label>
+          <input id="oldPass" type="password" class="input" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="newPass">New password</label>
+          <input id="newPass" type="password" class="input" autocomplete="new-password" minlength="8" aria-describedby="passHelp passMsg" />
+          <div class="field__help" id="passHelp">At least 8 characters.</div>
+        </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="changePass">Update password</button>
         </div>
-        <div class="small" id="passMsg" style="margin-top:10px"></div>
+        <div class="field__message" id="passMsg" role="status" aria-live="polite"></div>
       </div>
       <div class="card">
         <div class="h1">Notifications</div>
@@ -137,8 +144,15 @@ export async function renderLoginPage(root) {
     root.querySelector("#changePass").onclick = async () => {
       const oldPassword = root.querySelector("#oldPass").value.trim();
       const newPassword = root.querySelector("#newPass").value.trim();
+      const newPasswordEl = root.querySelector("#newPass");
       const msg = root.querySelector("#passMsg");
-      if (!newPassword) { msg.textContent = "Enter a new password"; return; }
+      newPasswordEl.removeAttribute("aria-invalid");
+      if (newPassword.length < 8) {
+        newPasswordEl.setAttribute("aria-invalid", "true");
+        msg.textContent = "Enter a new password with at least 8 characters.";
+        newPasswordEl.focus();
+        return;
+      }
       msg.textContent = "Updating…";
       const res = await API.userSetPassword(oldPassword, newPassword).catch(() => null);
       if (!res?.ok) { msg.textContent = res?.error || "Failed"; toastError(res?.error || "Failed"); return; }
@@ -172,8 +186,8 @@ export async function renderLoginPage(root) {
           <div style="font-weight:950">${n.message}</div>
           <div class="small">${n.createdAt}</div>
           ${(n.publicCode || n.matchCode)
-            ? `<div class="row" style="margin-top:8px; gap:10px; justify-content:space-between; align-items:center"><button class="btn primary" data-open="${n.publicCode || n.matchCode}">Open match</button><button class="btn gray" data-close="${n.id}" style="padding:8px 10px; border-radius:12px">×</button></div>`
-            : `<div class="row" style="margin-top:8px; justify-content:flex-end"><button class="btn gray" data-close="${n.id}" style="padding:8px 10px; border-radius:12px">×</button></div>`}
+            ? `<div class="row" style="margin-top:8px; gap:10px; justify-content:space-between; align-items:center"><button class="btn primary" data-open="${n.publicCode || n.matchCode}">Open match</button><button class="btn gray iconButton" data-close="${n.id}" aria-label="Dismiss notification">×</button></div>`
+            : `<div class="row" style="margin-top:8px; justify-content:flex-end"><button class="btn gray iconButton" data-close="${n.id}" aria-label="Dismiss notification">×</button></div>`}
         </div>
       `
         )
@@ -257,28 +271,32 @@ export async function renderLoginPage(root) {
     </div>
 
     <div class="card">
-      <div class="small"><b>Username</b></div>
-      <input id="name" class="input" placeholder="Your name" autocomplete="username" maxlength="80" />
-      <div class="small" style="margin-top:10px"><b>Password</b></div>
-      <input id="password" type="password" class="input" placeholder="Password" autocomplete="current-password" />
+      <div class="field">
+        <label class="field__label" for="name">Player name</label>
+        <input id="name" class="input" autocomplete="username" maxlength="80" />
+      </div>
+      <div class="field">
+        <label class="field__label" for="password">Password</label>
+        <input id="password" type="password" class="input" autocomplete="current-password" />
+      </div>
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="loginBtn" class="btn primary">Login</button>
         <button id="showReg" class="btn gray">Register</button>
       </div>
-      <div id="msg" class="small" style="margin-top:10px"></div>
+      <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </div>
 
     <div class="card" id="regCard" style="display:none">
       <div class="h1">Register</div>
       <div class="small">Create your player account. Use at least 8 characters for your password.</div>
-      <input id="rname" class="input" placeholder="Your name" autocomplete="username" maxlength="80" />
-      <input id="rphone" class="input" placeholder="Phone (optional)" inputmode="numeric" pattern="[0-9]*" maxlength="15" style="margin-top:10px" />
-      <input id="rpass" type="password" class="input" placeholder="Password (8+ characters)" autocomplete="new-password" minlength="8" maxlength="128" style="margin-top:10px" />
+      <div class="field"><label class="field__label" for="rname">Player name</label><input id="rname" class="input" autocomplete="username" maxlength="80" /></div>
+      <div class="field"><label class="field__label" for="rphone">Phone <span class="field__optional">Optional</span></label><input id="rphone" class="input" inputmode="numeric" pattern="[0-9]*" maxlength="15" autocomplete="tel" /></div>
+      <div class="field"><label class="field__label" for="rpass">Password</label><input id="rpass" type="password" class="input" autocomplete="new-password" minlength="8" maxlength="128" aria-describedby="rpassHelp rmsg" /><div class="field__help" id="rpassHelp">Use at least 8 characters.</div></div>
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="regBtn" class="btn primary">Create account</button>
         <button id="hideReg" class="btn gray">Cancel</button>
       </div>
-      <div id="rmsg" class="small" style="margin-top:10px"></div>
+      <div id="rmsg" class="field__message" role="status" aria-live="polite"></div>
     </div>
   `;
 
@@ -287,13 +305,25 @@ export async function renderLoginPage(root) {
   const msgEl = root.querySelector("#msg");
 
   const regCard = root.querySelector("#regCard");
-  root.querySelector("#showReg").onclick = () => (regCard.style.display = "block");
+  root.querySelector("#showReg").onclick = () => {
+    regCard.style.display = "block";
+    root.querySelector("#rname")?.focus();
+  };
   root.querySelector("#hideReg").onclick = () => (regCard.style.display = "none");
 
   root.querySelector("#loginBtn").onclick = async () => {
-    msgEl.textContent = "Signing in…";
     const name = nameEl.value.replace(/\s+/g, " ").trim();
     const password = passEl.value;
+    nameEl.removeAttribute("aria-invalid");
+    passEl.removeAttribute("aria-invalid");
+    if (!name || !password) {
+      const invalid = !name ? nameEl : passEl;
+      invalid.setAttribute("aria-invalid", "true");
+      msgEl.textContent = !name ? "Enter your player name." : "Enter your password.";
+      invalid.focus();
+      return;
+    }
+    msgEl.textContent = "Signing in…";
     const res = await API.login(name, password);
     if (!res?.ok) {
       msgEl.textContent = res?.error || "Login failed";
@@ -319,14 +349,26 @@ export async function renderLoginPage(root) {
 
 const rmsg = root.querySelector("#rmsg");
   root.querySelector("#regBtn").onclick = async () => {
-    rmsg.textContent = "Creating account…";
-    const name = root.querySelector("#rname").value.replace(/\s+/g, " ").trim();
+    const rnameEl = root.querySelector("#rname");
+    const rpassEl = root.querySelector("#rpass");
+    const name = rnameEl.value.replace(/\s+/g, " ").trim();
     const phone = root.querySelector("#rphone").value.trim();
-    const password = root.querySelector("#rpass").value;
-    if (password.length < 8) {
-      rmsg.textContent = "Password must be at least 8 characters";
+    const password = rpassEl.value;
+    rnameEl.removeAttribute("aria-invalid");
+    rpassEl.removeAttribute("aria-invalid");
+    if (!name) {
+      rnameEl.setAttribute("aria-invalid", "true");
+      rmsg.textContent = "Enter the player name for this account.";
+      rnameEl.focus();
       return;
     }
+    if (password.length < 8) {
+      rpassEl.setAttribute("aria-invalid", "true");
+      rmsg.textContent = "Enter a password with at least 8 characters.";
+      rpassEl.focus();
+      return;
+    }
+    rmsg.textContent = "Creating account…";
     const res = await API.registerUser(name, password, phone);
     if (!res?.ok) {
       rmsg.textContent = res?.error || "Registration failed";
