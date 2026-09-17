@@ -35,7 +35,7 @@ async function ensurePushSubscribed() {
   }
 
   const out = await API.pushPublicKey().catch(() => null);
-  if (!out?.ok?.toString && !out?.publicKey) return; // safety
+  if (!out?.ok || !out?.publicKey) return;
   const publicKey = out.publicKey;
 
   const sub = await reg.pushManager.subscribe({

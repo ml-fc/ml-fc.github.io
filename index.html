@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1220" />
+  <meta name="theme-color" content="#07111e" />
   <meta name="description" content="Manor Lakes Football Club – Weekly match availability and stats tracker." />
 
   <title>Manor Lakes Football Club</title>
@@ -26,6 +26,7 @@
 </head>
 
 <body>
+  <a class="skipLink" href="#app">Skip to content</a>
       <!-- Global Loading Bar -->
   <div id="loadingbar" class="loadingbar" aria-hidden="true">
     <div class="loadingbar__fill"></div>
@@ -33,32 +34,33 @@
 
   <!-- Top App Bar -->
   <header class="appbar">
-    <div class="appbar__left">
+    <div class="appbar__inner">
       <a class="brand" href="#/match" aria-label="Go to matches">
-     <img
-  class="brand__mark"
-  src="./assets/icons/icon-192.png"
-  alt="Manor Lakes FC"
-/>
+        <img class="brand__mark" src="./assets/icons/icon-192.png" alt="" />
 
         <div class="brand__text">
-          <div class="brand__title">Manor Lakes Football Club</div>
-          <div class="brand__subtitle">Availability • Teams • Ratings</div>
+          <div class="brand__kicker">The Lakes · Melbourne</div>
+          <div class="brand__title">Manor Lakes FC</div>
         </div>
       </a>
-    </div>
 
-    <nav class="tabs" aria-label="Primary navigation">
-      <a class="tab" href="#/match" data-tab="match">Match</a>
-      <a class="tab" href="#/login" data-tab="register">Login</a>
-      <a class="tab" href="#/leaderboard" data-tab="leaderboard">Leaderboard</a>
-      <a class="tab" href="#/admin" data-tab="admin">Admin</a>
-    </nav>
+      <nav class="tabs" aria-label="Primary navigation">
+        <a class="tab" href="#/match" data-tab="match">Match centre</a>
+        <a class="tab" href="#/leaderboard" data-tab="leaderboard">Standings</a>
+        <a class="tab" href="#/admin" data-tab="admin">Club desk</a>
+        <a class="tab tab--account" href="#/login" data-tab="register">Login</a>
+      </nav>
+    </div>
   </header>
 
   <!-- Main -->
-  <main class="shell">
+  <main class="shell" id="main-content">
     <div class="container">
+      <div class="matchdayStrip" aria-hidden="true">
+        <span>Manor Lakes Football Club</span>
+        <span>Matchday operations</span>
+        <span>Est. community football</span>
+      </div>
       <div id="app"></div>
     </div>
   </main>
@@ -66,7 +68,8 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="footer__inner">
-      <span>Build: <span id="buildId">—</span></span>
+      <span>Manor Lakes FC</span>
+      <span class="footer__build">Release <span id="buildId">—</span></span>
     </div>
   </footer>
 
@@ -81,20 +84,20 @@
   <!-- Bottom Nav (mobile) -->
   <nav class="bottomnav" aria-label="Bottom navigation">
     <a class="bottomnav__item" href="#/match">
-      <span class="bottomnav__icon" aria-hidden="true">⚽</span>
-      <span class="bottomnav__label">Match</span>
+      <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 7v10l7 4 7-4V7l-7-4Zm0 5.1 3.7 2.7-1.4 4.3H9.7l-1.4-4.3L12 8.1Z"/></svg>
+      <span class="bottomnav__label">Matches</span>
     </a>
     <a class="bottomnav__item" href="#/login">
-      <span class="bottomnav__icon" aria-hidden="true">📝</span>
+      <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0H5Z"/></svg>
       <span class="bottomnav__label">Login</span>
     </a>
     <a class="bottomnav__item" href="#/leaderboard">
-      <span class="bottomnav__icon" aria-hidden="true">🏆</span>
-      <span class="bottomnav__label">Ranks</span>
+      <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v3h3v2c0 3.2-1.7 5.4-4.7 6.1A5.1 5.1 0 0 1 13 16.8V19h4v2H7v-2h4v-2.2a5.1 5.1 0 0 1-2.3-2.7C5.7 13.4 4 11.2 4 8V6h3V3Zm10 5v3.7c.7-.5 1-1.5 1-3V8h-1ZM6 8v.7c0 1.5.3 2.5 1 3V8H6Z"/></svg>
+      <span class="bottomnav__label">Standings</span>
     </a>
     <a class="bottomnav__item" href="#/admin">
-      <span class="bottomnav__icon" aria-hidden="true">🛠️</span>
-      <span class="bottomnav__label">Admin</span>
+      <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h10v2H4V5Zm0 6h16v2H4v-2Zm0 6h7v2H4v-2Zm14-1 3 3-1.4 1.4-3-3L18 16Z"/></svg>
+      <span class="bottomnav__label">Club desk</span>
     </a>
   </nav>
   <!-- Toasts -->

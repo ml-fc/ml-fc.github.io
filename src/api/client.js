@@ -16,6 +16,28 @@ let showTimer = null;
 // Request de-duplication (GET only)
 // If multiple callers request the same URL concurrently, reuse the same promise.
 const INFLIGHT_GET = new Map(); // url -> Promise
+const REQUEST_TIMEOUT_MS = 15_000;
+
+async function requestJson(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const data = await res.json().catch(() => null);
+    if (!data || typeof data !== "object") {
+      return { ok: false, error: `Server returned an invalid response (${res.status})` };
+    }
+    if (!res.ok && data.ok !== false) {
+      return { ...data, ok: false, error: data.error || `Request failed (${res.status})` };
+    }
+    return data;
+  } catch (e) {
+    if (e?.name === "AbortError") return { ok: false, error: "The server took too long to respond. Try again." };
+    return { ok: false, error: "Could not reach the server. Check your connection and try again." };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function setVisible(visible) {
   const el = document.getElementById("loadingbar");
@@ -59,15 +81,12 @@ export async function apiGet(params) {
     const p = (async () => {
       loadingStart();
       try {
-        const res = await fetch(key, {
+        return await requestJson(key, {
           method: "GET",
           cache: "no-store",
           credentials: "omit",
           headers: (getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}),
         });
-        return await res.json();
-      } catch (e) {
-        return { ok: false, error: String(e?.message || e) };
       } finally {
         loadingEnd();
         INFLIGHT_GET.delete(key);
@@ -92,7 +111,7 @@ export async function apiPost(body) {
       else params.set(k, String(v));
     });
 
-    const res = await fetch(CONFIG.API_BASE, {
+    return await requestJson(CONFIG.API_BASE, {
       method: "POST",
       cache: "no-store",
       credentials: "omit",
@@ -102,8 +121,6 @@ export async function apiPost(body) {
       },
       body: params.toString(),
     });
-
-    return await res.json();
   } catch (e) {
     return { ok: false, error: String(e?.message || e) };
   } finally {

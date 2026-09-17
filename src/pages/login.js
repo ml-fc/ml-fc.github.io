@@ -27,7 +27,7 @@ export async function renderLoginPage(root) {
 
       <div class="card">
         <div class="h1">Change password</div>
-        <div class="small">Update your password (stored in plain text in this demo build).</div>
+        <div class="small">Use at least 8 characters. Updating it signs in securely on this device.</div>
         <input id="oldPass" type="password" class="input" placeholder="Current password" style="margin-top:10px" />
         <input id="newPass" type="password" class="input" placeholder="New password" style="margin-top:10px" />
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
@@ -258,9 +258,9 @@ export async function renderLoginPage(root) {
 
     <div class="card">
       <div class="small"><b>Username</b></div>
-      <input id="name" class="input" placeholder="Your name" />
+      <input id="name" class="input" placeholder="Your name" autocomplete="username" maxlength="80" />
       <div class="small" style="margin-top:10px"><b>Password</b></div>
-      <input id="password" type="password" class="input" placeholder="Password" />
+      <input id="password" type="password" class="input" placeholder="Password" autocomplete="current-password" />
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="loginBtn" class="btn primary">Login</button>
         <button id="showReg" class="btn gray">Register</button>
@@ -270,10 +270,10 @@ export async function renderLoginPage(root) {
 
     <div class="card" id="regCard" style="display:none">
       <div class="h1">Register</div>
-      <div class="small">Create an account (passwords are stored as plain text in this demo build).</div>
-      <input id="rname" class="input" placeholder="Your name" />
+      <div class="small">Create your player account. Use at least 8 characters for your password.</div>
+      <input id="rname" class="input" placeholder="Your name" autocomplete="username" maxlength="80" />
       <input id="rphone" class="input" placeholder="Phone (optional)" inputmode="numeric" pattern="[0-9]*" maxlength="15" style="margin-top:10px" />
-      <input id="rpass" type="password" class="input" placeholder="Password" style="margin-top:10px" />
+      <input id="rpass" type="password" class="input" placeholder="Password (8+ characters)" autocomplete="new-password" minlength="8" maxlength="128" style="margin-top:10px" />
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="regBtn" class="btn primary">Create account</button>
         <button id="hideReg" class="btn gray">Cancel</button>
@@ -293,7 +293,7 @@ export async function renderLoginPage(root) {
   root.querySelector("#loginBtn").onclick = async () => {
     msgEl.textContent = "Signing in…";
     const name = nameEl.value.replace(/\s+/g, " ").trim();
-    const password = passEl.value.trim();
+    const password = passEl.value;
     const res = await API.login(name, password);
     if (!res?.ok) {
       msgEl.textContent = res?.error || "Login failed";
@@ -322,7 +322,11 @@ const rmsg = root.querySelector("#rmsg");
     rmsg.textContent = "Creating account…";
     const name = root.querySelector("#rname").value.replace(/\s+/g, " ").trim();
     const phone = root.querySelector("#rphone").value.trim();
-    const password = root.querySelector("#rpass").value.trim();
+    const password = root.querySelector("#rpass").value;
+    if (password.length < 8) {
+      rmsg.textContent = "Password must be at least 8 characters";
+      return;
+    }
     const res = await API.registerUser(name, password, phone);
     if (!res?.ok) {
       rmsg.textContent = res?.error || "Registration failed";
