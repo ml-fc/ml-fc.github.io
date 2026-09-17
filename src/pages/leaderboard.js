@@ -13,6 +13,8 @@ const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
 // Preference: show/hide ratings on leaderboard
 const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
+const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v1";
+const DEFAULT_MINIMUM_MATCHES = 10;
 
 const LB_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 const LB_REFRESH_COOLDOWN_MS = 20 * 1000;
@@ -28,6 +30,17 @@ function esc(value) {
 }
 
 function lbKey(seasonId){ return `${LS_LB_PREFIX}${seasonId}`; }
+
+function savedMinimumMatches() {
+  const value = Number.parseInt(localStorage.getItem(LS_MINIMUM_MATCHES) || "", 10);
+  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : DEFAULT_MINIMUM_MATCHES;
+}
+
+function playerMatches(row) {
+  // Older cached/API rows only expose matchesRated. Prefer matchesPlayed as soon
+  // as the leaderboard endpoint supplies the full appearance count.
+  return Math.max(0, Number(row?.matchesPlayed ?? row?.matchesRated ?? 0) || 0);
+}
 
 function seasonSelectHtml(seasons, selectedId) {
   const opts = (seasons||[]).map(s =>
@@ -67,14 +80,15 @@ function sortRows(rows, mode, showRating) {
   return r;
 }
 
-function renderTable(root, rows, sortMode, showRating) {
+function renderTable(root, rows, sortMode, showRating, minimumMatches) {
   const body = root.querySelector("#lbBody");
-  const sorted = sortRows(rows, sortMode, showRating);
+  const eligibleRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
+  const sorted = sortRows(eligibleRows, sortMode, showRating);
 
   const cols = showRating ? 6 : 4;
-  const maxGoals = Math.max(0, ...(rows || []).map(x => Number(x.goals || 0)));
-  const maxAssists = Math.max(0, ...(rows || []).map(x => Number(x.assists || 0)));
-  const ratedRows = (rows || []).filter(x => Number(x.matchesRated || 0) > 0);
+  const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
+  const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
+  const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
   const maxRating = Math.max(0, ...ratedRows.map(x => Number(x.avgRating || 0)));
   body.innerHTML = sorted.map((x, i) => {
     const awards = [
@@ -95,7 +109,12 @@ function renderTable(root, rows, sortMode, showRating) {
         ${ratingCols}
       </tr>
     `;
-  }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No data.</td></tr>`;
+  }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No players have played at least ${minimumMatches} ${minimumMatches === 1 ? "match" : "matches"} this season.</td></tr>`;
+
+  const summary = root.querySelector("#eligibilitySummary");
+  if (summary) {
+    summary.textContent = `Showing ${eligibleRows.length} of ${(rows || []).length} players with at least ${minimumMatches} ${minimumMatches === 1 ? "match" : "matches"}.`;
+  }
 }
 
 function renderPlayerHistory(dialog, data) {
@@ -161,6 +180,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   // Leaderboard is public, including ratings view.
   await refreshMe(false);
   let showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
+  let minimumMatches = savedMinimumMatches();
 
   let sortMode = showRating ? "rating" : "goals";
 
@@ -181,6 +201,14 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
         <button class="btn primary" id="refresh">Refresh</button>
       </div>
       ${ratingToggleHtml}
+      <div class="row" style="gap:10px; align-items:flex-end; margin-top:12px; flex-wrap:wrap">
+        <label for="minimumMatches">
+          <span class="field__label">Minimum matches</span>
+          <input class="input" id="minimumMatches" name="minimumMatches" type="number" min="1" max="100" step="1" inputmode="numeric" value="${minimumMatches}" aria-describedby="minimumMatchesHelp minimumMatchesError" style="width:120px" />
+        </label>
+        <span class="small" id="minimumMatchesHelp">Only eligible players are included in rankings.</span>
+      </div>
+      <div class="small" id="minimumMatchesError" role="status" aria-live="polite"></div>
       <div class="small" id="msg" style="margin-top:8px"></div>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
@@ -192,6 +220,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
     <div class="card">
       <div class="h1">Season Stats</div>
+      <div class="small" id="eligibilitySummary" aria-live="polite" style="margin:6px 0 10px"></div>
       <div class="lb__tableWrap">
         <table class="lb__table">
           <thead>
@@ -234,7 +263,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   } else {
     msg.textContent = "No cached data. Refreshing latest…";
   }
-  renderTable(root, rows, sortMode, showRating);
+  renderTable(root, rows, sortMode, showRating, minimumMatches);
 
   root.querySelector("#lbBody").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-player]");
@@ -281,7 +310,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
       lsSet(lbKey(seasonId), { ts: now(), data: res });
       rows = res.rows || [];
-      renderTable(root, rows, sortMode, showRating);
+      renderTable(root, rows, sortMode, showRating, minimumMatches);
       msg.textContent = silent ? "Updated just now." : "";
       if (!silent) toastSuccess("Leaderboard refreshed.");
     } finally {
@@ -302,7 +331,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const c = lsGet(lbKey(seasonId));
     rows = c?.data?.ok ? (c.data.rows || []) : [];
     msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Refreshing latest…";
-    renderTable(root, rows, sortMode, showRating);
+    renderTable(root, rows, sortMode, showRating, minimumMatches);
 
     ACTIVE_LB.seasonId = seasonId;
     if (!rows.length || shouldAutoRefreshLeaderboard(seasonId)) {
@@ -310,10 +339,34 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     }
   };
 
-  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, showRating); };
-  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, showRating); };
+  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
+  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
   const sortRatingBtn = root.querySelector("#sortRating");
-  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, showRating); };
+  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
+
+  const minimumMatchesInput = root.querySelector("#minimumMatches");
+  const minimumMatchesError = root.querySelector("#minimumMatchesError");
+  minimumMatchesInput.oninput = () => {
+    const rawValue = minimumMatchesInput.value.trim();
+    const nextValue = Number(rawValue);
+    if (!rawValue || !Number.isInteger(nextValue) || nextValue < 1 || nextValue > 100) {
+      minimumMatchesInput.setAttribute("aria-invalid", "true");
+      minimumMatchesError.textContent = "Enter a whole number from 1 to 100.";
+      return;
+    }
+    minimumMatchesInput.removeAttribute("aria-invalid");
+    minimumMatchesError.textContent = "";
+    minimumMatches = nextValue;
+    localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
+    renderTable(root, rows, sortMode, showRating, minimumMatches);
+  };
+  minimumMatchesInput.onblur = () => {
+    if (minimumMatchesInput.getAttribute("aria-invalid") === "true") {
+      minimumMatchesInput.value = String(minimumMatches);
+      minimumMatchesInput.removeAttribute("aria-invalid");
+      minimumMatchesError.textContent = "";
+    }
+  };
 
   const toggle = root.querySelector("#toggleRating");
   if (toggle) {

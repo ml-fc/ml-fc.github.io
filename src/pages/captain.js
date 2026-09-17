@@ -6,9 +6,11 @@ import { getCachedUser, refreshMe } from "../auth.js";
 
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
+const LS_CAPTAIN_RATINGS_DRAFT_PREFIX = "mlfc_captain_ratings_draft_v1:";
 
 function rosterKey(code, captain){ return `${LS_CAPTAIN_ROSTER_PREFIX}${code}:${captain.toLowerCase()}`; }
 function teamsKey(code){ return `${LS_CAPTAIN_TEAMS_PREFIX}${code}`; }
+function ratingsDraftKey(code, actor){ return `${LS_CAPTAIN_RATINGS_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
 
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
@@ -67,6 +69,9 @@ function clampHalfRating(x, min=1, max=10) {
 }
 
 function safeUpper(x){ return String(x || "").trim().toUpperCase(); }
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
+}
 
 // Some API calls accept a "scope" so the backend can validate permissions.
 // Captain flow defaults to CAPTAIN; when an admin opens the captain page from
@@ -118,6 +123,9 @@ export async function renderCaptainPage(root, query) {
 
   const m = data.match;
   const type = safeUpper(m.type);
+  const homeTeamName = escapeHtml(type === "INTERNAL" ? String(m.teamHomeName || "Blue") : "MLFC");
+  const awayTeamName = escapeHtml(type === "INTERNAL" ? String(m.teamAwayName || "Orange") : "Opponent");
+  const visibleTeamName = (team) => safeUpper(team) === "BLUE" ? homeTeamName : safeUpper(team) === "ORANGE" ? awayTeamName : team;
   const status = safeUpper(m.status);
   const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE" || Number(m.ratingsLocked) === 1;
   const when = formatHumanDateTime(m.date, m.time);
@@ -261,6 +269,19 @@ export async function renderCaptainPage(root, query) {
     if (drafts[p].goals == null || drafts[p].goals === "") drafts[p].goals = eventMap[p]?.goals ?? "";
     if (drafts[p].assists == null || drafts[p].assists === "") drafts[p].assists = eventMap[p]?.assists ?? "";
   });
+  const localRatingsDraft = lsGet(ratingsDraftKey(code, captain));
+  if (localRatingsDraft?.drafts && typeof localRatingsDraft.drafts === "object") {
+    roster.forEach(p => {
+      if (!localRatingsDraft.drafts[p]) return;
+      drafts[p] = { ...drafts[p], ...localRatingsDraft.drafts[p] };
+    });
+  }
+
+  function saveRatingsDraft() {
+    lsSet(ratingsDraftKey(code, captain), { ts: Date.now(), drafts });
+    const indicator = root.querySelector("#ratingsDraftState");
+    if (indicator) indicator.textContent = "Unsaved ratings · draft saved on this device";
+  }
 
   const hint = adminMode
     ? `<span style="opacity:.75">• Admin mode: enter and save both sides.</span>`
@@ -316,27 +337,27 @@ export async function renderCaptainPage(root, query) {
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
-        ${type === "INTERNAL" ? "Enter Blue vs Orange score." : "Enter MLFC vs Opponent score."} ${hint}
+        ${type === "INTERNAL" ? `Enter ${homeTeamName} vs ${awayTeamName} score.` : "Enter MLFC vs Opponent score."} ${hint}
       </div>
 
       ${
         (type === "INTERNAL" && captainTeam && !adminMode) ? `
           <div class="scoreGrid">
             <div class="scoreBox">
-              <div class="scoreLabel">${captainTeam} score (read-only)</div>
+              <div class="scoreLabel">${visibleTeamName(captainTeam)} score (read-only)</div>
               <div class="scoreValue" id="homeScoreLabel">—</div>
               <div class="small muted">This will be filled when the other captain submits their opponent score.</div>
             </div>
             <div class="scoreBox">
-              <div class="scoreLabel">Opponent (${opponentTeam}) score (editable)</div>
+              <div class="scoreLabel">Opponent (${visibleTeamName(opponentTeam)}) score (editable)</div>
               <input id="oppScoreInput" class="input" type="number" min="0" inputmode="numeric" aria-label="${opponentTeam} score" placeholder="Opponent score" style="margin-top:8px" />
               <div class="small muted">You can only edit opponent score</div>
             </div>
           </div>
         ` : `
           <div class="row" style="margin-top:10px">
-            <input id="scoreA" class="input" type="number" min="0" inputmode="numeric" aria-label="${type === "INTERNAL" ? "Blue score" : "MLFC score"}" placeholder="${type === "INTERNAL" ? "Blue score" : "MLFC score"}" style="flex:1" />
-            <input id="scoreB" class="input" type="number" min="0" inputmode="numeric" aria-label="${type === "INTERNAL" ? "Orange score" : "Opponent score"}" placeholder="${type === "INTERNAL" ? "Orange score" : "Opponent score"}" style="flex:1" />
+            <div class="field" style="flex:1"><label class="field__label" for="scoreA">${type === "INTERNAL" ? homeTeamName : "MLFC"} score</label><input id="scoreA" class="input" type="number" min="0" inputmode="numeric" /></div>
+            <div class="field" style="flex:1"><label class="field__label" for="scoreB">${type === "INTERNAL" ? awayTeamName : "Opponent"} score</label><input id="scoreB" class="input" type="number" min="0" inputmode="numeric" /></div>
           </div>
         `
       }
@@ -408,8 +429,9 @@ export async function renderCaptainPage(root, query) {
 
         <div id="rosterMobileWrap"></div>
 
+        <div class="draftState isDirty" id="ratingsDraftState" role="status" aria-live="polite">Changes save locally until you submit the batch</div>
         <div class="row" style="margin-top:12px">
-          <button class="btn primary" id="submitRatings">Submit ratings</button>
+          <button class="btn primary" id="submitRatings">Save ratings batch</button>
         </div>
         <div class="small" id="rateMsg" style="margin-top:10px"></div>
       </div>
@@ -427,7 +449,7 @@ export async function renderCaptainPage(root, query) {
       root.querySelector("#stepRoster")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
     }
   }
-  showStage(ratingsEnabled ? 2 : 1);
+  showStage(ratingsEnabled ? (adminMode ? 3 : 2) : 1);
   root.querySelector("#continueToRatings").onclick = () => showStage(3);
 
   // Prefill score UI (no extra fetch)
@@ -493,7 +515,7 @@ export async function renderCaptainPage(root, query) {
         ratingsEnabled = true;
         root.querySelector("#continueToRatings").disabled = false;
         renderRows();
-        showStage(2);
+        showStage(adminMode ? 3 : 2);
       } else {
         const sAEl = root.querySelector("#scoreA");
         const sBEl = root.querySelector("#scoreB");
@@ -524,7 +546,7 @@ export async function renderCaptainPage(root, query) {
         ratingsEnabled = true;
         root.querySelector("#continueToRatings").disabled = false;
         renderRows();
-        showStage(2);
+        showStage(adminMode ? 3 : 2);
       }
 
       // Update label if present
@@ -595,8 +617,8 @@ export async function renderCaptainPage(root, query) {
         // admin/internal or legacy: keep Blue/Orange assignment
         moveBtns = `
           <div class="row" style="gap:6px; flex-wrap:wrap">
-            <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
-            <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
+            <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
+            <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>${awayTeamName}</button>
           </div>
         `;
       } else {
@@ -655,8 +677,8 @@ export async function renderCaptainPage(root, query) {
             <td style="padding:10px; font-weight:950">${p}</td>
             <td style="padding:10px; text-align:center">
               <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
-                <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>Blue</button>
-                <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>Orange</button>
+                <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
+                <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>${awayTeamName}</button>
               </div>
             </td>
             <td style="padding:10px; text-align:center">${ratingCell}</td>
@@ -700,7 +722,7 @@ export async function renderCaptainPage(root, query) {
           <tr style="border-top:1px solid rgba(11,18,32,0.08)">
             <td style="padding:10px">${p}</td>
             <td style="padding:10px; text-align:center">
-              ${isInternalCaptainView ? moveBtn : `<span class="badge" style="background:${tm === "ORANGE" ? "#f97316" : "#2563eb"}; color:#fff">${tm}</span>`}
+              ${isInternalCaptainView ? moveBtn : `<span class="badge" style="background:${tm === "ORANGE" ? "#f97316" : "#2563eb"}; color:#fff">${visibleTeamName(tm)}</span>`}
             </td>
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
@@ -768,6 +790,7 @@ export async function renderCaptainPage(root, query) {
 
         drafts[p] = drafts[p] || {};
         drafts[p].rating = String(inp.value ?? "");
+        saveRatingsDraft();
       });
     });
     root.querySelectorAll("[data-goals]").forEach(inp => {
@@ -775,6 +798,7 @@ export async function renderCaptainPage(root, query) {
         const p = decodeURIComponent(inp.getAttribute("data-goals"));
         drafts[p] = drafts[p] || {};
         drafts[p].goals = String(inp.value ?? "");
+        saveRatingsDraft();
       });
     });
     root.querySelectorAll("[data-assists]").forEach(inp => {
@@ -782,6 +806,7 @@ export async function renderCaptainPage(root, query) {
         const p = decodeURIComponent(inp.getAttribute("data-assists"));
         drafts[p] = drafts[p] || {};
         drafts[p].assists = String(inp.value ?? "");
+        saveRatingsDraft();
       });
     });
   }
@@ -895,7 +920,13 @@ export async function renderCaptainPage(root, query) {
         } catch {}
 
         msg.textContent = "Submitted ✅";
-        toastSuccess("Submitted.");
+        try { localStorage.removeItem(ratingsDraftKey(code, captain)); } catch {}
+        const indicator = root.querySelector("#ratingsDraftState");
+        if (indicator) {
+          indicator.textContent = `Saved ${rows.length} player rating${rows.length === 1 ? "" : "s"}`;
+          indicator.classList.remove("isDirty");
+        }
+        toastSuccess(`${rows.length} player rating${rows.length === 1 ? "" : "s"} saved.`);
         toastInfo("Leaderboard cache cleared. Open Leaderboard and tap Refresh.");
       } catch (e) {
         msg.textContent = "Failed";

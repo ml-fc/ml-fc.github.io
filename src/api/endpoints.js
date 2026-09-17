@@ -45,6 +45,7 @@ export const API = {
   adminSetAdmin: (name, isAdmin) => apiPost({ action: "admin_set_admin", name, isAdmin: isAdmin ? 1 : 0 }),
   adminSetPassword: (name, password) => apiPost({ action: "admin_set_password", name, password }),
   adminDeleteUser: (name) => apiPost({ action: "admin_delete_user", name }),
+  adminBroadcastNotification: (payload) => apiPost({ action: "admin_broadcast_notification", ...payload }),
 
   // admin: match availability management (for adding players who may not have the app)
   adminSetAvailabilityFor: (matchId, playerName, availability, note = "") =>

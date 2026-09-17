@@ -13,6 +13,7 @@ const LS_ADMIN_MATCHES_PREFIX = "mlfc_admin_matches_cache_v3:"; // + seasonId =>
 const LS_MANAGE_CACHE_PREFIX = "mlfc_admin_manage_cache_v3:";   // + code => {ts, data}
 const LS_MATCH_DETAIL_PREFIX = "mlfc_match_detail_cache_v2:";   // shared with match page
 const LS_USERS_CACHE = "mlfc_admin_users_cache_v1"; // {ts, users}
+const LS_SETUP_DRAFT_PREFIX = "mlfc_admin_setup_draft_v1:";
    // shared with match page
 
 const SEASONS_TTL_MS = 60 * 10000;
@@ -99,6 +100,17 @@ function lsDel(key) { try { localStorage.removeItem(key); } catch {} }
 
 function matchesKey(seasonId) { return `${LS_ADMIN_MATCHES_PREFIX}${seasonId}`; }
 function manageKey(code) { return `${LS_MANAGE_CACHE_PREFIX}${code}`; }
+function setupDraftKey(matchId) { return `${LS_SETUP_DRAFT_PREFIX}${matchId}`; }
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  })[char]);
+}
+
+function sameNames(a, b) {
+  return uniqueSorted(a).map(x => x.toLowerCase()).join("|") === uniqueSorted(b).map(x => x.toLowerCase()).join("|");
+}
 
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
@@ -319,9 +331,8 @@ function matchRowHtml(m, view) {
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
 
-  // If locked/completed: disable Manage + Lock ratings
+  // If locked/completed: disable Manage + scoring.
   const disableManage = isEditLocked;
-  const disableLock = locked || isCompleted || !hasBothScores;
 
   const when = formatHumanDateTime(m.date, m.time);
 
@@ -341,7 +352,7 @@ function matchRowHtml(m, view) {
       <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
         <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked ? "disabled" : ""}>Score & ratings</button>
-        <button class="btn gray" data-lock="${m.matchId}" ${disableLock ? "disabled" : ""}>${!hasBothScores ? "Add score first" : "Lock ratings"}</button>
+        ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
         <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
       </div>
@@ -405,6 +416,12 @@ function renderAdminShell(root, view) {
         <option value="OPPONENT">Against opponents (1 captain)</option>
       </select></div>
 
+      <div class="formGrid formGrid--two" id="teamNamesFields">
+        <div class="field"><label class="field__label" for="teamHomeName">Home team name</label><input id="teamHomeName" class="input" value="Blue" maxlength="30" aria-describedby="teamNamesHelp" /></div>
+        <div class="field"><label class="field__label" for="teamAwayName">Away team name</label><input id="teamAwayName" class="input" value="Orange" maxlength="30" aria-describedby="teamNamesHelp" /></div>
+      </div>
+      <div class="field__help" id="teamNamesHelp">For internal matches, choose the names shown instead of Blue and Orange.</div>
+
       <div class="field"><label class="field__label" for="availabilityLimit">Maximum confirmed players</label><input
         id="availabilityLimit"
         class="input"
@@ -418,6 +435,17 @@ function renderAdminShell(root, view) {
 
       <button id="createMatch" class="btn primary" style="margin-top:10px">Create</button>
       <div id="created" class="small" style="margin-top:10px"></div>
+    </details>
+
+    <details class="card" id="announcementCard">
+      <summary style="font-weight:950">Send club announcement</summary>
+      <p class="small">Send one in-app and push notification to every registered player. Add an optional secure link for payments or tournament registration.</p>
+      <div class="field"><label class="field__label" for="announcementTitle">Notification title</label><input id="announcementTitle" class="input" maxlength="80" placeholder="For example, Tournament registration" /></div>
+      <div class="field"><label class="field__label" for="announcementMessage">Message</label><textarea id="announcementMessage" class="input" rows="4" maxlength="500" placeholder="Write a clear action and deadline"></textarea></div>
+      <div class="field"><label class="field__label" for="announcementUrl">Registration or payment link <span class="field__optional">optional</span></label><input id="announcementUrl" class="input" type="url" inputmode="url" placeholder="https://…" aria-describedby="announcementUrlHelp" /><div class="field__help" id="announcementUrlHelp">HTTPS links can open directly. Embedding is offered only when the provider permits it.</div></div>
+      <label class="row announcementEmbedChoice"><input id="announcementEmbed" type="checkbox" /><span>Offer an embedded registration view</span></label>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="sendAnnouncement">Review & send to everyone</button></div>
+      <div class="field__message" id="announcementMsg" role="status" aria-live="polite"></div>
     </details>
 
     <div id="usersArea"></div>
@@ -436,9 +464,11 @@ function setAdminChromeVisible(root, visible) {
   const header = root.querySelector("#adminHeaderCard");
   const seasonMgmt = root.querySelector("#seasonMgmt");
   const createMatch = root.querySelector("#createMatchCard");
+  const announcement = root.querySelector("#announcementCard");
   if (header) header.style.display = display;
   if (seasonMgmt) seasonMgmt.style.display = display;
   if (createMatch) createMatch.style.display = display;
+  if (announcement) announcement.style.display = display;
 }
 
 function renderListView(root, view) {
@@ -767,9 +797,18 @@ function bindCreateMatch(root, routeToken) {
   try {
     const typeEl = root.querySelector("#type");
     const limitEl = root.querySelector("#availabilityLimit");
+    const homeNameEl = root.querySelector("#teamHomeName");
+    const awayNameEl = root.querySelector("#teamAwayName");
+    const namesHelp = root.querySelector("#teamNamesHelp");
     if (typeEl && limitEl) {
       const setDefault = () => {
-        limitEl.value = (String(typeEl.value || "").toUpperCase() === "OPPONENT") ? 11 : 22;
+        const opponent = String(typeEl.value || "").toUpperCase() === "OPPONENT";
+        limitEl.value = opponent ? 11 : 22;
+        if (homeNameEl) homeNameEl.value = opponent ? "MLFC" : "Blue";
+        if (awayNameEl) awayNameEl.value = opponent ? "Opponent" : "Orange";
+        if (homeNameEl) homeNameEl.disabled = opponent;
+        if (awayNameEl) awayNameEl.disabled = opponent;
+        if (namesHelp) namesHelp.textContent = opponent ? "Opponent fixtures use MLFC and Opponent." : "Choose the internal team names shown across scores, teams and results.";
       };
       // initial default
       setDefault();
@@ -789,6 +828,8 @@ function bindCreateMatch(root, routeToken) {
       date: root.querySelector("#date").value,
       time: root.querySelector("#time").value || "19:00",
       type: root.querySelector("#type").value,
+      teamHomeName: root.querySelector("#teamHomeName")?.value.trim() || "Blue",
+      teamAwayName: root.querySelector("#teamAwayName")?.value.trim() || "Orange",
       availabilityLimit: Math.max(1, Math.min(100, Math.floor(Number(root.querySelector("#availabilityLimit")?.value || 22)))),
       seasonId: MEM.selectedSeasonId
     };
@@ -826,6 +867,8 @@ function bindCreateMatch(root, routeToken) {
       date: payload.date,
       time: payload.time,
       type: payload.type,
+      teamHomeName: payload.teamHomeName,
+      teamAwayName: payload.teamAwayName,
       availabilityLimit: payload.availabilityLimit,
       status: "OPEN",
       ratingsLocked: "FALSE"
@@ -841,6 +884,44 @@ function bindCreateMatch(root, routeToken) {
 
     // Navigate to manage view (prev=open)
     location.hash = `#/admin?view=manage&code=${encodeURIComponent(out.publicCode)}&prev=open`;
+  };
+}
+
+function bindAnnouncement(root, routeToken) {
+  const button = root.querySelector("#sendAnnouncement");
+  if (!button) return;
+  button.onclick = async () => {
+    if (!stillOnAdmin(routeToken)) return;
+    const titleEl = root.querySelector("#announcementTitle");
+    const messageEl = root.querySelector("#announcementMessage");
+    const urlEl = root.querySelector("#announcementUrl");
+    const embedEl = root.querySelector("#announcementEmbed");
+    const statusEl = root.querySelector("#announcementMsg");
+    const title = String(titleEl?.value || "").trim();
+    const message = String(messageEl?.value || "").trim();
+    const linkUrl = String(urlEl?.value || "").trim();
+    titleEl?.removeAttribute("aria-invalid");
+    messageEl?.removeAttribute("aria-invalid");
+    urlEl?.removeAttribute("aria-invalid");
+    if (!title) { titleEl?.setAttribute("aria-invalid", "true"); titleEl?.focus(); statusEl.textContent = "Enter a notification title."; return; }
+    if (!message) { messageEl?.setAttribute("aria-invalid", "true"); messageEl?.focus(); statusEl.textContent = "Enter the message players should receive."; return; }
+    if (linkUrl && !/^https:\/\//i.test(linkUrl)) { urlEl?.setAttribute("aria-invalid", "true"); urlEl?.focus(); statusEl.textContent = "Use a secure HTTPS link."; return; }
+    const embedUrl = linkUrl && embedEl?.checked ? linkUrl : "";
+    if (!confirm(`Send “${title}” to every registered player?\n\n${message}${linkUrl ? `\n\nLink: ${linkUrl}` : ""}`)) return;
+    setDisabled(button, true, "Sending…");
+    statusEl.textContent = "Sending one notification to each registered player…";
+    let pushOffset = 0;
+    let out;
+    do {
+      out = await API.adminBroadcastNotification({ title, message, linkUrl, embedUrl, pushOffset });
+      if (!out?.ok) break;
+      pushOffset = Number.isInteger(out.nextPushOffset) ? out.nextPushOffset : null;
+    } while (pushOffset !== null);
+    setDisabled(button, false);
+    if (!out?.ok) { statusEl.textContent = out?.error || "The announcement could not be sent."; return toastError(statusEl.textContent); }
+    statusEl.textContent = `Sent to ${Number(out.recipients || 0)} players.`;
+    titleEl.value = ""; messageEl.value = ""; urlEl.value = ""; embedEl.checked = false;
+    toastSuccess("Club announcement sent.");
   };
 }
 
@@ -1085,13 +1166,15 @@ function bindListButtons(root, view) {
       if (!stillOnAdmin(routeToken)) return;
 
       const matchId = btn.getAttribute("data-lock");
+      const match = (MEM.matches || []).find(item => String(item.matchId) === String(matchId));
+      if (!confirm(`Complete “${match?.title || "this match"}”?\n\nTeams, availability, scores and ratings will become read-only and the final result will be published.`)) return;
       setDisabled(btn, true, "Locking…");
 
       const out = await API.adminLockRatings(matchId);
       setDisabled(btn, false);
 
       if (!out.ok) return toastError(out.error || "Failed");
-      toastSuccess("Ratings locked.");
+      toastSuccess("Match completed and ratings locked.");
 
       const found = (MEM.matches || []).find(x => String(x.matchId) === String(matchId));
       if (found?.publicCode) {
@@ -1283,31 +1366,29 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const teams = data.teams || [];
 
   const when = formatHumanDateTime(m.date, m.time);
+  const safeTitle = escapeHtml(m.title || "Untitled match");
+  const safeWhen = escapeHtml(when);
+  const phaseLabel = locked ? "Completed" : hasBothScores ? "Ratings open" : availabilityLocked ? "Teams & scoring" : "Availability open";
 
   manageArea.innerHTML = `
-    <div class="card">
+    <section class="manageCommand" aria-labelledby="manageMatchTitle">
       <div class="row" style="justify-content:space-between; align-items:flex-start">
         <div style="min-width:0">
-          <div class="h1" style="margin:0">Manage: ${m.title}</div>
-          <div class="small" style="margin-top:6px">${when} • ${m.type} • ${m.status}</div>
-          <div class="small" style="margin-top:6px">${fromCache ? "Loaded from device cache." : "Loaded from API."}</div>
-          <div class="small" style="margin-top:6px">${isIOSStandalone() ? "(iPhone app loads fresh from server.)" : ""}</div>
+          <div class="manageCommand__eyebrow">Matchday control · ${escapeHtml(type)}</div>
+          <div class="h1 manageCommand__title" id="manageMatchTitle">${safeTitle}</div>
+          <div class="manageCommand__meta">${safeWhen}</div>
         </div>
+        <div class="manageCommand__state"><span class="statusDot" aria-hidden="true"></span>${phaseLabel}</div>
       </div>
-
-      <div class="small" style="margin-top:10px">Match link:</div>
-      <div class="small" style="word-break:break-all">${matchLink(m.publicCode)}</div>
-
-      <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+      <div class="manageCommand__actions">
         <button class="btn gray" id="backToAdminList">Back to matches</button>
         <button class="btn primary" id="shareMatch">Share match link</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
-       
-        <button class="btn primary" id="lockRatingsTop" ${locked || !hasBothScores ? "disabled" : ""}>${hasBothScores ? "Lock ratings" : "Add score before locking"}</button>
+        ${hasBothScores && !locked ? `<button class="btn primary" id="lockRatingsTop">Complete & lock match</button>` : ""}
       </div>
-
-      ${locked ? `<div class="small" style="margin-top:10px">This match is locked. Manage and Lock actions are disabled in lists.</div>` : ""}
-    </div>
+      <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : "Ready to complete once all ratings have been checked."}</div>
+      <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
+    </section>
 
     <div id="manageBody"></div>
   `;
@@ -1356,8 +1437,14 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
  
 
-  manageArea.querySelector("#lockRatingsTop").onclick = async () => {
+  const lockRatingsTop = manageArea.querySelector("#lockRatingsTop");
+  if (lockRatingsTop) lockRatingsTop.onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
+
+    const confirmed = confirm(
+      `Complete “${m.title || "this match"}”?\n\nThis will:\n• lock team and availability changes\n• lock scores and ratings\n• publish the final result\n• mark the match completed\n\nAn admin can unlock it later, but availability will stay closed while scores exist.`
+    );
+    if (!confirmed) return;
 
     const btn = manageArea.querySelector("#lockRatingsTop");
     setDisabled(btn, true, "Locking…");
@@ -1400,6 +1487,24 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     // If no saved squad yet, default to all YES players (keeps old behavior simple)
     if (!squad.length && yesPlayers.length) squad = [...yesPlayers];
+    const savedOpponent = { squad: [...squad], captain: cap };
+    const opponentDraft = lsGet(setupDraftKey(m.matchId));
+    let opponentCaptain = cap;
+    if (!isEditLocked && opponentDraft?.type === "OPPONENT") {
+      squad = uniqueSorted((opponentDraft.squad || []).filter(name => yesPlayers.includes(name)));
+      opponentCaptain = squad.includes(opponentDraft.captain) ? opponentDraft.captain : "";
+    }
+
+    function updateOpponentDraft() {
+      const dirty = !sameNames(squad, savedOpponent.squad) || opponentCaptain.toLowerCase() !== savedOpponent.captain.toLowerCase();
+      const state = manageArea.querySelector("#draftState");
+      if (state) {
+        state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
+        state.classList.toggle("isDirty", dirty);
+      }
+      if (dirty) lsSet(setupDraftKey(m.matchId), { type: "OPPONENT", squad, captain: opponentCaptain, ts: now() });
+      else lsDel(setupDraftKey(m.matchId));
+    }
 
     function renderSquadLists() {
       const pool = uniqueSorted(yesPlayers.filter(p => !squad.includes(p)));
@@ -1433,6 +1538,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           const p = decodeURIComponent(btn.dataset.addSquad || "");
           if (!p) return;
           if (!squad.includes(p)) squad = uniqueSorted([...squad, p]);
+          updateOpponentDraft();
           renderSquadLists();
         };
       });
@@ -1440,6 +1546,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         btn.onclick = () => {
           const p = decodeURIComponent(btn.dataset.removeSquad || "");
           squad = squad.filter(x => x !== p);
+          if (opponentCaptain === p) opponentCaptain = "";
+          updateOpponentDraft();
           renderSquadLists();
         };
       });
@@ -1451,8 +1559,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <summary style="font-weight:950">Opponent match setup</summary>
 
         <div class="h1">Captain</div>
-        <div class="small">Select captain from available (YES) players.</div>
-        <select id="captainSel" class="input" aria-label="Select captain" style="margin-top:10px" ${isEditLocked ? "disabled" : ""}>
+        <label class="field__label" for="captainSel">Select from available players</label>
+        <select id="captainSel" class="input" style="margin-top:7px" ${isEditLocked ? "disabled" : ""}>
           <option value="">Select captain</option>
           ${opts}
         </select>
@@ -1484,7 +1592,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div class="h1">Availability (admin)</div>
         <div class="small">Add/update any player’s availability (including people without the app).</div>
 
-        <input id="adminPlayerCombo" class="input" type="search" aria-label="Search player name" placeholder="Search player name" autocomplete="off" style="margin-top:10px" ${isEditLocked ? "disabled" : ""} />
+        <label class="field__label" for="adminPlayerCombo">Player name</label>
+        <input id="adminPlayerCombo" class="input" type="search" placeholder="Start typing a name" autocomplete="off" style="margin-top:7px" ${isEditLocked ? "disabled" : ""} />
         <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
 
         <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
@@ -1512,9 +1621,14 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     wireAvailabilityLimitEditor();
 
     const capSel = manageBody.querySelector("#captainSel");
-    capSel.value = cap || "";
+    capSel.value = opponentCaptain || "";
+    capSel.onchange = () => {
+      opponentCaptain = String(capSel.value || "").trim();
+      updateOpponentDraft();
+    };
 
     renderSquadLists();
+    updateOpponentDraft();
 
     const openAdmin = manageBody.querySelector("#openRatingsAdmin");
     if (openAdmin) openAdmin.onclick = () => {
@@ -1541,6 +1655,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       if (!out.ok) { msg.textContent = out.error || "Failed"; return toastError(out.error || "Failed"); }
       msg.textContent = "Saved ✅";
       toastSuccess("Opponent match setup saved.");
+      lsDel(setupDraftKey(m.matchId));
 
       clearPublicMatchDetailCache(m.publicCode);
       clearManageCache(m.publicCode);
@@ -1714,6 +1829,31 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   let orange = uniqueSorted(teams.filter(t => String(t.team).toUpperCase() === "ORANGE").map(t => String(t.playerName || "").trim()));
   let captainBlue = String(captains.captain1 || "");
   let captainOrange = String(captains.captain2 || "");
+  const homeTeamName = String(m.teamHomeName || "Blue");
+  const awayTeamName = String(m.teamAwayName || "Orange");
+  const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
+  const internalDraft = lsGet(setupDraftKey(m.matchId));
+  let playerFilter = "";
+  if (!isEditLocked && internalDraft?.type === "INTERNAL") {
+    const allowed = new Set(yesPlayers.map(name => name.toLowerCase()));
+    blue = uniqueSorted((internalDraft.blue || []).filter(name => allowed.has(name.toLowerCase())));
+    orange = uniqueSorted((internalDraft.orange || []).filter(name => allowed.has(name.toLowerCase()) && !blue.some(b => b.toLowerCase() === name.toLowerCase())));
+    captainBlue = blue.includes(internalDraft.captainBlue) ? internalDraft.captainBlue : "";
+    captainOrange = orange.includes(internalDraft.captainOrange) ? internalDraft.captainOrange : "";
+  }
+
+  function updateInternalDraft() {
+    const dirty = !sameNames(blue, savedInternal.blue) || !sameNames(orange, savedInternal.orange) ||
+      captainBlue.toLowerCase() !== savedInternal.captainBlue.toLowerCase() ||
+      captainOrange.toLowerCase() !== savedInternal.captainOrange.toLowerCase();
+    const state = manageArea.querySelector("#draftState");
+    if (state) {
+      state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
+      state.classList.toggle("isDirty", dirty);
+    }
+    if (dirty) lsSet(setupDraftKey(m.matchId), { type: "INTERNAL", blue, orange, captainBlue, captainOrange, ts: now() });
+    else lsDel(setupDraftKey(m.matchId));
+  }
 
   // Links can be generated as soon as we know the captain names (no need to wait for Save setup).
   const blueUrl = captainBlue ? captainLink(m.publicCode) : "";
@@ -1738,6 +1878,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     // if captain got removed, clear
     if (!blue.includes(captainBlue)) captainBlue = "";
     if (!orange.includes(captainOrange)) captainOrange = "";
+    updateInternalDraft();
   }
 
   function removeFromTeam(p) {
@@ -1745,6 +1886,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     orange = orange.filter(x => x !== p);
     if (captainBlue === p) captainBlue = "";
     if (captainOrange === p) captainOrange = "";
+    updateInternalDraft();
   }
 
   manageBody.innerHTML = `
@@ -1759,7 +1901,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
         <div class="comboWrap" style="flex:1; min-width:220px; position:relative">
-          <input class="input" id="adminPlayerCombo" type="search" aria-label="Search and select player" placeholder="Search and select player…" autocomplete="off" style="width:100%" />
+          <label class="field__label" for="adminPlayerCombo">Player name</label>
+          <input class="input" id="adminPlayerCombo" type="search" placeholder="Start typing a name" autocomplete="off" style="width:100%; margin-top:7px" />
           <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
         </div>
 
@@ -1779,7 +1922,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <summary style="font-weight:950">Internal setup</summary>
 
       <div class="small" style="margin-top:8px">
-        Assign available players to Blue/Orange. You can change teams anytime. Tap <b>Clear</b> to unassign.
+        Assign available players to ${escapeHtml(homeTeamName)} or ${escapeHtml(awayTeamName)}. Tap <b>Clear</b> to unassign.
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="teamPlayerFilter">Find an available player</label>
+        <input class="input" id="teamPlayerFilter" type="search" placeholder="Search by name" autocomplete="off" />
       </div>
 
       <div style="margin-top:12px">
@@ -1790,11 +1938,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div class="row" style="gap:14px; align-items:flex-start; flex-wrap:wrap">
         <div style="flex:1; min-width:260px">
-          <div class="badge assignBadge--blue">BLUE - <span id="blueCount">0</span></div>
+          <div class="badge assignBadge--blue">${escapeHtml(homeTeamName)} · <span id="blueCount">0</span></div>
           <div id="blueList" style="margin-top:10px"></div>
         </div>
         <div style="flex:1; min-width:260px">
-          <div class="badge assignBadge--orange">ORANGE - <span id="orangeCount">0</span></div>
+          <div class="badge assignBadge--orange">${escapeHtml(awayTeamName)} · <span id="orangeCount">0</span></div>
           <div id="orangeList" style="margin-top:10px"></div>
         </div>
       </div>
@@ -2028,12 +2176,18 @@ function renderComboList(filterText = "") {
       return;
     }
 
-    box.innerHTML = yesPlayers.map(p => {
+    const visiblePlayers = playerFilter ? yesPlayers.filter(p => p.toLowerCase().includes(playerFilter)) : yesPlayers;
+    if (!visiblePlayers.length) {
+      box.innerHTML = `<div class="emptyInline">No available players match “${escapeHtml(playerFilter)}”.</div>`;
+      return;
+    }
+
+    box.innerHTML = visiblePlayers.map(p => {
       const a = assignedTeam(p);
       const badgeCls = a === "BLUE" ? "assignBadge assignBadge--blue"
         : a === "ORANGE" ? "assignBadge assignBadge--orange"
         : "assignBadge";
-      const badgeText = a ? a : "UNASSIGNED";
+      const badgeText = a === "BLUE" ? homeTeamName : a === "ORANGE" ? awayTeamName : "Unassigned";
 
       const blueActive = a === "BLUE" ? "primary" : "gray";
       const orangeActive = a === "ORANGE" ? "primary" : "gray";
@@ -2049,8 +2203,8 @@ function renderComboList(filterText = "") {
           </div>
 
           <div class="assignBtns">
-            <button class="btn ${blueActive} tiny" data-team-btn="BLUE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>Blue</button>
-            <button class="btn ${orangeActive} tiny" data-team-btn="ORANGE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>Orange</button>
+            <button class="btn ${blueActive} tiny" data-team-btn="BLUE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>${escapeHtml(homeTeamName)}</button>
+            <button class="btn ${orangeActive} tiny" data-team-btn="ORANGE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>${escapeHtml(awayTeamName)}</button>
             <button class="btn ghost tiny" data-remove="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""} ${a ? "" : "disabled"}>Clear</button>
           </div>
         </div>
@@ -2118,6 +2272,7 @@ function renderComboList(filterText = "") {
         }
         if (teamName === "BLUE") captainBlue = cb.checked ? p : "";
         if (teamName === "ORANGE") captainOrange = cb.checked ? p : "";
+        updateInternalDraft();
         renderAll();
       };
     });
@@ -2145,6 +2300,15 @@ function renderComboList(filterText = "") {
   }
 
   renderAll();
+  updateInternalDraft();
+
+  const teamPlayerFilter = manageBody.querySelector("#teamPlayerFilter");
+  if (teamPlayerFilter) {
+    teamPlayerFilter.oninput = () => {
+      playerFilter = String(teamPlayerFilter.value || "").trim().toLowerCase();
+      renderTeamAssignList();
+    };
+  }
 
   // Admin ratings entry point (internal matches)
   const openRatingsInternal = manageBody.querySelector("#openRatingsAdminInternal");
@@ -2187,6 +2351,7 @@ function renderComboList(filterText = "") {
 
     msg.textContent = "Saved ✅";
     toastSuccess("Setup saved.");
+    lsDel(setupDraftKey(m.matchId));
 
     clearManageCache(m.publicCode);
 
@@ -2219,10 +2384,10 @@ function renderComboList(filterText = "") {
   lines.push("");
 
   // Do NOT reveal captain names in the shared message
-  lines.push(`BLUE Team`);
+  lines.push(`${homeTeamName} Team`);
   blue.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
   lines.push("");
-  lines.push(`ORANGE Team`);
+  lines.push(`${awayTeamName} Team`);
   orange.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
   lines.push("");
 
@@ -2305,6 +2470,7 @@ export async function renderAdminPage(root, query) {
   bindSeasonSelector(root, routeToken);
   bindSeasonMgmt(root, routeToken);
   bindCreateMatch(root, routeToken);
+  bindAnnouncement(root, routeToken);
   bindHeaderButtons(root, routeToken);
   // Users view is rendered on demand
   if (view === "users") {

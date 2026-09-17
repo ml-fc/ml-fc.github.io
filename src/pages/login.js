@@ -6,6 +6,14 @@ import { isReloadFor } from "../nav_state.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
+function esc(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
+}
+
+function safeHttpsUrl(value) {
+  try { const url = new URL(String(value || "")); return url.protocol === "https:" ? url.href : ""; } catch { return ""; }
+}
+
 export async function renderLoginPage(root) {
   const token = getToken();
   let me = getCachedUser();
@@ -47,6 +55,9 @@ export async function renderLoginPage(root) {
         <div class="small" id="notiMsg">Loading…</div>
         <div id="notiList" style="margin-top:10px"></div>
       </div>
+      <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
+        <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
+      </dialog>
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
@@ -181,15 +192,18 @@ export async function renderLoginPage(root) {
       msg.textContent = "";
       list.innerHTML = items
         .map(
-          (n) => `
-        <div style="padding:10px 0; border-bottom:1px solid rgba(11,18,32,0.10)">
-          <div style="font-weight:950">${n.message}</div>
-          <div class="small">${n.createdAt}</div>
+          (n) => {
+          const linkUrl = safeHttpsUrl(n.linkUrl);
+          const embedUrl = safeHttpsUrl(n.embedUrl);
+          return `
+        <article class="notificationCard">
+          <div class="notificationCard__title">${esc(n.title || "Club update")}</div>
+          <div class="notificationCard__message">${esc(n.message)}</div>
+          <div class="small">${esc(n.createdAt)}</div>
           ${(n.publicCode || n.matchCode)
-            ? `<div class="row" style="margin-top:8px; gap:10px; justify-content:space-between; align-items:center"><button class="btn primary" data-open="${n.publicCode || n.matchCode}">Open match</button><button class="btn gray iconButton" data-close="${n.id}" aria-label="Dismiss notification">×</button></div>`
-            : `<div class="row" style="margin-top:8px; justify-content:flex-end"><button class="btn gray iconButton" data-close="${n.id}" aria-label="Dismiss notification">×</button></div>`}
-        </div>
-      `
+            ? `<div class="notificationCard__actions"><button class="btn primary" data-open="${esc(n.publicCode || n.matchCode)}">Open match</button><button class="btn gray iconButton" data-close="${esc(n.id)}" aria-label="Dismiss notification">×</button></div>`
+            : `<div class="notificationCard__actions">${linkUrl ? `<a class="btn primary" href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">Open link</a>` : ""}${embedUrl ? `<button class="btn gray" data-embed-url="${esc(embedUrl)}" data-embed-title="${esc(n.title || "Registration")}">Open here</button>` : ""}<button class="btn gray iconButton" data-close="${esc(n.id)}" aria-label="Dismiss notification">×</button></div>`}
+        </article>`; }
         )
         .join("");
     };
@@ -220,7 +234,7 @@ export async function renderLoginPage(root) {
     renderNoti(items);
     const removeNoti = (id) => {
       try {
-        const el = list.querySelector(`[data-close="${id}"]`)?.closest("div[style*='border-bottom']");
+        const el = list.querySelector(`[data-close="${id}"]`)?.closest(".notificationCard");
         if (el) el.remove();
       } catch {}
       // Update cached notifications so it doesn't reappear.
@@ -239,7 +253,7 @@ export async function renderLoginPage(root) {
     list.querySelectorAll("[data-open]").forEach((b) => {
       b.onclick = async () => {
         const code = b.getAttribute("data-open");
-        const id = b.closest("div[style*='border-bottom']")?.querySelector("[data-close]")?.getAttribute("data-close");
+        const id = b.closest(".notificationCard")?.querySelector("[data-close]")?.getAttribute("data-close");
         if (id) {
           await API.notificationsMarkRead([id]).catch(() => {});
           removeNoti(id);
@@ -255,6 +269,19 @@ export async function renderLoginPage(root) {
         if (!id) return;
         await API.notificationsMarkRead([id]).catch(() => {});
         removeNoti(id);
+      };
+    });
+
+    const dialog = root.querySelector("#announcementDialog");
+    const frame = root.querySelector("#announcementFrame");
+    root.querySelector("#closeAnnouncementDialog")?.addEventListener("click", () => { dialog.close(); frame.src = "about:blank"; });
+    list.querySelectorAll("[data-embed-url]").forEach(button => {
+      button.onclick = () => {
+        const url = safeHttpsUrl(button.dataset.embedUrl);
+        if (!url) return toastError("This registration link is not valid.");
+        root.querySelector("#announcementDialogTitle").textContent = button.dataset.embedTitle || "Registration";
+        frame.src = url;
+        dialog.showModal();
       };
     });
 

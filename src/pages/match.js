@@ -37,7 +37,9 @@ const MATCH_OPEN_REFRESH_COOLDOWN_MS = 15 * 1000;
 
 function matchTeamLabel(m, side) {
   const t = String(m?.type || "").toUpperCase();
-  if (t === "INTERNAL") return side === "HOME" ? "BLUE" : "ORANGE";
+  if (t === "INTERNAL") return side === "HOME"
+    ? String(m?.teamHomeName || "Blue")
+    : String(m?.teamAwayName || "Orange");
   return side === "HOME" ? "MLFC" : "OPPONENT";
 }
 
@@ -254,29 +256,19 @@ function formatHumanDateTime(dateStr, timeStr) {
   });
 }
 
-// Prefer createdAt (newest first). Fallback to match datetime (soonest first) if missing.
+// Matchday order follows kick-off time. Creation order is irrelevant to players.
 function openMatchSortKey(m) {
-  const created = new Date(m?.createdAt || "").getTime();
-  if (!Number.isNaN(created) && created > 0) return { type: "created", v: created };
   const d = normalizeDateStr(m?.date);
   const t = normalizeTimeStr(m?.time);
   const dt = new Date(`${d}T${t}:00`).getTime();
-  return { type: "dt", v: Number.isNaN(dt) ? 0 : dt };
+  return { type: "dt", v: Number.isNaN(dt) ? Number.MAX_SAFE_INTEGER : dt };
 }
 
-// Find newest match (for LATEST tag)
+// Find the next scheduled match.
 function getLatestOpenCode(openMatches) {
-  const list = Array.isArray(openMatches) ? openMatches : [];
-  let best = null;
-  for (const m of list) {
-    const k = openMatchSortKey(m);
-    if (!best) { best = { code: m.publicCode, key: k }; continue; }
-    // createdAt wins always; else compare dt
-    if (k.type === "created" && best.key.type !== "created") { best = { code: m.publicCode, key: k }; continue; }
-    if (k.type === "created" && best.key.type === "created" && k.v > best.key.v) { best = { code: m.publicCode, key: k }; continue; }
-    if (k.type === "dt" && best.key.type === "dt" && k.v > best.key.v) { best = { code: m.publicCode, key: k }; continue; }
-  }
-  return best?.code || "";
+  const list = Array.isArray(openMatches) ? openMatches.slice() : [];
+  list.sort((a, b) => openMatchSortKey(a).v - openMatchSortKey(b).v);
+  return list[0]?.publicCode || "";
 }
 
 // Prefetch details for all open matches and store in localStorage cache.
@@ -284,7 +276,7 @@ function getLatestOpenCode(openMatches) {
 function prefetchOpenMatchDetails(openMatches) {
   // To reduce Cloudflare free-tier API usage, only prefetch on a browser reload of the match list.
   if (!isReloadForMatchList()) return;
-  const list = Array.isArray(openMatches) ? openMatches : [];
+  const list = Array.isArray(openMatches) ? openMatches.slice(0, 3) : [];
   const toFetch = list.filter(m => {
     const code = m?.publicCode;
     if (!code) return false;
@@ -484,9 +476,11 @@ function renderNextMatchDashboard(host, data) {
   const availability = availabilityPresentation(match.availability);
   const assignment = match.assignment || {};
   const score = match.score || {};
-  const hasScore = String(score.home ?? "") !== "" || String(score.away ?? "") !== "";
+  const hasScore = String(score.home ?? "") !== "" && String(score.away ?? "") !== "";
   const team = String(assignment.team || "").toUpperCase();
-  const captainLabel = assignment.isCaptain ? `Captain · ${assignment.captainTeam || team}` : "";
+  const teamName = String(assignment.teamName || team);
+  const captainTeamName = String(match.teamNames?.[String(assignment.captainTeam || team).toUpperCase() === "ORANGE" ? "away" : "home"] || teamName);
+  const captainLabel = assignment.isCaptain ? `Captain · ${captainTeamName}` : "";
   const action = match.contextualAction || null;
   const canRespond = Boolean(match.availability?.canRespond);
   const showResponse = canRespond && (!action || action.type === "RESPOND");
@@ -512,7 +506,7 @@ function renderNextMatchDashboard(host, data) {
         </div>
         <div class="nextMatch__state">
           <span class="nextMatch__label">Your role</span>
-          <strong>${team ? escapeHtml(`${team} team`) : "Team not assigned"}</strong>
+          <strong>${team ? escapeHtml(`${teamName} team`) : "Team not assigned"}</strong>
           <small>${captainLabel ? escapeHtml(captainLabel) : team ? "Player" : "Check back after team selection."}</small>
         </div>
         <div class="nextMatch__state">
@@ -785,10 +779,6 @@ function renderMatchList(root, seasonId, openMatches) {
     const ak = openMatchSortKey(a);
     const bk = openMatchSortKey(b);
 
-    if (ak.type === "created" && bk.type === "created") return bk.v - ak.v;
-    if (ak.type === "created" && bk.type !== "created") return -1;
-    if (ak.type !== "created" && bk.type === "created") return 1;
-
     return ak.v - bk.v;
   });
 
@@ -798,53 +788,43 @@ function renderMatchList(root, seasonId, openMatches) {
         <div class="nextMatch__eyebrow">Your matchday</div><div class="nextMatch__skeleton"></div>
       </section>
     </div>
-    <div class="matchSidebar">
-      <div class="card matchCentreIntro">
-        <div class="matchCentreIntro__eyebrow">First team · Matchday</div>
-        <div class="h1">Match centre</div>
-        <div class="small">Choose a season, then open a fixture to post availability or view the teams.</div>
-
-        <div id="seasonBlock"></div>
-
-        <div id="banner" style="margin-top:10px"></div>
-      </div>
-
-      <details class="card matchHistory" id="pastSection">
-        <summary>Past matches</summary>
-        <div class="small" style="margin-top:8px">Load completed fixtures and previous results for this season.</div>
-        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="refreshPast">Refresh past matches</button>
-        </div>
-        <div id="pastArea" style="margin-top:10px"></div>
-      </details>
-    </div>
-
     <div class="card matchBoard">
       <div class="matchBoard__header">
         <div>
-          <div class="matchCentreIntro__eyebrow">Live schedule</div>
-          <div class="h1">Open matches</div>
+          <div class="matchCentreIntro__eyebrow">Match centre · Live schedule</div>
+          <div class="h1">Upcoming fixtures</div>
         </div>
         <span class="matchBoard__count">${open.length} ${open.length === 1 ? "fixture" : "fixtures"}</span>
       </div>
+      <div class="matchBoard__toolbar"><div id="seasonBlock"></div><div id="banner"></div></div>
       ${
         open.length
           ? open.map(m=>`
             <article class="fixtureRow">
+              <div class="fixtureDate" aria-hidden="true"><b>${escapeHtml(new Date(`${normalizeDateStr(m.date)}T12:00:00`).toLocaleDateString(undefined,{day:"2-digit"}))}</b><span>${escapeHtml(new Date(`${normalizeDateStr(m.date)}T12:00:00`).toLocaleDateString(undefined,{month:"short"}))}</span></div>
               <div class="fixtureRow__body">
                 <div class="fixtureRow__badges">
-                ${m.publicCode === latestCode ? `<span class="badge" style="background:#16a34a;color:#fff">LATEST</span>` : ""}
-                <span class="badge" data-captain-badge="${m.publicCode}" style="background:#111827;color:#fff; display:${ACTIVE_MATCH.captainCodes?.includes?.(m.publicCode) ? "inline-flex" : "none"}">CAPTAIN</span>
+                ${m.publicCode === latestCode ? `<span class="badge badge--next">NEXT</span>` : ""}
+                <span class="badge" data-captain-badge="${escapeHtml(m.publicCode)}" style="background:#111827;color:#fff; display:${ACTIVE_MATCH.captainCodes?.includes?.(m.publicCode) ? "inline-flex" : "none"}">CAPTAIN</span>
                 </div>
-                <div class="fixtureRow__title">${m.title}</div>
-                <div class="small fixtureRow__meta">${formatHumanDateTime(m.date,m.time)} <span aria-hidden="true">·</span> ${m.type}</div>
-                ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${formatResultLabel(m)}</b></div>` : `<div class="fixtureRow__status">Availability open</div>`}
+                <div class="fixtureRow__title">${escapeHtml(m.title || "Match")}</div>
+                <div class="small fixtureRow__meta">${escapeHtml(formatHumanDateTime(m.date,m.time))} <span aria-hidden="true">·</span> ${escapeHtml(m.type)}</div>
+                ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${escapeHtml(formatResultLabel(m))}</b></div>` : `<div class="fixtureRow__status"><span aria-hidden="true">●</span> Availability open</div>`}
               </div>
-              <button class="btn primary fixtureRow__open" data-open="${m.publicCode}" aria-label="Open ${m.title}">Open match</button>
+              <button class="btn primary fixtureRow__open" data-open="${escapeHtml(m.publicCode)}" aria-label="View ${escapeHtml(m.title || "match")}">View match</button>
             </article>
           `).join("")
           : `<div class="emptyState"><b>No open matches</b><span>New fixtures will appear here when the club desk publishes them.</span></div>`
       }
+    </div>
+
+    <div class="matchSidebar">
+      <details class="card matchHistory" id="pastSection">
+        <summary>Results & match history</summary>
+        <div class="small" style="margin-top:8px">Load completed fixtures from this season.</div>
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap"><button class="btn gray" id="refreshPast">Load history</button></div>
+        <div id="pastArea" style="margin-top:10px"></div>
+      </details>
     </div>
 
   `;
@@ -1032,7 +1012,7 @@ const cap = availabilityLimitForMatch(m);
   function teamLabel(side) {
     // side: "HOME" | "AWAY"
     const t = String(m.type || "").toUpperCase();
-    if (t === "INTERNAL") return side === "HOME" ? "BLUE" : "ORANGE";
+    if (t === "INTERNAL") return side === "HOME" ? String(m.teamHomeName || "Blue") : String(m.teamAwayName || "Orange");
     return side === "HOME" ? "MLFC" : "OPPONENT";
   }
 
@@ -1090,7 +1070,7 @@ const cap = availabilityLimitForMatch(m);
         </div>
 
         <div class="small" style="margin-top:8px">
-          <b>Home:</b> ${m.type === "INTERNAL" ? "BLUE" : "MLFC"} &nbsp; • &nbsp; <b>Away:</b> ${m.type === "INTERNAL" ? "ORANGE" : "OPPONENT"}
+          <b>Home:</b> ${escapeHtml(teamLabel("HOME"))} &nbsp; • &nbsp; <b>Away:</b> ${escapeHtml(teamLabel("AWAY"))}
         </div>
 
         ${scorers.length ? `
@@ -1203,7 +1183,9 @@ const cap = availabilityLimitForMatch(m);
     if (!res.ok) {
       saveMsg.textContent = res.error || "Failed";
       toastError(res.error || "Failed to post availability");
-      y.disabled = false; n.disabled = false; renderAvailLists();
+      if (y) y.disabled = false;
+      if (n) n.disabled = false;
+      renderAvailLists();
       return;
     }
 
@@ -1235,7 +1217,7 @@ renderAvailLists();
     // toastInfo("WhatsApp opened (tap Send).");
 
     // Re-enable buttons, but keep Waiting List rule enforced.
-    setTimeout(()=>{ y.disabled=false; n.disabled=false; renderAvailLists(); }, 900);
+    setTimeout(()=>{ if (y) y.disabled=false; if (n) n.disabled=false; renderAvailLists(); }, 900);
   }
 
   const btnYes = detail.querySelector("#btnYes");
