@@ -58,6 +58,14 @@ function clampInt(x, min=0, max=99) {
   return n;
 }
 
+function clampHalfRating(x, min=1, max=10) {
+  const raw = String(x ?? "").trim();
+  if (raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < min || n > max || Math.round(n * 2) !== n * 2) return null;
+  return n;
+}
+
 function safeUpper(x){ return String(x || "").trim().toUpperCase(); }
 
 // Some API calls accept a "scope" so the backend can validate permissions.
@@ -300,10 +308,13 @@ export async function renderCaptainPage(root, query) {
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">Open match</button>
       </div>
+      <div class="matchSteps" aria-label="Match update progress">
+        <span data-step-dot="1">1 <b>Score</b></span><span data-step-dot="2">2 <b>Roster</b></span><span data-step-dot="3">3 <b>Ratings</b></span>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="h1">Score</div>
+    <div class="card" id="stepScore">
+      <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
         ${type === "INTERNAL" ? "Enter Blue vs Orange score." : "Enter MLFC vs Opponent score."} ${hint}
       </div>
@@ -336,8 +347,9 @@ export async function renderCaptainPage(root, query) {
       <div class="small" id="scoreMsg" style="margin-top:10px"></div>
     </div>
 
-    <div class="card">
-      <div class="h1">Roster</div>
+    <div class="card" id="stepRoster" style="display:none">
+      <div id="rosterSetup">
+      <div class="small stepEyebrow">Step 2 of 3</div><div class="h1">Confirm roster</div>
       <div class="small">Roster starts from confirmed YES availability. Add more players if someone joins late.</div>
 
       <details class="card" style="margin-top:10px">
@@ -359,11 +371,13 @@ export async function renderCaptainPage(root, query) {
         <input id="search" class="input" placeholder="Search roster…" />
       </div>
 
-      <div id="ratingsGate" class="small" style="margin-top:12px; ${ratingsEnabled ? "display:none" : ""}">
-        <span class="pill">Step 1</span> ${adminMode ? "Submit the score to unlock ratings." : "Submit your opponent score to unlock ratings."}
+      <div id="ratingsGate" class="small" style="margin-top:12px">
+        <button class="btn primary" id="continueToRatings" ${ratingsEnabled ? "" : "disabled"}>Continue to ratings</button>
+      </div>
       </div>
 
-      <div id="ratingsSection" style="margin-top:12px; ${ratingsEnabled ? "" : "display:none"}">
+      <div id="ratingsSection" style="display:none">
+        <div class="small stepEyebrow">Step 3 of 3</div><div class="h1">Add player stats</div>
         ${
         (!adminMode && type === "INTERNAL" && captainTeam) ? `
             <div class="small" style="margin-bottom:8px">
@@ -401,6 +415,17 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
   `;
+
+  function showStage(stage) {
+    root.querySelector("#stepScore").style.display = stage === 1 ? "block" : "none";
+    root.querySelector("#stepRoster").style.display = stage >= 2 ? "block" : "none";
+    root.querySelector("#rosterSetup").style.display = stage === 2 ? "block" : "none";
+    root.querySelector("#ratingsSection").style.display = stage === 3 ? "block" : "none";
+    root.querySelectorAll("[data-step-dot]").forEach(el => el.classList.toggle("isActive", Number(el.dataset.stepDot) === stage));
+    if (stage > 1) root.querySelector("#stepRoster")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  showStage(ratingsEnabled ? 2 : 1);
+  root.querySelector("#continueToRatings").onclick = () => showStage(3);
 
   // Prefill score UI (no extra fetch)
   try {
@@ -462,11 +487,10 @@ export async function renderCaptainPage(root, query) {
         msg.textContent = "Submitted ✅";
         toastSuccess("Opponent score submitted.");
 
-        // Unlock ratings right away
-        root.querySelector("#ratingsGate").style.display = "none";
-        root.querySelector("#ratingsSection").style.display = "block";
         ratingsEnabled = true;
+        root.querySelector("#continueToRatings").disabled = false;
         renderRows();
+        showStage(2);
       } else {
         const sAEl = root.querySelector("#scoreA");
         const sBEl = root.querySelector("#scoreB");
@@ -494,10 +518,10 @@ export async function renderCaptainPage(root, query) {
         msg.textContent = "Submitted ✅";
         toastSuccess("Score submitted.");
 
-        root.querySelector("#ratingsGate").style.display = "none";
-        root.querySelector("#ratingsSection").style.display = "block";
         ratingsEnabled = true;
+        root.querySelector("#continueToRatings").disabled = false;
         renderRows();
+        showStage(2);
       }
 
       // Update label if present
@@ -547,7 +571,7 @@ export async function renderCaptainPage(root, query) {
       const d = drafts[p] || {};
 
       const ratingInput = canEdit
-        ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="text-align:center" value="${d.rating ?? ""}" />`
+        ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="text-align:center" value="${d.rating ?? ""}" />`
         : `<div class="small muted">—</div>`;
 
       const goalsInput = canEdit
@@ -615,7 +639,7 @@ export async function renderCaptainPage(root, query) {
         const canEdit = ratingsEnabled && isOpponentPlayer(p);
         const d = drafts[p] || {};
         const ratingCell = canEdit
-          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
           : `<span class="small muted">—</span>`;
         const goalsCell = canEdit
           ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
@@ -654,7 +678,7 @@ export async function renderCaptainPage(root, query) {
         const d = drafts[p] || {};
 
         const ratingCell = canEdit
-          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" placeholder="1-10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const goalsCell = canEdit
@@ -739,17 +763,6 @@ export async function renderCaptainPage(root, query) {
       inp.addEventListener("input", () => {
         const p = decodeURIComponent(inp.getAttribute("data-rating"));
 
-        // Allow empty, but otherwise clamp to integer 1-10
-        let raw = String(inp.value ?? "");
-        raw = raw.replace(/[^0-9]/g, "");
-        if (raw === "") {
-          inp.value = "";
-        } else {
-          const n = Math.floor(Number(raw));
-          const clamped = Math.min(10, Math.max(1, Number.isFinite(n) ? n : 1));
-          inp.value = String(clamped);
-        }
-
         drafts[p] = drafts[p] || {};
         drafts[p].rating = String(inp.value ?? "");
       });
@@ -822,8 +835,8 @@ export async function renderCaptainPage(root, query) {
             continue;
           }
 
-          const ratingVal = clampInt(ratingRaw, 1, 10);
-          if (ratingVal == null) throw new Error(`Invalid rating for ${p} (1-10)`);
+          const ratingVal = clampHalfRating(ratingRaw, 1, 10);
+          if (ratingVal == null) throw new Error(`Invalid rating for ${p} (use 1–10 in 0.5 steps)`);
 
           const goalsRaw = String(d.goals ?? "").trim();
           const assistsRaw = String(d.assists ?? "").trim();

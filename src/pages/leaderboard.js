@@ -23,6 +23,9 @@ let LB_LAST_REFRESH_TS = 0;
 let LB_REFRESH_INFLIGHT = false;
 
 function now(){ return Date.now(); }
+function esc(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
+}
 
 function lbKey(seasonId){ return `${LS_LB_PREFIX}${seasonId}`; }
 
@@ -69,7 +72,16 @@ function renderTable(root, rows, sortMode, showRating) {
   const sorted = sortRows(rows, sortMode, showRating);
 
   const cols = showRating ? 6 : 4;
+  const maxGoals = Math.max(0, ...(rows || []).map(x => Number(x.goals || 0)));
+  const maxAssists = Math.max(0, ...(rows || []).map(x => Number(x.assists || 0)));
+  const ratedRows = (rows || []).filter(x => Number(x.matchesRated || 0) > 0);
+  const maxRating = Math.max(0, ...ratedRows.map(x => Number(x.avgRating || 0)));
   body.innerHTML = sorted.map((x, i) => {
+    const awards = [
+      maxGoals > 0 && Number(x.goals || 0) === maxGoals ? `<span class="playerAward playerAward--boot" title="Golden Boot — top scorer" aria-label="Golden Boot — top scorer">●</span>` : "",
+      maxAssists > 0 && Number(x.assists || 0) === maxAssists ? `<span class="playerAward" title="Top assists" aria-label="Top assists">🎯</span>` : "",
+      Number(x.matchesRated || 0) > 0 && Number(x.avgRating || 0) === maxRating ? `<span class="playerAward" title="Top rated" aria-label="Top rated">⭐</span>` : "",
+    ].join("");
     const ratingCols = showRating ? `
       <td class="lb__cell lb__num">${(x.avgRating || 0).toFixed(2)}</td>
       <td class="lb__cell lb__num small">${x.matchesRated || 0}</td>
@@ -77,13 +89,33 @@ function renderTable(root, rows, sortMode, showRating) {
     return `
       <tr class="lb__row">
         <td class="lb__cell lb__rank">${i+1}</td>
-        <td class="lb__cell lb__player" title="${x.playerName}">${x.playerName}</td>
+        <td class="lb__cell lb__player"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></td>
         <td class="lb__cell lb__num">${x.goals || 0}</td>
         <td class="lb__cell lb__num">${x.assists || 0}</td>
         ${ratingCols}
       </tr>
     `;
   }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No data.</td></tr>`;
+}
+
+function renderPlayerHistory(dialog, data) {
+  const matches = data.matches || [];
+  const goals = matches.reduce((n, m) => n + Number(m.goals || 0), 0);
+  const assists = matches.reduce((n, m) => n + Number(m.assists || 0), 0);
+  const rated = matches.filter(m => m.rating != null && Number(m.ratingCount || 0) > 0);
+  const avg = rated.length ? rated.reduce((n, m) => n + Number(m.rating || 0), 0) / rated.length : null;
+  dialog.innerHTML = `
+    <div class="playerSheet">
+      <div class="playerSheet__head"><div><div class="small">Season player card</div><div class="h1">${esc(data.playerName)}</div></div><button class="btn gray" data-close-history aria-label="Close player history">Close</button></div>
+      <div class="playerSummary">
+        <div><b>${matches.length}</b><span>Played</span></div><div><b>${goals}</b><span>Goals</span></div><div><b>${assists}</b><span>Assists</span></div><div><b>${avg == null ? "—" : avg.toFixed(2)}</b><span>Rating</span></div>
+      </div>
+      <div class="playerMatchList">${matches.map(m => {
+        const score = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "" ? `${esc(m.scoreHome)}–${esc(m.scoreAway)}` : "—";
+        return `<div class="playerMatch"><div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || m.type || "")}</span></div><div class="playerMatch__score">${score}</div><div class="playerMatch__stats"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} R</span></div></div>`;
+      }).join("") || `<div class="emptyState"><b>No matches yet</b><span>This player has no recorded season history.</span></div>`}</div>
+    </div>`;
+  dialog.querySelector("[data-close-history]").onclick = () => dialog.close();
 }
 
 function isLeaderboardRouteActive() {
@@ -178,6 +210,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
         </table>
       </div>
     </div>
+    <dialog id="playerHistoryDialog" class="playerDialog" aria-label="Player season history"></dialog>
   `;
 
   const msg = root.querySelector("#msg");
@@ -202,6 +235,18 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     msg.textContent = "No cached data. Refreshing latest…";
   }
   renderTable(root, rows, sortMode, showRating);
+
+  root.querySelector("#lbBody").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-player]");
+    if (!button) return;
+    const playerName = decodeURIComponent(button.dataset.player || "");
+    const dialog = root.querySelector("#playerHistoryDialog");
+    dialog.innerHTML = `<div class="playerSheet"><div class="h1">${esc(playerName)}</div><div class="small">Loading season history…</div></div>`;
+    dialog.showModal();
+    const out = await API.playerHistory(seasonId, playerName);
+    if (!out?.ok) { dialog.close(); return toastError(out?.error || "Could not load player history"); }
+    renderPlayerHistory(dialog, out);
+  });
 
   async function refreshLeaderboard(opts = {}) {
     const silent = !!opts.silent;

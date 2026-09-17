@@ -14,6 +14,7 @@ export const API = {
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
+  playerHistory: (seasonId, playerName) => apiGet({ action: "player_history", seasonId, playerName }),
 
   // public matches (season-scoped)
   publicOpenMatches: (seasonId) => apiGet({ action: "public_open_matches", seasonId }),
