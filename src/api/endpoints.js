@@ -11,6 +11,7 @@ export const API = {
   // notifications
   notifications: () => apiGet({ action: "notifications" }),
   notificationsMarkRead: (ids) => apiPost({ action: "notifications_mark_read", ids }),
+  myNextMatch: () => apiGet({ action: "my_next_match" }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
