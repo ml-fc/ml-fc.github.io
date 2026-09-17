@@ -29,11 +29,9 @@ let MATCH_META_LISTENERS_INSTALLED = false;
 let MATCH_OPEN_AUTO_REFRESH_INSTALLED = false;
 let MATCH_OPEN_REFRESH_INFLIGHT = false;
 let MATCH_OPEN_LAST_REFRESH_TS = 0;
-let MATCH_OPEN_REFRESH_TIMER = null;
 
 const MATCH_OPEN_CACHE_MAX_AGE_MS = 60 * 1000;
 const MATCH_OPEN_REFRESH_COOLDOWN_MS = 15 * 1000;
-const MATCH_OPEN_REFRESH_INTERVAL_MS = 45 * 1000;
 
 function matchTeamLabel(m, side) {
   const t = String(m?.type || "").toUpperCase();
@@ -127,7 +125,7 @@ async function refreshOpenMatches(root, seasons, seasonId, { force = false } = {
   }
 }
 
-function ensureMatchOpenAutoRefresh() {
+function ensureMatchOpenLifecycleRefresh() {
   if (MATCH_OPEN_AUTO_REFRESH_INSTALLED) return;
   MATCH_OPEN_AUTO_REFRESH_INSTALLED = true;
 
@@ -148,10 +146,10 @@ function ensureMatchOpenAutoRefresh() {
     if (!document.hidden) trigger(false);
   });
 
-  MATCH_OPEN_REFRESH_TIMER = window.setInterval(() => {
-    if (!isMatchRouteActive()) return;
-    trigger(false);
-  }, MATCH_OPEN_REFRESH_INTERVAL_MS);
+  // A restored connection is a meaningful refresh point. There is deliberately
+  // no interval here: background polling wastes Worker/D1 quota while the app is
+  // idle, whereas route entry, foregrounding, reconnect and push cover changes.
+  window.addEventListener("online", () => trigger(false));
 }
 
 
@@ -1103,7 +1101,7 @@ export async function renderMatchPage(root, query) {
   ACTIVE_MATCH.pageRoot = root;
   ACTIVE_MATCH.listRoot = root.querySelector('#matchListView');
   ACTIVE_MATCH.seasonId = seasonId;
-  ensureMatchOpenAutoRefresh();
+  ensureMatchOpenLifecycleRefresh();
   // Meta check only on initial load / tab enter (backend-friendly)
   setTimeout(() => scheduleMatchMetaCheck("load"), 0);
 

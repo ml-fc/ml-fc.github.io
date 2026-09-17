@@ -6,9 +6,12 @@ import { API } from "./api/endpoints.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
+const LS_PUSH_SYNC = "mlfc_push_sync_v1";
 
 let __mlfcNotiLastCheck = 0;
-let __mlfcNotiTimer = null;
+let __mlfcNotiInflight = null;
+const NOTIFICATION_REFRESH_COOLDOWN_MS = 30 * 1000;
+const PUSH_SYNC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -27,10 +30,26 @@ async function ensurePushSubscribed() {
 
   // already subscribed?
   const existing = await reg.pushManager.getSubscription();
-  // IMPORTANT: if a subscription already exists in the browser,
-  // still upsert it to the backend (prevents subs:0 after backend redeploys).
   if (existing) {
-    await API.pushSubscribe(existing, navigator.userAgent).catch(() => {});
+    const user = getCachedUser();
+    let lastSync = null;
+    try { lastSync = JSON.parse(localStorage.getItem(LS_PUSH_SYNC) || "null"); } catch {}
+    const endpoint = String(existing.endpoint || "");
+    const alreadySynced = lastSync?.endpoint === endpoint
+      && lastSync?.playerName === String(user?.name || "")
+      && Date.now() - Number(lastSync?.ts || 0) < PUSH_SYNC_MAX_AGE_MS;
+    if (!alreadySynced) {
+      const out = await API.pushSubscribe(existing, navigator.userAgent).catch(() => null);
+      if (out?.ok) {
+        try {
+          localStorage.setItem(LS_PUSH_SYNC, JSON.stringify({
+            endpoint,
+            playerName: String(user?.name || ""),
+            ts: Date.now(),
+          }));
+        } catch {}
+      }
+    }
     return;
   }
 
@@ -43,7 +62,16 @@ async function ensurePushSubscribed() {
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
 
-  await API.pushSubscribe(sub, navigator.userAgent);
+  const out = await API.pushSubscribe(sub, navigator.userAgent);
+  if (out?.ok) {
+    try {
+      localStorage.setItem(LS_PUSH_SYNC, JSON.stringify({
+        endpoint: String(sub.endpoint || ""),
+        playerName: String(getCachedUser()?.name || ""),
+        ts: Date.now(),
+      }));
+    } catch {}
+  }
 }
 
 function notifyDesktop(title, body) {
@@ -91,11 +119,14 @@ async function checkNotificationsBadge(reason = "nav", { force = false } = {}) {
   const nowTs = Date.now();
   // Throttle to avoid hammering the API while tabbing around.
   // (Still allow forced checks, e.g. the 10-minute timer.)
-  if (!force && nowTs - __mlfcNotiLastCheck < 2000) return;
+  if (!force && nowTs - __mlfcNotiLastCheck < NOTIFICATION_REFRESH_COOLDOWN_MS) return null;
+  if (__mlfcNotiInflight) return __mlfcNotiInflight;
   __mlfcNotiLastCheck = nowTs;
 
-  const out = await API.notifications().catch(() => null);
-  if (!out?.ok) return;
+  __mlfcNotiInflight = API.notifications().catch(() => null);
+  const out = await __mlfcNotiInflight;
+  __mlfcNotiInflight = null;
+  if (!out?.ok) return null;
 
   try {
     localStorage.setItem(LS_NOTI_CACHE, JSON.stringify({ ts: nowTs, data: out }));
@@ -104,11 +135,7 @@ async function checkNotificationsBadge(reason = "nav", { force = false } = {}) {
   }
 
   setAccountNotiBadge((out.notifications || []).length > 0);
-}
-
-function startNotificationsTimer() {
-  // Push notifications are enabled; do not poll the notifications API in the background.
-  // (Keeping this function for backward compatibility.)
+  return out;
 }
 
 
@@ -116,25 +143,13 @@ async function checkNotificationsOnce() {
   const cachedUser = getCachedUser();
   if (!cachedUser) return;
 
-  try {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission().catch(() => {});
-    }
-    await ensurePushSubscribed().catch(() => {});
-  } catch {
-    // ignore
-  }
+  // Browsers require notification permission prompts to follow a user gesture.
+  // Startup only repairs an already-granted subscription; the Account screen
+  // owns the explicit "Enable notifications" action.
+  await ensurePushSubscribed().catch(() => {});
 
-  const out = await API.notifications().catch(() => null);
+  const out = await checkNotificationsBadge("startup", { force: true });
   if (!out?.ok) return;
-
-  // Always update badge/cache on startup too
-  try {
-    localStorage.setItem(LS_NOTI_CACHE, JSON.stringify({ ts: Date.now(), data: out }));
-  } catch {
-    // ignore
-  }
-  setAccountNotiBadge((out.notifications || []).length > 0);
 
   const ids = new Set();
   try {
@@ -203,9 +218,6 @@ function boot() {
     .then((u) => {
       updateNavForUser(u);
       checkNotificationsOnce().catch(() => {});
-      checkNotificationsBadge("startup", { force: true }).catch(() => {});
-      // No 10-minute polling; push notifications update the badge.
-
     })
     .catch(() => {
       updateNavForUser(null);
@@ -214,12 +226,16 @@ function boot() {
 
   // Check notifications when user navigates across tabs.
   window.addEventListener("hashchange", () => {
-    checkNotificationsBadge("tab", { force: true }).catch(() => {});
+    checkNotificationsBadge("tab").catch(() => {});
   });
 
   // Also re-check when the browser tab becomes visible again.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) checkNotificationsBadge("visible", { force: true }).catch(() => {});
+    if (!document.hidden) checkNotificationsBadge("visible").catch(() => {});
+  });
+
+  window.addEventListener("online", () => {
+    checkNotificationsBadge("online").catch(() => {});
   });
 
   // When a Web Push arrives, the Service Worker will postMessage("MLFC_PUSH") to any open tabs.
