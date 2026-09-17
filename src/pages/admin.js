@@ -307,33 +307,35 @@ function matchRowHtml(m, view) {
   const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE";
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
+  const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
 
   // If locked/completed: disable Manage + Lock ratings
   const disableManage = isEditLocked;
-  const disableLock = locked || isCompleted;
+  const disableLock = locked || isCompleted || !hasBothScores;
 
   const when = formatHumanDateTime(m.date, m.time);
 
   return `
-    <div style="padding:10px 0; border-bottom:1px solid #eee">
-      <div class="row" style="justify-content:space-between">
-        <div style="min-width:0">
-          <div style="font-weight:950; color: rgba(11,18,32,0.92)">${m.title}</div>
-          <div class="small">${when} • ${m.type}</div>
+    <article class="adminMatchRow">
+      <div class="adminMatchRow__head">
+        <div class="adminMatchRow__main">
+          <div class="adminMatchRow__title">${m.title}</div>
+          <div class="adminMatchRow__meta">${when}<span aria-hidden="true">·</span>${m.type}</div>
         </div>
-        <div class="row" style="gap:6px">
+        <div class="adminMatchRow__badges">
           <span class="badge">${m.status}</span>
           ${locked ? `<span class="badge badge--bad">LOCKED</span>` : ""}
         </div>
       </div>
 
-      <div class="row" style="margin-top:8px; flex-wrap:wrap">
+      <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
-        <button class="btn gray" data-lock="${m.matchId}" ${disableLock ? "disabled" : ""}>Lock ratings</button>
+        <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked ? "disabled" : ""}>Score & ratings</button>
+        <button class="btn gray" data-lock="${m.matchId}" ${disableLock ? "disabled" : ""}>${!hasBothScores ? "Add score first" : "Lock ratings"}</button>
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
-        <button class="btn bad" data-delete-match="${m.matchId}" style="margin-left:auto">Delete</button>
+        <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
       </div>
-    </div>
+    </article>
   `;
 }
 
@@ -1039,6 +1041,13 @@ function bindUserMgmt(root, routeToken) {
 }
 
 function bindListButtons(root, view) {
+  root.querySelectorAll('[data-score]:not([disabled])').forEach(btn => {
+    btn.onclick = () => {
+      const code = btn.getAttribute("data-score");
+      location.hash = `#/captain?code=${encodeURIComponent(code)}&src=admin`;
+    };
+  });
+
   // Manage
   // IMPORTANT: Don't rely solely on hashchange to open manage.
   // If the user previously opened the same match, setting the same hash may not trigger router work
@@ -1171,6 +1180,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const availabilityLocked = Number(m.availabilityLocked || 0) === 1 || String(m.availabilityLocked || "").toUpperCase() === "TRUE";
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
+  const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
 
   const type = String(m.type || "").toUpperCase();
   const availability = data.availability || [];
@@ -1278,7 +1288,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <button class="btn primary" id="shareMatch">Share match link</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
        
-        <button class="btn primary" id="lockRatingsTop" ${locked ? "disabled" : ""}>Lock ratings</button>
+        <button class="btn primary" id="lockRatingsTop" ${locked || !hasBothScores ? "disabled" : ""}>${hasBothScores ? "Lock ratings" : "Add score before locking"}</button>
       </div>
 
       ${locked ? `<div class="small" style="margin-top:10px">This match is locked. Manage and Lock actions are disabled in lists.</div>` : ""}

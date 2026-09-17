@@ -237,7 +237,9 @@ export async function renderCaptainPage(root, query) {
     if (drafts[p].assists == null || drafts[p].assists === "") drafts[p].assists = eventMap[p]?.assists ?? "";
   });
 
-  const hint = (!adminMode && type === "INTERNAL" && captainTeam)
+  const hint = adminMode
+    ? `<span style="opacity:.75">• Admin mode: enter and save both sides.</span>`
+    : (!adminMode && type === "INTERNAL" && captainTeam)
     ? `<span style="opacity:.75">• You can only put <b>opponent</b> score.</span>`
     : "";
 
@@ -276,7 +278,7 @@ export async function renderCaptainPage(root, query) {
         <span class="badge">${m.status}</span>
       </div>
       <div class="small" style="margin-top:10px">${when}</div>
-      <div class="small" style="margin-top:6px"><b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}</div>
+      <div class="small" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}`}</div>
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">Open match</button>
@@ -312,7 +314,7 @@ export async function renderCaptainPage(root, query) {
       }
 
       <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="submitScore">Submit score</button>
+        <button class="btn primary" id="submitScore">${adminMode ? "Save both scores" : "Submit score"}</button>
       </div>
       <div class="small" id="scoreMsg" style="margin-top:10px"></div>
     </div>
@@ -458,7 +460,9 @@ export async function renderCaptainPage(root, query) {
           return;
         }
 
-        out = await API.captainSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b), getScopeFromHash());
+        out = adminMode
+          ? await API.adminSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b))
+          : await API.captainSubmitScore(code, type === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(a), String(b), getScopeFromHash());
 
         if (!out.ok) {
           msg.textContent = out.error || "Failed";
@@ -484,6 +488,12 @@ export async function renderCaptainPage(root, query) {
         const homeScore = (captainTeam === "BLUE") ? String(m.scoreHome ?? "").trim() : String(m.scoreAway ?? "").trim();
         if (homeLabel) homeLabel.textContent = homeScore === "" ? "—" : homeScore;
       }
+
+      try {
+        localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
+        localStorage.removeItem(`mlfc_admin_manage_cache_v3:${code}`);
+        if (m.seasonId) localStorage.removeItem(`mlfc_admin_matches_cache_v3:${m.seasonId}`);
+      } catch {}
     } catch (e) {
       msg.textContent = "Failed";
       toastError(e?.message || "Score submit failed");
@@ -820,13 +830,13 @@ export async function renderCaptainPage(root, query) {
         }
 
         if (rows.length === 0) {
-          toastWarn(requireAll ? `Rate all ${opponentTeam} players before submitting.` : "Enter at least one rating.");
+          toastWarn(requireAll ? `Rate all ${opponentTeam || "required"} players before submitting.` : "Enter at least one rating.");
           msg.textContent = "Nothing to submit";
           return;
         }
 
         // Opponent match: ensure MLFC score matches total goals entered
-        if (type !== "INTERNAL") {
+        if (!adminMode && type !== "INTERNAL") {
           const mlfcScore = clampInt(String(m.scoreHome ?? "").trim(), 0, 99);
           if (mlfcScore != null) {
             const totalGoals = rows.reduce((s,r)=>s+Number(r.goals||0),0);

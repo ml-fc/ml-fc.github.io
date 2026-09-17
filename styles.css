@@ -1447,3 +1447,114 @@ body::before {
   .bottomnav__icon { font-size: 16px; }
   .bottomnav__label { font-size: 10px; }
 }
+
+/* 2026.2 mobile/admin refinements */
+.footer {
+  position: static;
+  inset: auto;
+  opacity: 1;
+  pointer-events: auto;
+  text-align: left;
+  background: rgba(5, 14, 25, .55);
+  border-top: 1px solid var(--line);
+}
+.footer__inner { color: #8296a8; opacity: 1; }
+
+.adminMatchRow {
+  padding: 16px;
+  margin-top: 12px;
+  background: linear-gradient(145deg, #fff 0%, #f5f8f9 100%);
+  border: 1px solid #d7e0e5;
+  border-radius: 7px;
+  box-shadow: 0 7px 18px rgba(14, 42, 60, .07);
+}
+.adminMatchRow:first-child { margin-top: 0; }
+.adminMatchRow__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.adminMatchRow__main { min-width: 0; }
+.adminMatchRow__title {
+  color: #0a1726;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+.adminMatchRow__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+  color: #5a7082;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.adminMatchRow__badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.adminMatchRow__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.adminMatchRow__actions .btn { width: 100%; min-width: 0; }
+.btn.dangerGhost {
+  color: #a32631;
+  background: #fff5f5;
+  border-color: #efc6ca;
+}
+.btn.dangerGhost:hover:not(:disabled) { color: white; background: #b92f3a; border-color: #b92f3a; }
+
+#adminHeaderCard {
+  background: linear-gradient(135deg, #f7fbfc, #eaf2f5);
+  border-color: rgba(37, 183, 243, .32);
+}
+#adminHeaderCard .h1::after {
+  content: "Club operations";
+  display: block;
+  margin-top: 9px;
+  color: var(--primary);
+  font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .12em;
+}
+
+#app .scoreGrid { gap: 12px; }
+#app .scoreBox {
+  padding: 14px;
+  background: linear-gradient(145deg, #fff, #eef4f6);
+  border: 1px solid #ccd9e0;
+  border-radius: 6px;
+}
+#app .scoreLabel {
+  color: #536a7c;
+  font: 800 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+#app .scoreValue { color: var(--primary); font-size: 32px; }
+
+details.card > summary {
+  cursor: pointer;
+  color: var(--ink);
+  list-style-position: outside;
+}
+details.card[open] > summary { margin-bottom: 14px; }
+
+@media (max-width: 640px) {
+  .shell { padding: 18px 10px 20px; }
+  .card { padding: 18px 16px; border-radius: 7px; }
+  .h1 { font-size: 25px; }
+  .brand__title { font-size: 17px; }
+  .footer { padding: 14px 14px calc(92px + var(--safe-bottom)); }
+  .footer__inner { align-items: center; gap: 12px; }
+  .adminMatchRow { padding: 14px; }
+  .adminMatchRow__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adminMatchRow__actions .btn { padding-inline: 8px; font-size: 12px; }
+}
+
+@media (max-width: 380px) {
+  .adminMatchRow__head { flex-direction: column; }
+  .adminMatchRow__badges { justify-content: flex-start; }
+  .footer__inner { flex-direction: column; align-items: flex-start; }
+}
