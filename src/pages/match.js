@@ -13,6 +13,7 @@ const SS_MATCH_LIST_UI = "mlfc_match_list_ui_v1"; // session-only: {pastOpen, sc
 const LS_MATCH_DETAIL_PREFIX = "mlfc_match_detail_cache_v2:"; // code -> {ts,data}
 const LS_MATCH_META_PREFIX = "mlfc_matches_meta_v2:";         // seasonId -> {ts,fingerprint,latestCode}
 const LS_PLAYERS_CACHE = "mlfc_players_cache_v2";             // {ts,players:[name...]}
+const LS_NEXT_MATCH_PREFIX = "mlfc_next_match_cache_v1:";     // player name -> {ts,data}
 
 const PLAYERS_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -29,6 +30,7 @@ let MATCH_META_LISTENERS_INSTALLED = false;
 let MATCH_OPEN_AUTO_REFRESH_INSTALLED = false;
 let MATCH_OPEN_REFRESH_INFLIGHT = false;
 let MATCH_OPEN_LAST_REFRESH_TS = 0;
+let NEXT_MATCH_COUNTDOWN_TIMER = null;
 
 const MATCH_OPEN_CACHE_MAX_AGE_MS = 60 * 1000;
 const MATCH_OPEN_REFRESH_COOLDOWN_MS = 15 * 1000;
@@ -211,6 +213,14 @@ function setDisabled(btn, disabled, busyText) {
 }
 
 function uniqueSorted(arr){ return [...new Set(arr)].filter(Boolean).sort((a,b)=>a.localeCompare(b)); }
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 // Handle both normalized and Sheets Date-string formats
 function normalizeDateStr(dateStr) {
@@ -423,6 +433,172 @@ function renderShell(root){
   `;
 }
 
+function nextMatchCacheKey() {
+  const name = String(getCachedUser()?.name || "player").trim().toLowerCase();
+  return `${LS_NEXT_MATCH_PREFIX}${name}`;
+}
+
+function matchDateTime(match) {
+  const date = normalizeDateStr(match?.date);
+  const time = normalizeTimeStr(match?.time) || "00:00";
+  const value = new Date(`${date}T${time}:00`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+function countdownLabel(match) {
+  const fixtureTime = matchDateTime(match);
+  if (!fixtureTime) return "Date to be confirmed";
+  const difference = fixtureTime.getTime() - Date.now();
+  if (difference <= 0) return "Matchday is here";
+  const minutes = Math.max(1, Math.ceil(difference / 60000));
+  if (minutes < 60) return `Starts in ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Starts in ${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"} to kick-off`;
+}
+
+function availabilityPresentation(availability) {
+  const status = String(availability?.status || "NOT_RESPONDED").toUpperCase();
+  if (status === "YES") return { label: "Available", tone: "yes", detail: "You’re on the availability list." };
+  if (status === "NO") return { label: "Not available", tone: "no", detail: "You’ve told the club you can’t play." };
+  if (status === "WAITING") {
+    const position = Number(availability?.waitingPosition || 0);
+    return { label: "Waiting list", tone: "waiting", detail: position ? `You’re number ${position} in the queue.` : "You’re in the queue." };
+  }
+  return { label: "Response needed", tone: "pending", detail: "Let the club know if you can play." };
+}
+
+function renderNextMatchDashboard(host, data) {
+  if (!host) return;
+  const match = data?.nextMatch;
+  if (!match) {
+    host.innerHTML = `
+      <section class="nextMatch nextMatch--empty" aria-labelledby="nextMatchTitle">
+        <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
+        <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
+      </section>`;
+    return;
+  }
+
+  const availability = availabilityPresentation(match.availability);
+  const assignment = match.assignment || {};
+  const score = match.score || {};
+  const hasScore = String(score.home ?? "") !== "" || String(score.away ?? "") !== "";
+  const team = String(assignment.team || "").toUpperCase();
+  const captainLabel = assignment.isCaptain ? `Captain · ${assignment.captainTeam || team}` : "";
+  const action = match.contextualAction || null;
+  const canRespond = Boolean(match.availability?.canRespond);
+  const showResponse = canRespond && (!action || action.type === "RESPOND");
+  const result = data?.latestResult;
+
+  host.innerHTML = `
+    <section class="nextMatch" aria-labelledby="nextMatchTitle">
+      <div class="nextMatch__pitch" aria-hidden="true"></div>
+      <header class="nextMatch__head">
+        <div>
+          <div class="nextMatch__eyebrow">Your next fixture</div>
+          <h1 id="nextMatchTitle">${escapeHtml(match.title)}</h1>
+          <p>${escapeHtml(formatHumanDateTime(match.date, match.time))} <span aria-hidden="true">·</span> ${escapeHtml(match.type)}</p>
+        </div>
+        <div class="nextMatch__countdown" data-next-countdown aria-live="off">${escapeHtml(countdownLabel(match))}</div>
+      </header>
+
+      <div class="nextMatch__stateGrid">
+        <div class="nextMatch__state">
+          <span class="nextMatch__label">Availability</span>
+          <strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>
+          <small>${escapeHtml(availability.detail)}</small>
+        </div>
+        <div class="nextMatch__state">
+          <span class="nextMatch__label">Your role</span>
+          <strong>${team ? escapeHtml(`${team} team`) : "Team not assigned"}</strong>
+          <small>${captainLabel ? escapeHtml(captainLabel) : team ? "Player" : "Check back after team selection."}</small>
+        </div>
+        <div class="nextMatch__state">
+          <span class="nextMatch__label">Match status</span>
+          <strong>${hasScore ? escapeHtml(`${score.home || "–"} — ${score.away || "–"}`) : "Fixture open"}</strong>
+          <small>${hasScore ? (score.complete ? "Final score" : "Score entry in progress") : "Awaiting kick-off"}</small>
+        </div>
+      </div>
+
+      <footer class="nextMatch__actions">
+        ${showResponse ? `
+          <div class="quickResponse" role="group" aria-label="Set your availability">
+            <button class="btn quickResponse__yes" type="button" data-next-response="YES"><span aria-hidden="true">✓</span> Yes, I can play</button>
+            <button class="btn quickResponse__no" type="button" data-next-response="NO"><span aria-hidden="true">×</span> No, I’m unavailable</button>
+          </div>` : ""}
+        ${action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
+        ${!showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+      </footer>
+
+      ${result ? `<div class="nextMatch__lastResult"><span>Last result</span><b>${escapeHtml(result.title)}</b><strong>${escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>` : ""}
+    </section>`;
+
+  host.querySelectorAll("[data-next-open]").forEach((button) => {
+    button.onclick = () => {
+      const code = button.getAttribute("data-next-open");
+      if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
+    };
+  });
+
+  host.querySelectorAll("[data-next-response]").forEach((button) => {
+    button.onclick = async () => {
+      const choice = button.getAttribute("data-next-response");
+      const buttons = [...host.querySelectorAll("[data-next-response]")];
+      buttons.forEach((item) => { item.disabled = true; });
+      button.textContent = "Saving…";
+      const response = await API.setAvailability(match.publicCode, choice);
+      if (!response?.ok) {
+        buttons.forEach((item) => { item.disabled = false; });
+        button.innerHTML = choice === "YES" ? '<span aria-hidden="true">✓</span> Yes, I can play' : '<span aria-hidden="true">×</span> No, I’m unavailable';
+        toastError(response?.error || "Your availability could not be saved. Try again.");
+        return;
+      }
+      lsDel(nextMatchCacheKey());
+      lsDel(detailKey(match.publicCode));
+      toastSuccess(choice === "YES" ? "You’re marked as available." : "You’re marked as unavailable.");
+      await loadNextMatchDashboard(host, { force: true });
+    };
+  });
+
+  if (NEXT_MATCH_COUNTDOWN_TIMER) clearInterval(NEXT_MATCH_COUNTDOWN_TIMER);
+  NEXT_MATCH_COUNTDOWN_TIMER = setInterval(() => {
+    if (!document.body.contains(host) || !isMatchRouteActive()) {
+      clearInterval(NEXT_MATCH_COUNTDOWN_TIMER);
+      NEXT_MATCH_COUNTDOWN_TIMER = null;
+      return;
+    }
+    const countdown = host.querySelector("[data-next-countdown]");
+    if (countdown) countdown.textContent = countdownLabel(match);
+  }, 60000);
+}
+
+async function loadNextMatchDashboard(host, { force = false } = {}) {
+  if (!host) return;
+  const key = nextMatchCacheKey();
+  const cached = lsGet(key);
+  const fresh = cached?.data?.ok && now() - Number(cached.ts || 0) < 2 * 60 * 1000;
+  if (cached?.data?.ok) renderNextMatchDashboard(host, cached.data);
+  if (!force && fresh) return;
+
+  const response = await API.myNextMatch();
+  if (!document.body.contains(host)) return;
+  if (response?.ok) {
+    lsSet(key, { ts: now(), data: response });
+    renderNextMatchDashboard(host, response);
+    return;
+  }
+  if (cached?.data?.ok) return;
+  host.innerHTML = `
+    <section class="nextMatch nextMatch--error" role="status">
+      <div><div class="nextMatch__eyebrow">Your matchday</div><h1>Next fixture unavailable</h1></div>
+      <p>${escapeHtml(response?.error || "Check your connection, then try again.")}</p>
+      <button class="btn gray" type="button" data-next-retry>Try again</button>
+    </section>`;
+  host.querySelector("[data-next-retry]")?.addEventListener("click", () => loadNextMatchDashboard(host, { force: true }));
+}
+
 async function loadSeasons() {
   const cached = lsGet(LS_SEASONS_CACHE)?.data;
   if (cached?.ok) return cached;
@@ -617,6 +793,11 @@ function renderMatchList(root, seasonId, openMatches) {
   });
 
   list.innerHTML = `
+    <div id="nextMatchDashboard" class="nextMatchHost" aria-live="polite">
+      <section class="nextMatch nextMatch--loading" aria-label="Loading your next fixture">
+        <div class="nextMatch__eyebrow">Your matchday</div><div class="nextMatch__skeleton"></div>
+      </section>
+    </div>
     <div class="matchSidebar">
       <div class="card matchCentreIntro">
         <div class="matchCentreIntro__eyebrow">First team · Matchday</div>
@@ -667,6 +848,8 @@ function renderMatchList(root, seasonId, openMatches) {
     </div>
 
   `;
+
+  loadNextMatchDashboard(list.querySelector("#nextMatchDashboard")).catch(() => {});
 
   list.querySelectorAll("[data-open]").forEach(btn=>{
     btn.onclick = async () => {
