@@ -51,11 +51,11 @@ function initialRosterFromAvailability(avail) {
 }
 
 function clampInt(x, min=0, max=99) {
-  const n = Number(x);
-  if (!Number.isFinite(n)) return null;
-  const v = Math.floor(n);
-  if (v < min || v > max) return null;
-  return v;
+  const raw = String(x ?? "").trim();
+  if (raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) return null;
+  return n;
 }
 
 function safeUpper(x){ return String(x || "").trim().toUpperCase(); }
@@ -120,6 +120,17 @@ export async function renderCaptainPage(root, query) {
         <div class="h1">${m.title}</div>
         <div class="small">${when} • ${m.type}</div>
         <div class="small" style="margin-top:10px">Ratings are locked.</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (status !== "OPEN") {
+    root.innerHTML = `
+      <div class="card">
+        <div class="h1">${m.title}</div>
+        <div class="small">${when} • ${m.type}</div>
+        <div class="small" style="margin-top:10px">This match is not open for scoring or ratings.</div>
       </div>
     `;
     return;
@@ -219,10 +230,16 @@ export async function renderCaptainPage(root, query) {
 
   // Prefill drafts from backend if ratings/events already exist.
   const ratingMap = {};
-  (data.ratings || []).slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
+  // A match may contain submissions from both captains and an admin. Prefill
+  // only the current user's own draft; showing somebody else's latest values
+  // makes a resubmission look like it belongs to the current user.
+  const currentActor = captain.toLowerCase();
+  (data.ratings || []).filter(r => String(r.givenBy || "").trim().toLowerCase() === currentActor)
+    .slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
     .forEach(r => { const p = String(r.playerName||"").trim(); if (p) ratingMap[p] = String(r.rating ?? ""); });
   const eventMap = {};
-  (data.events || []).slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
+  (data.events || []).filter(e => String(e.givenBy || "").trim().toLowerCase() === currentActor)
+    .slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
     .forEach(e => {
       const p = String(e.playerName||"").trim();
       if (!p) return;
@@ -429,10 +446,8 @@ export async function renderCaptainPage(root, query) {
         // Partial update: send only opponent side (backend supports COALESCE)
         if (captainTeam === "BLUE") {
           out = await API.captainSubmitScore(code, "INTERNAL", "", String(oppVal), getScopeFromHash());
-          m.scoreAway = String(oppVal);
         } else {
           out = await API.captainSubmitScore(code, "INTERNAL", String(oppVal), "", getScopeFromHash());
-          m.scoreHome = String(oppVal);
         }
 
         if (!out?.ok) {
@@ -440,6 +455,9 @@ export async function renderCaptainPage(root, query) {
           toastError(out?.error || "Score submit failed");
           return;
         }
+
+        m.scoreHome = String(out.scoreHome ?? m.scoreHome ?? "");
+        m.scoreAway = String(out.scoreAway ?? m.scoreAway ?? "");
 
         msg.textContent = "Submitted ✅";
         toastSuccess("Opponent score submitted.");
@@ -470,8 +488,8 @@ export async function renderCaptainPage(root, query) {
           return;
         }
 
-        m.scoreHome = String(a);
-        m.scoreAway = String(b);
+        m.scoreHome = String(out.scoreHome ?? a);
+        m.scoreAway = String(out.scoreAway ?? b);
 
         msg.textContent = "Submitted ✅";
         toastSuccess("Score submitted.");
@@ -846,7 +864,9 @@ export async function renderCaptainPage(root, query) {
           }
         }
 
-        const out = await API.captainSubmitRatingsBatch(code, rows, getScopeFromHash());
+        const out = adminMode
+          ? await API.adminSubmitRatingsBatch(code, rows)
+          : await API.captainSubmitRatingsBatch(code, rows, "CAPTAIN");
         if (!out.ok) {
           msg.textContent = out.error || "Failed";
           toastError(out.error || "Submit failed");

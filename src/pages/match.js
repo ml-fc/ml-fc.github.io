@@ -619,45 +619,55 @@ function renderMatchList(root, seasonId, openMatches) {
   });
 
   list.innerHTML = `
-    <div class="card">
-      <div class="h1">Matches</div>
-      <div class="small">Open matches auto-refresh in the background when this page is active.</div>
+    <div class="matchSidebar">
+      <div class="card matchCentreIntro">
+        <div class="matchCentreIntro__eyebrow">First team · Matchday</div>
+        <div class="h1">Match centre</div>
+        <div class="small">Choose a season, then open a fixture to post availability or view the teams.</div>
 
-      <div id="seasonBlock"></div>
+        <div id="seasonBlock"></div>
 
-      <div id="banner" style="margin-top:10px"></div>
+        <div id="banner" style="margin-top:10px"></div>
+      </div>
+
+      <details class="card matchHistory" id="pastSection">
+        <summary>Past matches</summary>
+        <div class="small" style="margin-top:8px">Load completed fixtures and previous results for this season.</div>
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+          <button class="btn primary" id="refreshPast">Refresh past matches</button>
+        </div>
+        <div id="pastArea" style="margin-top:10px"></div>
+      </details>
     </div>
 
-    <div class="card">
-      <div class="h1">Open matches</div>
+    <div class="card matchBoard">
+      <div class="matchBoard__header">
+        <div>
+          <div class="matchCentreIntro__eyebrow">Live schedule</div>
+          <div class="h1">Open matches</div>
+        </div>
+        <span class="matchBoard__count">${open.length} ${open.length === 1 ? "fixture" : "fixtures"}</span>
+      </div>
       ${
         open.length
           ? open.map(m=>`
-            <div style="padding:10px 0; border-bottom:1px solid rgba(11,18,32,0.10)">
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                <div style="font-weight:950">${m.title}</div>
+            <article class="fixtureRow">
+              <div class="fixtureRow__body">
+                <div class="fixtureRow__badges">
                 ${m.publicCode === latestCode ? `<span class="badge" style="background:#16a34a;color:#fff">LATEST</span>` : ""}
                 <span class="badge" data-captain-badge="${m.publicCode}" style="background:#111827;color:#fff; display:${ACTIVE_MATCH.captainCodes?.includes?.(m.publicCode) ? "inline-flex" : "none"}">CAPTAIN</span>
+                </div>
+                <div class="fixtureRow__title">${m.title}</div>
+                <div class="small fixtureRow__meta">${formatHumanDateTime(m.date,m.time)} <span aria-hidden="true">·</span> ${m.type}</div>
+                ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${formatResultLabel(m)}</b></div>` : `<div class="fixtureRow__status">Availability open</div>`}
               </div>
-              <div class="small">${formatHumanDateTime(m.date,m.time)} • ${m.type} • ${m.status}</div>
-              ${formatResultLabel(m) ? `<div class="small" style="margin-top:4px"><b>Result:</b> ${formatResultLabel(m)}</div>` : ``}
-              <div class="row" style="margin-top:8px">
-                <button class="btn primary" data-open="${m.publicCode}">Open</button>
-              </div>
-            </div>
+              <button class="btn primary fixtureRow__open" data-open="${m.publicCode}" aria-label="Open ${m.title}">Open match</button>
+            </article>
           `).join("")
-          : `<div class="small">No open matches.</div>`
+          : `<div class="emptyState"><b>No open matches</b><span>New fixtures will appear here when the club desk publishes them.</span></div>`
       }
     </div>
 
-    <details class="card" id="pastSection">
-      <summary style="font-weight:950">Past matches</summary>
-      <div class="small" style="margin-top:8px">Past matches only load when you tap Refresh Past.</div>
-      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <button class="btn primary" id="refreshPast">Refresh Past</button>
-      </div>
-      <div id="pastArea" style="margin-top:10px"></div>
-    </details>
   `;
 
   list.querySelectorAll("[data-open]").forEach(btn=>{

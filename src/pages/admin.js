@@ -124,6 +124,10 @@ function uniqueSorted(arr) {
   return [...new Set(arr)].filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
+function isTrueFlag(value) {
+  return Number(value) === 1 || String(value ?? "").trim().toUpperCase() === "TRUE";
+}
+
 function clearPublicMatchDetailCache(publicCode) {
   try {
     if (publicCode) localStorage.removeItem(`${LS_MATCH_DETAIL_PREFIX}${publicCode}`);
@@ -304,7 +308,7 @@ function topNavHtml(view) {
 
 function matchRowHtml(m, view) {
   const status = String(m.status || "").toUpperCase();
-  const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE";
+  const locked = isTrueFlag(m.ratingsLocked);
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
@@ -953,7 +957,7 @@ function bindHeaderButtons(root, routeToken) {
               <td style="padding:8px; text-align:right" data-label="Actions" class="usersActions">
                 <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
                 <button class="btn gray" data-reset-pass="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Change password</button>
-                <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
+                <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
               </td>
             </tr>
           `;
@@ -1025,10 +1029,15 @@ function bindHeaderButtons(root, routeToken) {
   area.querySelectorAll("[data-del-user]").forEach(btn => {
     btn.onclick = async () => {
       const name = decodeURIComponent(btn.getAttribute("data-del-user") || "");
+      if (meNameLower && String(name || "").trim().toLowerCase() === meNameLower) {
+        return toastError("You cannot delete your own admin account");
+      }
       const ok = confirm(`Delete user ${name}? This cannot be undone.`);
       if (!ok) return;
       const res = await API.adminDeleteUser(name).catch(() => null);
       if (!res?.ok) return toastError(res?.error || "Failed");
+      users = users.filter(u => String(u.name || "").trim().toLowerCase() !== String(name).trim().toLowerCase());
+      lsSet(LS_USERS_CACHE, { ts: Date.now(), users });
       toastSuccess("User deleted");
       renderUsers(root);
     };
@@ -1176,8 +1185,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   const m = data.match;
   const status = String(m.status || "").toUpperCase();
-  const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE";
-  const availabilityLocked = Number(m.availabilityLocked || 0) === 1 || String(m.availabilityLocked || "").toUpperCase() === "TRUE";
+  const locked = isTrueFlag(m.ratingsLocked);
+  const availabilityLocked = isTrueFlag(m.availabilityLocked);
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
@@ -1285,6 +1294,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="small" style="word-break:break-all">${matchLink(m.publicCode)}</div>
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+        <button class="btn gray" id="backToAdminList">Back to matches</button>
         <button class="btn primary" id="shareMatch">Share match link</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
        
@@ -1298,6 +1308,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   `;
 
   // Admin manage view
+
+  manageArea.querySelector("#backToAdminList").onclick = () => {
+    const target = prevView === "past" ? "past" : "open";
+    location.hash = `#/admin?view=${target}`;
+  };
 
   manageArea.querySelector("#shareMatch").onclick = () => {
     waOpenPrefill(`Manor Lakes FC match link:\n${matchLink(m.publicCode)}`);
@@ -2268,11 +2283,13 @@ export async function renderAdminPage(root, query) {
 
   if (view === "users") {
     root.innerHTML = `
-      <div class="pageHeader">
+      <div class="card">
         <div class="h1" style="margin:0">User management</div>
+        ${topNavHtml("users")}
       </div>
       <div class="card" id="usersArea"></div>
     `;
+    bindTopNav(root, routeToken);
     await renderUsers(root);
     return;
   }

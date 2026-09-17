@@ -45,7 +45,8 @@ export async function refreshMe(force = false) {
 
 export function updateNavForUser(user) {
   // Match features require login. Leaderboard stays public.
-  const matchTabs = document.querySelectorAll('[data-tab="match"], a[href="#/match"], .bottomnav__item[href="#/match"]');
+  // Keep the brand/home link visible. Only hide the actual navigation items.
+  const matchTabs = document.querySelectorAll('nav.tabs [data-tab="match"], nav.bottomnav .bottomnav__item[href="#/match"]');
   matchTabs.forEach(el => {
     el.style.display = user ? "" : "none";
   });
