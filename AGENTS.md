@@ -24,7 +24,7 @@ This repository is the production frontend for Manor Lakes Football Club. It is 
 
 ## Release and cache rules
 
-- Bump `BUILD_ID` in `src/config.js` whenever a release changes cached HTML, CSS, JavaScript, icons, or the service worker.
+- Bump `BUILD_ID` in `src/config.js` whenever a release changes cached HTML, CSS, JavaScript, icons, or the service worker. Keep the release query strings on the `styles.css` and `src/app.js` references in `index.html` aligned with that build ID so an older service worker cannot serve a mixed release.
 - Add new offline-critical modules or assets to `STATIC_ASSETS` in `service-worker.js`.
 - Do not cache backend API responses in the service worker; page modules manage API data caching.
 - The production branch is `main`. Pushing to `main` triggers the GitHub Pages deployment.
@@ -41,4 +41,3 @@ python3 -m http.server 4173
 ```
 
 Confirm the local root responds, then stop the temporary server. After publishing, verify that `https://ml-fc.github.io/src/config.js` exposes the new `BUILD_ID` and that the GitHub Pages job completed successfully.
-

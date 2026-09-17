@@ -8,7 +8,9 @@
 
   <title>Manor Lakes Football Club</title>
 
-  <link rel="stylesheet" href="./styles.css" />
+  <!-- Keep the shell stylesheet release-addressed so an older service worker
+       cannot paint a stale desktop layout while the new worker activates. -->
+  <link rel="stylesheet" href="./styles.css?v=2026-09-17.4" />
   <link rel="icon" href="./assets/icons/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png">
@@ -124,7 +126,9 @@
     setActive();
   </script>
   <script type="module">
-    import { BUILD_ID } from "./src/config.js";
+    // A query string bypasses cache-first service workers from older releases.
+    // Without this, an old config can keep registering its own old worker.
+    const { BUILD_ID } = await import(`./src/config.js?boot=${Date.now()}`);
 
     // Footer build id
     const bid = document.getElementById("buildId");
@@ -141,21 +145,21 @@
     // Service worker registration (cache-busted by BUILD_ID for GitHub Pages)
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
+        // Listen before register(): this worker calls skipWaiting() during its
+        // install and can otherwise take control before the listener exists.
+        let didReload = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (didReload) return;
+          didReload = true;
+          showBanner();
+          window.location.reload();
+        });
+
         try {
           const reg = await navigator.serviceWorker.register(
-            `./service-worker.js?b=${encodeURIComponent(BUILD_ID)}`
+            `./service-worker.js?b=${encodeURIComponent(BUILD_ID)}`,
+            { updateViaCache: "none" }
           );
-
-          // If a new SW takes control, reload once so users immediately get the new release.
-          // Guard against reload loops.
-          let didReload = false;
-          navigator.serviceWorker.addEventListener("controllerchange", () => {
-            if (didReload) return;
-            didReload = true;
-            // Show banner briefly in case reload is blocked.
-            showBanner();
-            window.location.reload();
-          });
 
           // If an update is found but control doesn't change immediately (platform quirks),
           // show the banner when an installing worker reaches "installed" and there's an existing controller.
@@ -165,7 +169,7 @@
               if (sw.state === "installed" && navigator.serviceWorker.controller) {
                 // Tell the new SW to activate immediately, then controllerchange will reload.
                 try {
-                  if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+                  if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
                 } catch {}
                 showBanner();
               }
@@ -187,6 +191,6 @@
       });
     }
   </script>
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/app.js?v=2026-09-17.4"></script>
 </body>
 </html>
