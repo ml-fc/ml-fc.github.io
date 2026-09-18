@@ -36,6 +36,162 @@ export async function cropPhotoFile(file, size = 384) {
   return blob;
 }
 
+export async function choosePhotoCrop(file, container = document.body) {
+  if (!file || !/^image\/(jpeg|png|webp)$/i.test(file.type)) throw new Error("Choose a JPEG, PNG or WebP photo.");
+  if (file.size > 8 * 1024 * 1024) throw new Error("Choose a photo smaller than 8 MB.");
+
+  const bitmap = await createImageBitmap(file);
+  const previewSize = 320;
+  const dialog = document.createElement("dialog");
+  dialog.className = "photoCropDialog";
+  dialog.setAttribute("aria-labelledby", "photoCropTitle");
+  dialog.innerHTML = `
+    <div class="photoCropSheet">
+      <div class="stepEyebrow">Profile photo</div>
+      <div class="h1" id="photoCropTitle">Crop around your face</div>
+      <p class="photoCropHelp" id="photoCropHelp">Move and zoom so your face fills the circle. The guide turns green when the crop is ready and red when it needs adjusting.</p>
+      <div class="photoCropViewport">
+        <canvas width="${previewSize}" height="${previewSize}" aria-label="Photo crop preview" aria-describedby="photoCropHelp"></canvas>
+        <span class="photoCropGuide" aria-hidden="true"></span>
+      </div>
+      <label class="photoCropZoom">Zoom <input type="range" min="1" max="3" step="0.01" value="1" aria-label="Photo zoom"></label>
+      <div class="photoCropCheck isChecking" role="status" aria-live="polite"><span aria-hidden="true"></span><b>Loading private face check…</b></div>
+      <p class="photoCropPrivacy">Face detection runs only on this device. Nothing is uploaded until you use the crop.</p>
+      <div class="photoCropActions">
+        <button class="btn gray" type="button" data-cancel>Cancel</button>
+        <button class="btn primary" type="button" data-use disabled>Use this crop</button>
+      </div>
+    </div>`;
+
+  const canvas = dialog.querySelector("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) { bitmap.close(); throw new Error("This browser could not prepare the photo."); }
+  const zoom = dialog.querySelector("input[type=range]");
+  const check = dialog.querySelector(".photoCropCheck");
+  const checkMessage = check.querySelector("b");
+  const useButton = dialog.querySelector("[data-use]");
+  let zoomLevel = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  let pointer = null;
+  let checkTimer = null;
+  let checkSequence = 0;
+  let faceCheckReady = false;
+
+  const dimensions = () => {
+    const baseScale = Math.max(previewSize / bitmap.width, previewSize / bitmap.height);
+    const scale = baseScale * zoomLevel;
+    return { scale, width: bitmap.width * scale, height: bitmap.height * scale };
+  };
+  const clampOffsets = () => {
+    const { width, height } = dimensions();
+    offsetX = Math.max((previewSize - width) / 2, Math.min((width - previewSize) / 2, offsetX));
+    offsetY = Math.max((previewSize - height) / 2, Math.min((height - previewSize) / 2, offsetY));
+  };
+  const draw = () => {
+    clampOffsets();
+    const { width, height } = dimensions();
+    context.fillStyle = "#dbe5ea";
+    context.fillRect(0, 0, previewSize, previewSize);
+    context.drawImage(bitmap, (previewSize - width) / 2 + offsetX, (previewSize - height) / 2 + offsetY, width, height);
+  };
+  const updateCheck = (quality, message) => {
+    dialog.dataset.cropQuality = quality;
+    check.className = `photoCropCheck is${quality[0].toUpperCase()}${quality.slice(1)}`;
+    checkMessage.textContent = message;
+    useButton.disabled = quality === "checking";
+    useButton.textContent = quality === "warning" ? "Continue anyway" : "Use this crop";
+  };
+  const runFaceCheck = async () => {
+    const sequence = ++checkSequence;
+    updateCheck("checking", faceCheckReady ? "Checking this crop…" : "Loading private face check…");
+    try {
+      const { checkFaceCrop } = await import("./face_detection.js");
+      let timeout;
+      const result = await Promise.race([
+        checkFaceCrop(canvas),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Face check timed out")), 10000); }),
+      ]).finally(() => clearTimeout(timeout));
+      if (sequence !== checkSequence || !dialog.isConnected) return;
+      faceCheckReady = true;
+      updateCheck(result.quality, result.message);
+    } catch {
+      if (sequence !== checkSequence || !dialog.isConnected) return;
+      updateCheck("unavailable", "Face check is unavailable. You can still review and use this crop.");
+    }
+  };
+  const scheduleFaceCheck = (delay = 350) => {
+    clearTimeout(checkTimer);
+    ++checkSequence;
+    updateCheck("checking", faceCheckReady ? "Checking this crop…" : "Loading private face check…");
+    checkTimer = setTimeout(runFaceCheck, delay);
+  };
+  const encodeCrop = async (size = 384) => {
+    const output = document.createElement("canvas");
+    output.width = size; output.height = size;
+    const outputContext = output.getContext("2d", { alpha: false });
+    if (!outputContext) throw new Error("This browser could not prepare the photo.");
+    outputContext.fillStyle = "#dbe5ea";
+    outputContext.fillRect(0, 0, size, size);
+    const ratio = size / previewSize;
+    const { width, height } = dimensions();
+    outputContext.drawImage(bitmap, ((previewSize - width) / 2 + offsetX) * ratio, ((previewSize - height) / 2 + offsetY) * ratio, width * ratio, height * ratio);
+    const blob = await new Promise(resolve => output.toBlob(resolve, "image/webp", .82));
+    if (!blob) throw new Error("This browser could not prepare the photo.");
+    return blob.size > 256 * 1024 && size > 300 ? encodeCrop(300) : blob;
+  };
+
+  zoom.oninput = () => { zoomLevel = Number(zoom.value); draw(); scheduleFaceCheck(); };
+  canvas.addEventListener("pointerdown", event => {
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+    canvas.classList.add("isDragging");
+  });
+  canvas.addEventListener("pointermove", event => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    const ratio = previewSize / canvas.getBoundingClientRect().width;
+    offsetX += (event.clientX - pointer.x) * ratio;
+    offsetY += (event.clientY - pointer.y) * ratio;
+    pointer.x = event.clientX; pointer.y = event.clientY;
+    draw();
+    scheduleFaceCheck();
+  });
+  const stopDragging = event => {
+    if (pointer?.id === event.pointerId) pointer = null;
+    canvas.classList.remove("isDragging");
+    scheduleFaceCheck(100);
+  };
+  canvas.addEventListener("pointerup", stopDragging);
+  canvas.addEventListener("pointercancel", stopDragging);
+
+  container.appendChild(dialog);
+  draw();
+  if (typeof dialog.showModal !== "function") {
+    dialog.remove(); bitmap.close();
+    return cropPhotoFile(file);
+  }
+
+  return new Promise((resolve, reject) => {
+    const finish = value => {
+      clearTimeout(checkTimer);
+      ++checkSequence;
+      if (dialog.open) dialog.close();
+      dialog.remove(); bitmap.close();
+      resolve(value);
+    };
+    dialog.querySelector("[data-cancel]").onclick = () => finish(null);
+    dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+    useButton.onclick = async event => {
+      event.currentTarget.disabled = true;
+      event.currentTarget.textContent = "Preparing…";
+      try { finish(await encodeCrop()); }
+      catch (error) { dialog.remove(); bitmap.close(); reject(error); }
+    };
+    dialog.showModal();
+    scheduleFaceCheck(0);
+  });
+}
+
 export function loadCanvasImage(url) {
   const safe = safePhotoUrl(url);
   if (!safe) return Promise.resolve(null);

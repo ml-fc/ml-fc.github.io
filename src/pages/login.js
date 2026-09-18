@@ -5,7 +5,7 @@ import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
 import { showPushEnableReminder } from "../ui/push_reminder.js";
-import { cropPhotoFile, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
+import { choosePhotoCrop, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
@@ -34,8 +34,7 @@ export async function renderLoginPage(root) {
         <div class="profilePhotoActions">
           <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
           <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-          ${me.photoUrl ? `<button class="btn gray" id="removeProfilePhoto" type="button">Remove photo</button>` : ""}
-          <span class="small" id="profilePhotoStatus" role="status" aria-live="polite">JPEG, PNG or WebP · centred square crop</span>
+          <span class="small" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear photo, then crop closely around your face for the best view.</span>
         </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
@@ -75,19 +74,37 @@ export async function renderLoginPage(root) {
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
+      ${me.photoUrl ? "" : `<dialog id="requiredPhotoDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhotoTitle" aria-describedby="requiredPhotoHelp">
+        <div class="requiredPhotoSheet">
+          <div class="requiredPhotoIcon" aria-hidden="true">${esc(String(me.name || "?").trim().slice(0, 1).toUpperCase() || "?")}</div>
+          <div class="stepEyebrow">One last step</div>
+          <div class="h1" id="requiredPhotoTitle">Add your player photo</div>
+          <p id="requiredPhotoHelp">A clear face photo is required before continuing. It helps teammates identify you on team sheets and POTM cards.</p>
+          <label class="btn primary requiredPhotoChoose" for="profilePhotoInput">Choose a photo</label>
+          <div class="small" id="requiredPhotoStatus" role="status" aria-live="polite">You’ll be able to move, zoom and check the crop before uploading.</div>
+          <button class="requiredPhotoLogout" id="requiredPhotoLogout" type="button">Sign out instead</button>
+        </div>
+      </dialog>`}
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
     const photoInput = root.querySelector("#profilePhotoInput");
     const photoStatus = root.querySelector("#profilePhotoStatus");
+    const requiredPhotoStatus = root.querySelector("#requiredPhotoStatus");
+    const setPhotoStatus = message => {
+      photoStatus.textContent = message;
+      if (requiredPhotoStatus) requiredPhotoStatus.textContent = message;
+    };
     photoInput.onchange = async () => {
       const file = photoInput.files?.[0];
       if (!file) return;
       photoInput.disabled = true;
-      photoStatus.textContent = "Preparing and uploading photo…";
+      setPhotoStatus("Adjust the crop around your face…");
       try {
-        const blob = await cropPhotoFile(file);
+        const blob = await choosePhotoCrop(file, root);
+        if (!blob) { setPhotoStatus("A profile photo is required. Choose a photo when you’re ready."); return; }
+        setPhotoStatus("Uploading photo…");
         const result = await API.userSetPhoto(blob);
         if (!result?.ok) throw new Error(result?.error || "Could not upload photo.");
         const updated = { ...me, photoUrl: result.photoUrl, photoUpdatedAt: result.photoUpdatedAt };
@@ -96,17 +113,28 @@ export async function renderLoginPage(root) {
         toastSuccess("Profile photo updated");
         await renderLoginPage(root);
       } catch (error) {
-        photoStatus.textContent = error?.message || "Could not upload photo.";
-        toastError(photoStatus.textContent);
+        setPhotoStatus(error?.message || "Could not upload photo.");
+        toastError(error?.message || "Could not upload photo.");
       } finally { photoInput.disabled = false; photoInput.value = ""; }
     };
-    root.querySelector("#removeProfilePhoto")?.addEventListener("click", async () => {
-      photoStatus.textContent = "Removing photo…";
-      const result = await API.userRemovePhoto();
-      if (!result?.ok) { photoStatus.textContent = result?.error || "Could not remove photo."; return toastError(photoStatus.textContent); }
-      const updated = { ...me, photoUrl: "" }; invalidatePlayerPhotoCaches(); setCachedUser(updated); updateNavForUser(updated);
-      toastSuccess("Profile photo removed"); await renderLoginPage(root);
-    });
+    const logout = async () => {
+      await API.logout().catch(() => {});
+      clearAuth();
+      updateNavForUser(null);
+      try { localStorage.removeItem("mlfc_notifications_cache_v1"); } catch {}
+      try {
+        document.querySelectorAll('a[href="#/login"], [data-tab="register"], a.bottomnav__item[href="#/login"]').forEach(a => a.classList.remove("has-noti"));
+      } catch {}
+      toastSuccess("Logged out");
+      location.hash = `#/login?logout=${Date.now()}`;
+    };
+    root.querySelector("#logout").onclick = logout;
+    root.querySelector("#requiredPhotoLogout")?.addEventListener("click", logout);
+    const requiredPhotoDialog = root.querySelector("#requiredPhotoDialog");
+    if (requiredPhotoDialog) {
+      requiredPhotoDialog.addEventListener("cancel", event => event.preventDefault());
+      if (typeof requiredPhotoDialog.showModal === "function") requiredPhotoDialog.showModal();
+    }
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.
     root.querySelector("#updateApp").onclick = async () => {
@@ -184,20 +212,6 @@ export async function renderLoginPage(root) {
         toastError(e?.message || "Update failed");
       }
     };
-    root.querySelector("#logout").onclick = async () => {
-      await API.logout().catch(() => {});
-      clearAuth();
-      updateNavForUser(null);
-      // Clear notifications cache + badge immediately on logout
-      try { localStorage.removeItem("mlfc_notifications_cache_v1"); } catch {}
-      try {
-        document.querySelectorAll('a[href="#/login"], [data-tab="register"], a.bottomnav__item[href="#/login"]').forEach(a => a.classList.remove("has-noti"));
-      } catch {}
-      toastSuccess("Logged out");
-      // Force a re-render even if we're already on #/login
-      location.hash = `#/login?logout=${Date.now()}`;
-    };
-
     root.querySelector("#changePass").onclick = async () => {
       const oldPassword = root.querySelector("#oldPass").value.trim();
       const newPassword = root.querySelector("#newPass").value.trim();
@@ -481,8 +495,12 @@ export async function renderLoginPage(root) {
     setCachedUser(res.user);
     updateNavForUser(res.user);
     toastSuccess("Logged in");
-    await showPushEnableReminder(root);
-    location.hash = "#/match";
+    if (res.user?.photoUrl) {
+      await showPushEnableReminder(root);
+      location.hash = "#/match";
+    } else {
+      location.hash = "#/login?photo=required";
+    }
   };
 
   
@@ -527,7 +545,11 @@ const rmsg = root.querySelector("#rmsg");
     setCachedUser(res.user);
     updateNavForUser(res.user);
     toastSuccess("Registered & logged in");
-    await showPushEnableReminder(root);
-    location.hash = "#/match";
+    if (res.user?.photoUrl) {
+      await showPushEnableReminder(root);
+      location.hash = "#/match";
+    } else {
+      location.hash = "#/login?photo=required";
+    }
   };
 }

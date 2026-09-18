@@ -81,12 +81,19 @@ async function renderRoute() {
     return;
   }
 
-  // If logged in, ensure we have user cached to gate admin
-  if (hasToken && !getCachedUser()) await refreshMe().catch(() => {});
+  // Refresh older cached user records that predate profile photos so an existing
+  // server-side photo is not mistaken for a missing one.
+  let user = getCachedUser();
+  if (hasToken && (!user || !Object.prototype.hasOwnProperty.call(user, "photoUrl"))) {
+    user = await refreshMe(true).catch(() => null);
+  }
+  if (hasToken && user && !String(user.photoUrl || "").trim() && route !== "#/login") {
+    window.location.hash = "#/login?photo=required";
+    return;
+  }
 
   if (route === "#/admin") {
-    const u = getCachedUser();
-    if (!u?.isAdmin) {
+    if (!user?.isAdmin) {
       window.location.hash = "#/match";
       return;
     }
