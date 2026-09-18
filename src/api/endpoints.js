@@ -12,7 +12,8 @@ export const API = {
   notifications: () => apiGet({ action: "notifications" }),
   notificationsMarkRead: (ids) => apiPost({ action: "notifications_mark_read", ids }),
   myNextMatch: () => apiGet({ action: "my_next_match" }),
-  mySeasonStats: (seasonId = "") => apiGet({ action: "my_season_stats", seasonId }),
+  mySeasonStats: (seasonId = "", includeHistory = false) =>
+    apiGet({ action: "my_season_stats", seasonId, includeHistory: includeHistory ? 1 : 0 }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),

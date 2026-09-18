@@ -35,10 +35,10 @@ export async function renderLoginPage(root) {
         </div>
       </div>
 
-      <section class="profileStats" aria-labelledby="profileStatsTitle">
-        <div class="profileStats__head"><div><div class="small">Your season</div><div class="h1" id="profileStatsTitle">Personal statistics</div></div><span class="badge">PRIVATE</span></div>
+      <details class="profileStats" open>
+        <summary class="profileStats__head"><div><div class="small">Your season</div><div class="h1" id="profileStatsTitle">Personal statistics</div></div><span class="badge">PRIVATE</span></summary>
         <div id="profileStatsBody" class="profileStats__loading" aria-live="polite">Loading your season…</div>
-      </section>
+      </details>
 
       <div class="card">
         <div class="h1">Change password</div>
@@ -70,6 +70,12 @@ export async function renderLoginPage(root) {
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
+      <dialog id="statsHistoryDialog" class="playerDialog statsHistoryDialog" aria-labelledby="statsHistoryTitle">
+        <div class="statsHistorySheet">
+          <div class="statsHistorySheet__head"><div><div class="small">Your season</div><div class="h1" id="statsHistoryTitle">Full match history</div></div><button class="btn gray" id="closeStatsHistory">Close</button></div>
+          <div id="statsHistoryBody" class="profileStats__loading" aria-live="polite">Loading match history…</div>
+        </div>
+      </dialog>
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
@@ -80,7 +86,6 @@ export async function renderLoginPage(root) {
       if (!out?.ok) { host.textContent = out?.error || "Could not load statistics."; return; }
       const s = out.summary || {};
       const rating = s.averageRating == null ? "—" : Number(s.averageRating).toFixed(1);
-      const matches = out.matches || [];
       host.className = "";
       host.innerHTML = `
         <div class="profileStatGrid">
@@ -89,16 +94,31 @@ export async function renderLoginPage(root) {
           <div><strong>${Number(s.assists || 0)}</strong><span>Assists</span></div>
           <div><strong>${esc(rating)}</strong><span>Avg rating</span></div>
         </div>
-        <div class="profileStats__matches">
-          ${matches.length ? matches.map((m) => `<article class="profileMatch">
-            <div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || "Squad")}</span></div>
-            <div class="profileMatch__score">${esc(m.scoreHome)}–${esc(m.scoreAway)}</div>
-            <div class="profileMatch__numbers"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} ★</span></div>
-          </article>`).join("") : `<div class="small">No completed appearances in this season yet.</div>`}
-        </div>`;
+        <button class="btn profileStats__historyButton" id="openStatsHistory" type="button">View full match history</button>`;
+      root.querySelector("#openStatsHistory")?.addEventListener("click", async () => {
+        const dialog = root.querySelector("#statsHistoryDialog");
+        const historyHost = root.querySelector("#statsHistoryBody");
+        if (!dialog || !historyHost) return;
+        historyHost.className = "profileStats__loading";
+        historyHost.textContent = "Loading match history…";
+        dialog.showModal();
+        const history = await API.mySeasonStats(out.seasonId, true).catch(() => null);
+        if (!history?.ok) { historyHost.textContent = history?.error || "Could not load match history."; return; }
+        const matches = history.matches || [];
+        historyHost.className = "profileStats__matches";
+        historyHost.innerHTML = matches.length ? matches.map((m) => `<article class="profileMatch">
+          <div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || "Squad")}</span></div>
+          <div class="profileMatch__score">${esc(m.scoreHome)}–${esc(m.scoreAway)}</div>
+          <div class="profileMatch__numbers"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} ★</span></div>
+        </article>`).join("") : `<div class="small statsHistoryEmpty">No completed appearances in this season yet.</div>`;
+      });
     }).catch(() => {
       const host = root.querySelector("#profileStatsBody");
       if (host) host.textContent = "Could not load statistics.";
+    });
+    root.querySelector("#closeStatsHistory")?.addEventListener("click", () => root.querySelector("#statsHistoryDialog")?.close());
+    root.querySelector("#statsHistoryDialog")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) event.currentTarget.close();
     });
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.
