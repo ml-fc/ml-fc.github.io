@@ -246,6 +246,39 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   </section>`;
 }
 
+function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCaptain = "", awayCaptain = "") {
+  const teams = [
+    { name: homeName, rows: homeRows || [], tone: "blue", captain: homeCaptain, upper: false },
+    { name: awayName, rows: awayRows || [], tone: "orange", captain: awayCaptain, upper: true }
+  ].filter((team) => team.rows.length);
+  const total = teams.reduce((sum, team) => sum + team.rows.length, 0);
+
+  return `<section class="digitalTeam digitalTeam--shared" aria-label="Digital team sheet">
+    <header class="digitalTeam__head digitalTeam__head--shared">
+      ${teams.map((team) => `<div class="digitalTeam__team digitalTeam__team--${team.tone}"><span>${team.upper ? "↓" : "↑"} attacks</span><strong>${escapeHtml(team.name)}</strong><b>${team.rows.length}</b></div>`).join("")}
+      <span class="srOnly">${total} players</span>
+    </header>
+    <div class="digitalTeam__pitch digitalTeam__pitch--positioned digitalTeam__pitch--shared"><span class="digitalTeam__centre" aria-hidden="true"></span>
+      ${teams.flatMap((team) => {
+        const players = team.rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
+        const defaults = defaultPositions(players);
+        return team.rows.map((row) => {
+          const player = String(row.playerName || "").trim();
+          if (!player) return "";
+          const fallback = defaults[player] || { positionX: 50, positionY: 50 };
+          const rawX = typeof row.positionX === "number" ? row.positionX : Number.NaN;
+          const rawY = typeof row.positionY === "number" ? row.positionY : Number.NaN;
+          const positionX = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
+          const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
+          const x = team.upper ? 100 - positionX : positionX;
+          const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%"><i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`;
+        });
+      }).join("")}
+    </div>
+  </section>`;
+}
+
 // Handle both normalized and Sheets Date-string formats
 function normalizeDateStr(dateStr) {
   const s = String(dateStr || "").trim();
@@ -1234,9 +1267,10 @@ const cap = availabilityLimitForMatch(m);
 
     ${teamsSelected ? `<div class="card teamSheetCard">
       <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
-      <div class="digitalTeamGrid ${awayPlayers.length ? "" : "digitalTeamGrid--single"}">
-        ${publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
-        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayTeamRows, "orange", caps.captain2) : ""}
+      <div class="digitalTeamGrid digitalTeamGrid--single">
+        ${awayPlayers.length
+          ? publicSharedTeamSheet(teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, caps.captain1, caps.captain2)
+          : publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
       </div>
     </div>` : ``}
 

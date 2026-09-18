@@ -308,9 +308,9 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa", captain:captains[0], upper:false }];
   if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55", captain:captains[1], upper:true });
   const left=70, top=390, width=940, height=800;
-  context.fillStyle="#103a4c";
+  context.fillStyle="#26713b";
   context.fillRect(left,top,width,height);
-  context.fillStyle="#123f51";
+  context.fillStyle="#226936";
   for(let i=0;i<10;i+=2) context.fillRect(left,top+i*height/10,width,height/10);
   context.strokeStyle="#78949c"; context.lineWidth=3;
   context.strokeRect(left,top,width,height);
