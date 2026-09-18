@@ -163,6 +163,117 @@ function wrapCanvasText(context, text, maxWidth) {
   return lines;
 }
 
+function fitCanvasLabel(context, value, maxWidth) {
+  const label = String(value || "Player").trim();
+  if (context.measureText(label).width <= maxWidth) return label;
+  let shortened = label;
+  while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) {
+    shortened = shortened.slice(0, -1);
+  }
+  return `${shortened}…`;
+}
+
+function drawTeamSheetPitch(context, team, x, y, width, height) {
+  const compact = width < 600;
+  const lineColor = "rgba(255,255,255,.42)";
+  const pitchTop = y + 88;
+  const pitchHeight = height - 112;
+  const pitchLeft = x + 18;
+  const pitchWidth = width - 36;
+  const centerX = pitchLeft + pitchWidth / 2;
+  const centerY = pitchTop + pitchHeight / 2;
+
+  context.fillStyle = "rgba(3,20,32,.78)";
+  context.fillRect(x, y, width, height);
+  context.fillStyle = team.color;
+  context.fillRect(x, y, width, 9);
+
+  context.fillStyle = team.color;
+  context.font = "900 31px Arial";
+  context.fillText(String(team.name || "Team").toUpperCase(), x + 24, y + 54);
+  context.fillStyle = "#bed2dc";
+  context.font = "800 18px Arial";
+  context.textAlign = "right";
+  context.fillText(`${team.players.length} PLAYERS`, x + width - 24, y + 52);
+  context.textAlign = "left";
+
+  const pitchGradient = context.createLinearGradient(pitchLeft, pitchTop, pitchLeft, pitchTop + pitchHeight);
+  pitchGradient.addColorStop(0, "#0d5969");
+  pitchGradient.addColorStop(1, "#083c50");
+  context.fillStyle = pitchGradient;
+  context.fillRect(pitchLeft, pitchTop, pitchWidth, pitchHeight);
+
+  context.fillStyle = "rgba(255,255,255,.035)";
+  const stripeHeight = pitchHeight / 8;
+  for (let stripe = 0; stripe < 8; stripe += 2) {
+    context.fillRect(pitchLeft, pitchTop + stripe * stripeHeight, pitchWidth, stripeHeight);
+  }
+
+  context.strokeStyle = lineColor;
+  context.lineWidth = 2;
+  context.strokeRect(pitchLeft, pitchTop, pitchWidth, pitchHeight);
+  context.beginPath();
+  context.moveTo(pitchLeft, centerY);
+  context.lineTo(pitchLeft + pitchWidth, centerY);
+  context.stroke();
+  context.beginPath();
+  context.arc(centerX, centerY, Math.min(54, pitchWidth * .14), 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = lineColor;
+  context.beginPath();
+  context.arc(centerX, centerY, 4, 0, Math.PI * 2);
+  context.fill();
+
+  const boxWidth = pitchWidth * .5;
+  const boxHeight = Math.min(76, pitchHeight * .13);
+  context.strokeRect(centerX - boxWidth / 2, pitchTop, boxWidth, boxHeight);
+  context.strokeRect(centerX - boxWidth / 2, pitchTop + pitchHeight - boxHeight, boxWidth, boxHeight);
+  context.strokeRect(centerX - boxWidth * .28, pitchTop, boxWidth * .56, boxHeight * .42);
+  context.strokeRect(centerX - boxWidth * .28, pitchTop + pitchHeight - boxHeight * .42, boxWidth * .56, boxHeight * .42);
+
+  const rows = formationRows(team.players);
+  if (!rows.length) {
+    context.fillStyle = "#dceaf0";
+    context.font = "800 23px Arial";
+    context.textAlign = "center";
+    context.fillText("SQUAD TO BE CONFIRMED", centerX, centerY + 8);
+    context.textAlign = "left";
+    return;
+  }
+
+  const rowGap = pitchHeight / (rows.length + 1);
+  [...rows].reverse().forEach((row, visualRowIndex) => {
+    const playerY = pitchTop + rowGap * (visualRowIndex + 1);
+    const playerGap = pitchWidth / (row.length + 1);
+    row.forEach((player, playerIndex) => {
+      const playerX = pitchLeft + playerGap * (playerIndex + 1);
+      const markerRadius = Math.min(compact ? 20 : 24, playerGap * .28);
+      const maxLabelWidth = Math.max(46, playerGap - 8);
+
+      context.shadowColor = "rgba(0,0,0,.42)";
+      context.shadowBlur = 10;
+      context.fillStyle = team.color;
+      context.beginPath();
+      context.arc(playerX, playerY - 10, markerRadius, 0, Math.PI * 2);
+      context.fill();
+      context.shadowBlur = 0;
+      context.strokeStyle = "rgba(255,255,255,.82)";
+      context.lineWidth = 3;
+      context.stroke();
+
+      context.font = `900 ${compact && row.length > 4 ? 13 : compact ? 16 : 19}px Arial`;
+      context.textAlign = "center";
+      const label = fitCanvasLabel(context, player, maxLabelWidth);
+      const labelWidth = context.measureText(label).width + 14;
+      context.fillStyle = "rgba(2,19,30,.86)";
+      context.fillRect(playerX - labelWidth / 2, playerY + markerRadius - 12, labelWidth, 25);
+      context.fillStyle = "#ffffff";
+      context.fillText(label, playerX, playerY + markerRadius + 7);
+      context.textAlign = "left";
+    });
+  });
+}
+
 async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -195,21 +306,7 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   const columnWidth = teams.length === 2 ? 455 : 940;
   teams.forEach((team, teamIndex) => {
     const x = 70 + teamIndex * 485;
-    const top = 370;
-    context.fillStyle = "rgba(3,20,32,.72)";
-    context.fillRect(x, top, columnWidth, 860);
-    context.fillStyle = team.color;
-    context.fillRect(x, top, columnWidth, 10);
-    context.font = "900 34px Arial";
-    context.fillText(String(team.name || "Team").toUpperCase(), x + 28, top + 66);
-    context.font = "800 25px Arial";
-    (team.players.length ? team.players : ["Squad to be confirmed"]).forEach((player, playerIndex) => {
-      const y = top + 125 + playerIndex * 57;
-      context.fillStyle = team.color;
-      context.beginPath(); context.arc(x + 42, y - 8, 15, 0, Math.PI * 2); context.fill();
-      context.fillStyle = "#ffffff";
-      context.fillText(`${playerIndex + 1}. ${player}`, x + 72, y);
-    });
+    drawTeamSheetPitch(context, team, x, 350, columnWidth, 880);
   });
   context.fillStyle = "#bed2dc";
   context.font = "700 22px Arial";
@@ -220,13 +317,14 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
 }
 
 async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
-  const text = teamSheetShareText(match, when, homeName, homePlayers, awayName, awayPlayers);
+  const fallbackText = teamSheetShareText(match, when, homeName, homePlayers, awayName, awayPlayers);
   const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers).catch(() => null);
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ title: `${match.title} team sheet`, text, files: [file] });
+    const caption = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${matchLink(match.publicCode)}`;
+    await navigator.share({ title: `${match.title} team sheet`, text: caption, files: [file] });
     return "image";
   }
-  waOpenPrefill(text);
+  waOpenPrefill(fallbackText);
   return "text";
 }
 
