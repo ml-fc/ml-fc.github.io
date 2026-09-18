@@ -45,6 +45,7 @@ export const API = {
   adminDeleteMatch: (matchId) => apiPost({ action: "admin_delete_match", matchId }),
   adminSetupInternal: (payload) => apiPost({ action: "admin_setup_internal", ...payload }),
   adminSetupOpponent: (payload) => apiPost({ action: "admin_setup_opponent", ...payload }),
+  adminShareTeams: (matchId) => apiPost({ action: "admin_share_teams", matchId }),
   adminUsers: () => apiGet({ action: "admin_users" }),
   adminSetAdmin: (name, isAdmin) => apiPost({ action: "admin_set_admin", name, isAdmin: isAdmin ? 1 : 0 }),
   adminSetPassword: (name, password) => apiPost({ action: "admin_set_password", name, password }),

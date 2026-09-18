@@ -1916,7 +1916,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const manageBody = manageArea.querySelector("#manageBody");
 
   let fieldPositions = positionMap(teams);
-  const savedPositions = JSON.stringify(fieldPositions);
+  let savedPositions = JSON.stringify(fieldPositions);
 
   /* ================= OPPONENT ================= */
   if (type === "OPPONENT") {
@@ -2025,6 +2025,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       setDisabled(button, true, "Preparing…");
       try {
         const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions, [opponentCaptain]);
+        const published = await API.adminShareTeams(m.matchId);
+        if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
         toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
       } catch (error) {
         if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
@@ -2046,15 +2048,13 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       msg.textContent = "Saved ✅";
       toastSuccess("Opponent match setup saved.");
       lsDel(setupDraftKey(m.matchId));
-
       clearPublicMatchDetailCache(m.publicCode);
       clearManageCache(m.publicCode);
-
-      const fresh = await API.getPublicMatch(m.publicCode);
-      if (stillOnAdmin(routeToken) && fresh.ok) {
-        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-      }
+      savedOpponent.squad = [...squad];
+      savedOpponent.captain = opponentCaptain;
+      savedPositions = JSON.stringify(fieldPositions);
+      const state = manageArea.querySelector("#draftState");
+      if (state) { state.textContent = "All setup changes saved"; state.classList.remove("isDirty"); }
     };
 
     // Close/re-open availability buttons (same behavior as internal)
@@ -2640,14 +2640,15 @@ function renderComboList(filterText = "") {
     msg.textContent = "Saved ✅";
     toastSuccess("Setup saved.");
     lsDel(setupDraftKey(m.matchId));
-
+    savedInternal.blue = [...blue];
+    savedInternal.orange = [...orange];
+    savedInternal.captainBlue = captainBlue;
+    savedInternal.captainOrange = captainOrange;
+    savedPositions = JSON.stringify(fieldPositions);
     clearManageCache(m.publicCode);
-
-    const fresh = await API.getPublicMatch(m.publicCode);
-    if (stillOnAdmin(routeToken) && fresh.ok) {
-      lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-      renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-    }
+    clearPublicMatchDetailCache(m.publicCode);
+    const state = manageArea.querySelector("#draftState");
+    if (state) { state.textContent = "All setup changes saved"; state.classList.remove("isDirty"); }
   };
 
   // Share teams (after saved)
@@ -2660,6 +2661,8 @@ function renderComboList(filterText = "") {
 
   try {
     const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange]);
+    const published = await API.adminShareTeams(m.matchId);
+    if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
     toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
   } catch (error) {
     if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
