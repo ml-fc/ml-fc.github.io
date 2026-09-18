@@ -2139,6 +2139,7 @@ body.hasCompactMatchCommand .appbar {
 .notificationCard { display: grid; gap: 6px; padding: 15px 0; border-bottom: 1px solid rgba(11,18,32,.12); }
 .notificationCard__title { color: var(--ink); font-weight: 950; }
 .notificationCard__message { color: #2f4a5d; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.notificationCard__image{width:88px;height:88px;margin:4px 0;object-fit:cover;object-position:center 32%;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 3px rgba(240,201,75,.35),0 8px 18px rgba(7,17,30,.18)}
 .notificationCard__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 7px; }
 .profileStats{margin:14px 0;padding:20px;border-radius:10px;background:linear-gradient(145deg,#071b2b,#123e51);color:#fff;box-shadow:0 18px 42px rgba(4,20,31,.2)}
 .profileStats__head{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none}.profileStats__head::-webkit-details-marker{display:none}.profileStats__head:after{content:"▾";color:#c2d8e1;font-size:18px;transition:transform .2s ease}.profileStats:not([open]) .profileStats__head:after{transform:rotate(-90deg)}.profileStats__head .badge{margin-left:auto}.profileStats .small{color:#c2d8e1}.profileStats__loading{padding:22px 0;color:#c2d8e1}
@@ -2329,6 +2330,22 @@ body.hasCompactMatchCommand .appbar {
 .fieldPreviewPitch .fieldPlayer--orange i{background:#ff9d4d}.fieldPlayer--preview{pointer-events:none;cursor:inherit;width:70px;min-height:35px}.fieldPlayer--preview i{width:22px;height:22px;line-height:18px}.fieldPlayer--preview span{font-size:9px;max-width:70px}
 .fieldPreview__hint{display:block;padding:7px;color:#526976;font-size:11px}.fieldPreview:focus-visible{outline:3px solid #2175a0;outline-offset:3px}
 @media(max-width:600px){.fieldRoster td:last-child{display:table-cell}.fieldWorkspace__head .small{font-size:10px}.fieldPlayer--preview{width:57px}.fieldPlayer--preview span{max-width:57px;font-size:8px}}
+
+/* Versioned player identity photos. The dark outer ring reads like a shirt
+   badge and keeps portraits legible against both halves of the pitch. */
+.playerPhoto{display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;overflow:hidden;border-radius:50%;color:#08283b;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.28),0 5px 14px rgba(0,0,0,.25);font:900 12px/1 Arial,sans-serif}
+.playerPhoto img{width:100%;height:100%;object-fit:cover;object-position:center 32%}
+.playerPhoto>span{max-width:none!important;padding:0!important;color:inherit!important;background:transparent!important;border-radius:0!important;font-size:inherit!important;line-height:1!important}
+.playerPhoto--field{width:34px;height:34px;font-size:10px}
+.fieldPlayer>.playerPhoto{margin:0 auto 3px}.fieldPlayer>.playerPhoto+span{display:inline-block}.fieldPlayer.isSelected>.playerPhoto,.fieldPlayer:focus-visible>.playerPhoto{outline:3px solid #ffe16a;outline-offset:2px}
+.fieldPlayer--orange>.playerPhoto{box-shadow:0 0 0 3px rgba(255,156,85,.38),0 5px 14px rgba(0,0,0,.25)}
+.digitalPlayer>.playerPhoto{margin:auto}.digitalPlayer--positioned>i{position:absolute;top:-4px;left:calc(50% + 10px);width:17px;height:17px;font-size:10px;z-index:2}.digitalPlayer>.playerPhoto+ i:empty{display:none}.digitalPlayer>span:last-child{display:inline-block}
+.playerPhoto--potm{width:68px;height:68px;font-size:18px;border-width:3px;box-shadow:0 0 0 4px rgba(240,201,75,.35)}
+.profileIdentity{display:flex;align-items:center;gap:18px}.playerPhoto--profile{width:86px;height:86px;font-size:24px;border-width:4px;box-shadow:0 0 0 5px rgba(114,215,250,.22),0 12px 25px rgba(7,17,30,.18)}
+.profilePhotoActions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(11,18,32,.1)}
+.appbarProfile{display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;overflow:hidden;border-radius:50%;color:#071e2d;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.2);font:900 11px/1 Arial;text-decoration:none}.appbarProfile[hidden]{display:none}.appbarProfile img{width:100%;height:100%;object-fit:cover;object-position:center 32%}
+@media(min-width:900px){.appbarProfile{display:none}.appbarProfile[hidden]{display:none}}
+@media(max-width:600px){.profileIdentity{align-items:flex-start}.playerPhoto--profile{width:72px;height:72px}.playerPhoto--field{width:29px;height:29px}.potmWinner{gap:9px}.playerPhoto--potm{width:54px;height:54px}}
 
 /* Compact notification inbox with touch-safe swipe dismissal. */
 .notificationHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }

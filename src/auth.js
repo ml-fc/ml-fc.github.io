@@ -67,4 +67,18 @@ export function updateNavForUser(user) {
     .forEach(a => { a.textContent = user ? "Profile" : "Sign in"; a.setAttribute("href", "#/login"); });
   document.querySelectorAll('a.bottomnav__item[href="#/login"]')
     .forEach(a => { a.querySelector('.bottomnav__label') && (a.querySelector('.bottomnav__label').textContent = user ? "Profile" : "Sign in"); });
+
+  const profile = document.querySelector("#appbarProfile");
+  const image = document.querySelector("#appbarProfileImage");
+  const fallback = document.querySelector("#appbarProfileFallback");
+  if (profile) profile.hidden = !user;
+  if (fallback) fallback.textContent = String(user?.name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase() || "?";
+  let photo = "";
+  try { const parsed = new URL(String(user?.photoUrl || "")); if (parsed.protocol === "https:" || ["localhost", "127.0.0.1"].includes(parsed.hostname)) photo = parsed.href; } catch {}
+  if (image) {
+    image.hidden = !photo;
+    image.src = photo || "";
+    image.onerror = () => { image.hidden = true; if (fallback) fallback.hidden = false; };
+  }
+  if (fallback) fallback.hidden = Boolean(photo);
 }

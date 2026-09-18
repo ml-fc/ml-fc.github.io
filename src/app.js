@@ -12,6 +12,18 @@ const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 let __mlfcNotiLastCheck = 0;
 let __mlfcNotiInflight = null;
 const NOTIFICATION_REFRESH_COOLDOWN_MS = 30 * 1000;
+async function refreshIdentity() {
+  const before = getCachedUser();
+  const user = await refreshMe(true);
+  updateNavForUser(user);
+  if (String(before?.photoUrl || "") !== String(user?.photoUrl || "")) {
+    try {
+      Object.keys(localStorage).filter(key => key.startsWith("mlfc_match_detail_cache_v2:") || key.startsWith("mlfc_admin_manage_cache_v3:")).forEach(key => localStorage.removeItem(key));
+    } catch {}
+    window.dispatchEvent(new CustomEvent("mlfc:identity-updated", { detail: user }));
+  }
+  return user;
+}
 function notifyDesktop(title, body) {
   try {
     if (!("Notification" in window)) return;
@@ -152,7 +164,7 @@ function boot() {
   if (cached) updateNavForUser(cached);
 
   // Confirm auth from API and refresh nav
-  refreshMe()
+  refreshIdentity()
     .then((u) => {
       updateNavForUser(u);
       if (u) showPushEnableReminder().catch(() => {});
@@ -170,7 +182,10 @@ function boot() {
 
   // Also re-check when the browser tab becomes visible again.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) checkNotificationsBadge("visible").catch(() => {});
+    if (!document.hidden) {
+      checkNotificationsBadge("visible").catch(() => {});
+      refreshIdentity().catch(() => {});
+    }
   });
 
   window.addEventListener("online", () => {

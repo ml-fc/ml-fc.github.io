@@ -4,6 +4,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
 import { defaultPositions } from "../ui/team_field.js";
+import { playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -240,7 +241,7 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const rawY = typeof row.positionY === "number" ? row.positionY : Number.NaN;
         const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
         const y = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
-        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%"><i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`;
+        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -272,7 +273,7 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
           const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
           const x = team.upper ? 100 - positionX : positionX;
           const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
-          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%"><i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`;
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span></div>`;
         });
       }).join("")}
     </div>
@@ -1251,7 +1252,7 @@ const cap = availabilityLimitForMatch(m);
       ${potm.closed ? `
         ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
           const result = (potm.results || []).find((row) => String(row.candidateName).toLowerCase() === String(winner.playerName).toLowerCase());
-          return `<div class="potmWinner"><span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(result?.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
+          return `<div class="potmWinner">${playerPhotoHtml(winner.playerName, winner.photoUrl, "playerPhoto playerPhoto--potm")}<span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(result?.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
         }).join("")}</div>` : `<div class="small">No votes were cast.</div>`}
       ` : potm.canVote ? `
         <div class="small">Choose any player from either team except yourself. You can change your vote until ${potmDeadline && !Number.isNaN(potmDeadline.getTime()) ? potmDeadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "the window closes"}.</div>

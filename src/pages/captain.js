@@ -446,7 +446,8 @@ export async function renderCaptainPage(root, query) {
   const ownTeams = type === "INTERNAL" ? (adminMode ? ["BLUE","ORANGE"] : [captainTeam]) : ["MLFC"];
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,editableTeams:ownTeams,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
+  const fieldPhotos = Object.fromEntries((data.teams || []).filter(row => row.photoUrl).map(row => [row.playerName, row.photoUrl]));
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
   root.querySelector("#shareCaptainTeam")?.addEventListener("click", () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
     if (!team || !team.players.length) return toastWarn("No players are assigned to your team yet.");

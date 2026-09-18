@@ -27,6 +27,7 @@ const STATIC_ASSETS = [
   "/src/push.js",
   "/src/ui/toast.js",
   "/src/ui/team_field.js",
+  "/src/ui/player_photo.js",
   "/src/ui/push_reminder.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
@@ -132,6 +133,8 @@ self.addEventListener("push", (event) => {
     tag: String(notification?.tag || data?.tag || "mlfc-update"),
     data: { url: String(notification?.url || data?.url || "/#/login") },
   };
+  const image = String(notification?.image || data?.image || "");
+  if (/^https:\/\//i.test(image)) options.image = image;
 
   event.waitUntil((async () => {
     await self.registration.showNotification(title, options);

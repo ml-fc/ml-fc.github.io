@@ -1,3 +1,5 @@
+import { playerPhotoHtml } from "./player_photo.js";
+
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp = n => Math.max(7, Math.min(93, n));
 
@@ -51,8 +53,9 @@ export function mountTeamField(root, options) {
   function playerMarker(name, group, preview = false) {
     const p = point(name);
     const captain = group.captain === name;
-    if (preview) return `<span class="fieldPlayer fieldPlayer--preview ${upper(group)?'fieldPlayer--orange':''}" style="left:${p.x}%;top:${p.y}%"><i>•</i>${captain?'<em aria-label="Captain">C</em>':''}<span>${esc(name)}</span></span>`;
-    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}><i>•</i>${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span></button>`;
+    const portrait = playerPhotoHtml(name, options.photos?.[name], 'playerPhoto playerPhoto--field');
+    if (preview) return `<span class="fieldPlayer fieldPlayer--preview ${upper(group)?'fieldPlayer--orange':''}" style="left:${p.x}%;top:${p.y}%">${portrait}${captain?'<em aria-label="Captain">C</em>':''}<span>${esc(name)}</span></span>`;
+    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span></button>`;
   }
 
   function pitchMarkup(preview = false) {

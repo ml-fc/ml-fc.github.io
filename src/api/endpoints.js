@@ -1,5 +1,5 @@
 // src/api/endpoints.js
-import { apiGet, apiPost } from "./client.js";
+import { apiGet, apiPost, apiUpload } from "./client.js";
 
 export const API = {
   // auth
@@ -58,6 +58,13 @@ export const API = {
 
   // user self-service
   userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
+  userSetPhoto: (blob) => {
+    const form = new FormData();
+    form.set("action", "user_set_photo");
+    form.set("photo", blob, "profile.webp");
+    return apiUpload(form);
+  },
+  userRemovePhoto: () => apiPost({ action: "user_remove_photo" }),
 
   saveTeamPositions: (code, team, positions) => apiPost({action:"save_team_positions",code,team,positions}),
 

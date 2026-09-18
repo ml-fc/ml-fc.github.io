@@ -127,3 +127,20 @@ export async function apiPost(body) {
     loadingEnd();
   }
 }
+
+export async function apiUpload(formData) {
+  loadingStart();
+  try {
+    return await requestJson(CONFIG.API_BASE, {
+      method: "POST",
+      cache: "no-store",
+      credentials: "omit",
+      headers: getToken() ? { "Authorization": `Bearer ${getToken()}` } : {},
+      body: formData,
+    });
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  } finally {
+    loadingEnd();
+  }
+}

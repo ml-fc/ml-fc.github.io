@@ -5,6 +5,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { cleanupCaches } from "../cache_cleanup.js";
 import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
+import { loadCanvasImage } from "../ui/player_photo.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -377,6 +378,13 @@ async function potmImageFile(match, when, player, voteCount) {
   context.fillStyle=gradient; context.fillRect(0,0,1080,1350);
   context.strokeStyle="rgba(114,215,250,.28)"; context.lineWidth=4;
   context.beginPath(); context.arc(890,220,260,0,Math.PI*2); context.stroke();
+  const portrait=await loadCanvasImage(player.photoUrl);
+  if (portrait) {
+    context.save(); context.beginPath(); context.arc(850,300,175,0,Math.PI*2); context.clip();
+    const scale=Math.max(350/portrait.width,350/portrait.height);
+    context.drawImage(portrait,850-portrait.width*scale/2,300-portrait.height*scale/2,portrait.width*scale,portrait.height*scale);
+    context.restore(); context.strokeStyle="#72d7fa"; context.lineWidth=10; context.beginPath(); context.arc(850,300,175,0,Math.PI*2); context.stroke();
+  }
   context.fillStyle="#72d7fa"; context.font="900 28px Arial";
   context.fillText("MANOR LAKES FC",70,90);
   context.fillStyle="#ffffff"; context.font="900 48px Arial";

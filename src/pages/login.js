@@ -5,6 +5,7 @@ import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
 import { showPushEnableReminder } from "../ui/push_reminder.js";
+import { cropPhotoFile, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
@@ -26,8 +27,16 @@ export async function renderLoginPage(root) {
     updateNavForUser(me);
     root.innerHTML = `
       <div class="card">
-        <div class="h1">Account</div>
-        <div class="small">Logged in as <b>${me.name}</b>${me.isAdmin ? " • <span class=\"badge\">ADMIN</span>" : ""}</div>
+        <div class="profileIdentity">
+          ${playerPhotoHtml(me.name, me.photoUrl, "playerPhoto playerPhoto--profile")}
+          <div><div class="stepEyebrow">Player profile</div><div class="h1">${esc(me.name)}</div><div class="small">${me.isAdmin ? "<span class=\"badge\">ADMIN</span> · " : ""}Your photo appears on team sheets and POTM cards.</div></div>
+        </div>
+        <div class="profilePhotoActions">
+          <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
+          <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          ${me.photoUrl ? `<button class="btn gray" id="removeProfilePhoto" type="button">Remove photo</button>` : ""}
+          <span class="small" id="profilePhotoStatus" role="status" aria-live="polite">JPEG, PNG or WebP · centred square crop</span>
+        </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
           <button class="btn gray" id="goSeason">My season</button>
@@ -70,6 +79,33 @@ export async function renderLoginPage(root) {
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
+    const photoInput = root.querySelector("#profilePhotoInput");
+    const photoStatus = root.querySelector("#profilePhotoStatus");
+    photoInput.onchange = async () => {
+      const file = photoInput.files?.[0];
+      if (!file) return;
+      photoInput.disabled = true;
+      photoStatus.textContent = "Preparing and uploading photo…";
+      try {
+        const blob = await cropPhotoFile(file);
+        const result = await API.userSetPhoto(blob);
+        if (!result?.ok) throw new Error(result?.error || "Could not upload photo.");
+        const updated = { ...me, photoUrl: result.photoUrl, photoUpdatedAt: result.photoUpdatedAt };
+        setCachedUser(updated); updateNavForUser(updated);
+        toastSuccess("Profile photo updated");
+        await renderLoginPage(root);
+      } catch (error) {
+        photoStatus.textContent = error?.message || "Could not upload photo.";
+        toastError(photoStatus.textContent);
+      } finally { photoInput.disabled = false; photoInput.value = ""; }
+    };
+    root.querySelector("#removeProfilePhoto")?.addEventListener("click", async () => {
+      photoStatus.textContent = "Removing photo…";
+      const result = await API.userRemovePhoto();
+      if (!result?.ok) { photoStatus.textContent = result?.error || "Could not remove photo."; return toastError(photoStatus.textContent); }
+      const updated = { ...me, photoUrl: "" }; setCachedUser(updated); updateNavForUser(updated);
+      toastSuccess("Profile photo removed"); await renderLoginPage(root);
+    });
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.
     root.querySelector("#updateApp").onclick = async () => {
@@ -257,6 +293,7 @@ export async function renderLoginPage(root) {
         const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
         return `<div class="notificationSwipe"><div class="notificationSwipe__hint" aria-hidden="true"><span>✓ Clear</span><span>Clear ✓</span></div>
           <article class="notificationCard" data-notification-id="${esc(n.id)}">
+            ${safeHttpsUrl(n.imageUrl) ? `<img class="notificationCard__image" src="${esc(safeHttpsUrl(n.imageUrl))}" alt="" loading="lazy" decoding="async">` : ""}
             <div class="notificationCard__head"><div class="notificationCard__title">${esc(n.title || "Club update")}</div><button class="notificationCard__clear" type="button" data-close="${esc(n.id)}" aria-label="Clear notification: ${esc(n.title || "Club update")}"><span aria-hidden="true">×</span> Clear</button></div>
             <div class="notificationCard__message">${esc(n.message)}</div>
             <div class="small">${esc(when)}</div>
