@@ -1224,6 +1224,13 @@ body::before {
 #app > [data-route] { animation: routeIn .32s ease both; }
 @keyframes routeIn { from { opacity: 0; transform: translateY(7px); } }
 
+/* A transformed ancestor changes the containing block for fixed children.
+   The manage-match banner must stay fixed to the viewport while scrolling. */
+#app > [data-route="#/admin"] {
+  animation: none;
+  transform: none;
+}
+
 .card {
   position: relative;
   overflow: hidden;
