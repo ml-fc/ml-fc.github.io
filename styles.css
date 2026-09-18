@@ -2333,17 +2333,21 @@ body.hasCompactMatchCommand .appbar {
 
 /* Versioned player identity photos. The dark outer ring reads like a shirt
    badge and keeps portraits legible against both halves of the pitch. */
-.playerPhoto{display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;overflow:hidden;border-radius:50%;color:#08283b;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.28),0 5px 14px rgba(0,0,0,.25);font:900 12px/1 Arial,sans-serif}
-.playerPhoto img{width:100%;height:100%;object-fit:cover;object-position:center 32%}
+.playerPhoto{position:relative;display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;overflow:hidden;border-radius:50%;color:#08283b;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.28),0 5px 14px rgba(0,0,0,.25);font:900 12px/1 Arial,sans-serif}
+.playerPhoto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 32%;z-index:1}
+.playerPhoto__initials{position:relative;z-index:0}
 .playerPhoto>span{max-width:none!important;padding:0!important;color:inherit!important;background:transparent!important;border-radius:0!important;font-size:inherit!important;line-height:1!important}
 .playerPhoto--field{width:34px;height:34px;font-size:10px}
 .fieldPlayer>.playerPhoto{margin:0 auto 3px}.fieldPlayer>.playerPhoto+span{display:inline-block}.fieldPlayer.isSelected>.playerPhoto,.fieldPlayer:focus-visible>.playerPhoto{outline:3px solid #ffe16a;outline-offset:2px}
-.fieldPlayer--orange>.playerPhoto{box-shadow:0 0 0 3px rgba(255,156,85,.38),0 5px 14px rgba(0,0,0,.25)}
+.fieldPlayer>.playerPhoto{border:3px solid #55ddff;box-shadow:0 0 0 2px #04334b,0 0 13px rgba(85,221,255,.9),0 5px 14px rgba(0,0,0,.35)}
+.fieldPlayer--orange>.playerPhoto{border-color:#ff8a2b;box-shadow:0 0 0 2px #542000,0 0 13px rgba(255,138,43,.95),0 5px 14px rgba(0,0,0,.35)}
 .digitalPlayer>.playerPhoto{margin:auto}.digitalPlayer--positioned>i{position:absolute;top:-4px;left:calc(50% + 10px);width:17px;height:17px;font-size:10px;z-index:2}.digitalPlayer>.playerPhoto+ i:empty{display:none}.digitalPlayer>span:last-child{display:inline-block}
+.digitalPlayer--blue>.playerPhoto,.digitalTeam--blue .digitalPlayer>.playerPhoto{border:3px solid #55ddff;box-shadow:0 0 0 2px #04334b,0 0 13px rgba(85,221,255,.9),0 5px 14px rgba(0,0,0,.35)}
+.digitalPlayer--orange>.playerPhoto,.digitalTeam--orange .digitalPlayer>.playerPhoto{border:3px solid #ff8a2b;box-shadow:0 0 0 2px #542000,0 0 13px rgba(255,138,43,.95),0 5px 14px rgba(0,0,0,.35)}
 .playerPhoto--potm{width:68px;height:68px;font-size:18px;border-width:3px;box-shadow:0 0 0 4px rgba(240,201,75,.35)}
 .profileIdentity{display:flex;align-items:center;gap:18px}.playerPhoto--profile{width:86px;height:86px;font-size:24px;border-width:4px;box-shadow:0 0 0 5px rgba(114,215,250,.22),0 12px 25px rgba(7,17,30,.18)}
 .profilePhotoActions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(11,18,32,.1)}
-.appbarProfile{display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;overflow:hidden;border-radius:50%;color:#071e2d;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.2);font:900 11px/1 Arial;text-decoration:none}.appbarProfile[hidden]{display:none}.appbarProfile img{width:100%;height:100%;object-fit:cover;object-position:center 32%}
+.appbarProfile{display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;overflow:hidden;margin-left:auto;transform:translateX(6px);border-radius:50%;color:#071e2d;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.4),0 4px 15px rgba(0,0,0,.28);font:900 11px/1 Arial;text-decoration:none}.appbarProfile[hidden]{display:none}.appbarProfile img{width:100%;height:100%;object-fit:cover;object-position:center 32%}
 @media(min-width:900px){.appbarProfile{display:none}.appbarProfile[hidden]{display:none}}
 @media(max-width:600px){.profileIdentity{align-items:flex-start}.playerPhoto--profile{width:72px;height:72px}.playerPhoto--field{width:29px;height:29px}.potmWinner{gap:9px}.playerPhoto--potm{width:54px;height:54px}}
 

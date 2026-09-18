@@ -13,7 +13,18 @@ export function initials(name) {
 
 export function playerPhotoHtml(name, url, className = "playerPhoto") {
   const safe = safePhotoUrl(url);
-  return `<span class="${esc(className)}${safe ? " hasPhoto" : ""}" aria-hidden="true">${safe ? `<img src="${esc(safe)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span>${esc(initials(name))}</span>`}</span>`;
+  return `<span class="${esc(className)}${safe ? " hasPhoto" : ""}" aria-hidden="true"><span class="playerPhoto__initials">${esc(initials(name))}</span>${safe ? `<img data-player-photo src="${esc(safe)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ""}</span>`;
+}
+
+// A version may briefly point at a photo that was replaced on another device,
+// or an image request may fail offline. Remove the failed image so the initials
+// already underneath it are shown instead of the browser's broken-image icon.
+if (typeof document !== "undefined" && !globalThis.__mlfcPlayerPhotoFallback) {
+  globalThis.__mlfcPlayerPhotoFallback = true;
+  document.addEventListener("error", event => {
+    const image = event.target;
+    if (image instanceof HTMLImageElement && image.matches("img[data-player-photo]")) image.remove();
+  }, true);
 }
 
 export async function cropPhotoFile(file, size = 384) {
