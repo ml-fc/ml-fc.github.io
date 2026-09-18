@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   "/src/prefetch.js",
   "/src/push.js",
   "/src/ui/toast.js",
+  "/src/ui/push_reminder.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
   "/src/pages/match.js",
@@ -35,7 +36,8 @@ const STATIC_ASSETS = [
   "/src/pages/captain.js",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
-  "/assets/icons/maskable-512.png"
+  "/assets/icons/maskable-512.png",
+  "/assets/icons/notification-badge.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -94,17 +96,28 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("push", (event) => {
   let data = {};
-  try { data = event.data?.json() || {}; } catch {
-    try { data = { body: event.data?.text() || "You have a new update." }; } catch {}
+  try {
+    data = event.data?.json() || {};
+  } catch {
+    try {
+      const raw = event.data?.text() || "";
+      try { data = JSON.parse(raw); } catch { data = { body: raw }; }
+    } catch {}
   }
 
-  const title = String(data.title || "Manor Lakes FC");
+  // Accept both our direct payload and the common { notification: { ... } }
+  // envelope so the real notification copy is not replaced by generic text.
+  const notification = data?.notification && typeof data.notification === "object"
+    ? data.notification
+    : data;
+  const title = String(notification?.title || data?.title || "Manor Lakes FC");
+  const body = String(notification?.body || data?.body || data?.message || "Open the app to view your update.");
   const options = {
-    body: String(data.body || "You have a new update."),
+    body,
     icon: "/assets/icons/icon-192.png",
-    badge: "/assets/icons/icon-192.png",
-    tag: String(data.tag || "mlfc-update"),
-    data: { url: String(data.url || "/#/login") },
+    badge: "/assets/icons/notification-badge.png",
+    tag: String(notification?.tag || data?.tag || "mlfc-update"),
+    data: { url: String(notification?.url || data?.url || "/#/login") },
   };
 
   event.waitUntil((async () => {

@@ -957,7 +957,7 @@ function bindHeaderButtons(root, routeToken) {
   };
 }
 
- async function renderUsers(root, opts = {}) {
+async function renderUsers(root, opts = {}) {
   const area = root.querySelector("#usersArea");
   if (!area) return;
   // Any admin can change admin rights for other users.
@@ -982,106 +982,97 @@ function bindHeaderButtons(root, routeToken) {
     area.innerHTML = `<div class="small">${String(e?.message||e)}</div>`;
     return;
   }
-  const out = { ok: true, users };
-  if (!out?.ok) {
-    area.innerHTML = `<div class="small">${out?.error || "Failed to load users"}</div>`;
-    return;
-  }
-   users = out.users || [];
-  const q = String(state.q || "").trim().toLowerCase();
-  const filtered = q ? users.filter(u => String(u.name||"").toLowerCase().includes(q) || String(u.phone||"").toLowerCase().includes(q)) : users;
-  const total = filtered.length;
-  const pageSize = Number(state.pageSize) || 20;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (state.page > pages) state.page = pages;
-  if (state.page < 1) state.page = 1;
-  const start = (state.page - 1) * pageSize;
-  const pageItems = filtered.slice(start, start + pageSize);
-
-  const showPager = pages > 1;
-
+  users = users || [];
   area.innerHTML = `
     <div class="card" style="margin-top:0">
       <div class="row" style="gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between">
         <div style="min-width:240px; flex:1">
           <div class="small"><b>Search</b></div>
-          <input id="userSearch" class="input" type="search" aria-label="Search users by name or phone" placeholder="Search by name or phone" value="${state.q || ""}" />
+          <input id="userSearch" class="input" type="search" aria-label="Search users by name or phone" placeholder="Search by name or phone" value="${escapeHtml(state.q || "")}" autocomplete="off" />
         </div>
-        ${showPager ? `
-          <div class="row" style="gap:10px; align-items:flex-end">
-            <button class="btn gray" id="usersPrev" ${state.page<=1?"disabled":""}>Prev</button>
-            <button class="btn gray" id="usersNext" ${state.page>=pages?"disabled":""}>Next</button>
-          </div>
-        ` : ``}
+        <div id="usersPager"></div>
       </div>
-      <div class="small" style="margin-top:8px">Showing ${pageItems.length} of ${total} users • Page ${state.page}/${pages}</div>
+      <div class="small" id="usersSummary" style="margin-top:8px" aria-live="polite"></div>
     </div>
+    <div id="usersResults"></div>
+  `;
 
-    ${pageItems.length ? `
-    <div style="overflow:auto">
-      <table class="table" style="width:100%; border-collapse:collapse">
-        <thead>
-          <tr>
-            <th style="text-align:left; padding:8px">Name</th>
-            <th style="text-align:left; padding:8px">Phone</th>
-            <th style="text-align:center; padding:8px">Admin</th>
-            <th style="text-align:right; padding:8px">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${pageItems.map(u => {
+  const results = area.querySelector("#usersResults");
+  const pager = area.querySelector("#usersPager");
+  const summary = area.querySelector("#usersSummary");
+
+  function renderResults() {
+    const q = String(state.q || "").trim().toLowerCase();
+    const filtered = q ? users.filter(u => String(u.name || "").toLowerCase().includes(q) || String(u.phone || "").toLowerCase().includes(q)) : users;
+    const total = filtered.length;
+    const pageSize = Number(state.pageSize) || 20;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    state.page = Math.min(Math.max(1, state.page), pages);
+    const start = (state.page - 1) * pageSize;
+    const pageItems = filtered.slice(start, start + pageSize);
+
+    pager.innerHTML = pages > 1 ? `
+      <div class="row" style="gap:10px; align-items:flex-end">
+        <button class="btn gray" id="usersPrev" ${state.page <= 1 ? "disabled" : ""}>Prev</button>
+        <button class="btn gray" id="usersNext" ${state.page >= pages ? "disabled" : ""}>Next</button>
+      </div>
+    ` : "";
+    summary.textContent = `Showing ${pageItems.length} of ${total} users • Page ${state.page}/${pages}`;
+    results.innerHTML = pageItems.length ? `
+      <div style="overflow:auto">
+        <table class="table" style="width:100%; border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:8px">Name</th>
+              <th style="text-align:left; padding:8px">Phone</th>
+              <th style="text-align:center; padding:8px">Admin</th>
+              <th style="text-align:right; padding:8px">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pageItems.map(u => {
             const isSelf = meNameLower && String(u.name || "").trim().toLowerCase() === meNameLower;
             const toggleDisabled = !canToggleAdmin || isSelf;
             const toggleTitle = !canToggleAdmin
               ? "Only admins can change admin rights"
               : (isSelf ? "You cannot change your own admin access" : "Toggle admin");
             return `
-            <tr style="border-top:1px solid rgba(11,18,32,0.08)">
-              <td style="padding:8px; font-weight:950" data-label="Name">${u.name}</td>
-              <td style="padding:8px" class="small" data-label="Phone">${u.phone || ""}</td>
-              <td style="padding:8px; text-align:center" data-label="Admin">${Number(u.isAdmin)===1 ? "✅" : "—"}</td>
-              <td style="padding:8px; text-align:right" data-label="Actions" class="usersActions">
-                <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
-                <button class="btn gray" data-reset-pass="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Change password</button>
-                <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
-              </td>
-            </tr>
-          `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-    ` : `<div class="small">No users found.</div>`}
-  `;
+              <tr style="border-top:1px solid rgba(11,18,32,0.08)">
+                <td style="padding:8px; font-weight:950" data-label="Name">${escapeHtml(u.name)}</td>
+                <td style="padding:8px" class="small" data-label="Phone">${escapeHtml(u.phone || "")}</td>
+                <td style="padding:8px; text-align:center" data-label="Admin">${Number(u.isAdmin) === 1 ? "✅" : "—"}</td>
+                <td style="padding:8px; text-align:right" data-label="Actions" class="usersActions">
+                  <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
+                  <button class="btn gray" data-reset-pass="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Change password</button>
+                  <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
+                </td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    ` : `<div class="small">No users found.</div>`;
+  }
 
   const search = area.querySelector("#userSearch");
-  if (search) {
-    // Preserve focus + caret while we re-render on each keystroke.
-    search.oninput = () => {
-      const caret = search.selectionStart;
-      state.q = search.value;
-      state.page = 1;
-      renderUsers(root, { focusSearch: true, caret });
-    };
-  }
-  const prevBtn = area.querySelector("#usersPrev");
-  const nextBtn = area.querySelector("#usersNext");
-  if (prevBtn) prevBtn.onclick = () => { state.page = Math.max(1, state.page - 1); renderUsers(root); };
-  if (nextBtn) nextBtn.onclick = () => { state.page = Math.min(pages, state.page + 1); renderUsers(root); };
+  search.oninput = () => {
+    state.q = search.value;
+    state.page = 1;
+    renderResults();
+  };
 
-  if (opts?.focusSearch) {
-    // After re-render, restore focus and caret.
-    requestAnimationFrame(() => {
-      const s = area.querySelector("#userSearch");
-      if (!s) return;
-      s.focus();
-      const pos = Number.isFinite(opts.caret) ? opts.caret : s.value.length;
-      try { s.setSelectionRange(pos, pos); } catch {}
-    });
-  }
+  pager.onclick = (event) => {
+    if (event.target.closest("#usersPrev")) state.page = Math.max(1, state.page - 1);
+    else if (event.target.closest("#usersNext")) state.page += 1;
+    else return;
+    renderResults();
+  };
 
-  area.querySelectorAll("[data-toggle-admin]").forEach(btn => {
-    btn.onclick = async () => {
+  results.onclick = async (event) => {
+    const btn = event.target.closest("button");
+    if (!btn) return;
+
+    if (btn.matches("[data-toggle-admin]")) {
       if (!canToggleAdmin) return toastError("Only admins can change admin rights");
       const name = decodeURIComponent(btn.getAttribute("data-toggle-admin") || "");
       if (meNameLower && String(name || "").trim().toLowerCase() === meNameLower) {
@@ -1097,23 +1088,21 @@ function bindHeaderButtons(root, routeToken) {
       users = users.map(u => (u.name === name ? { ...u, isAdmin: next ? 1 : 0 } : u));
       lsSet(LS_USERS_CACHE, { ts: Date.now(), users });
       toastSuccess("Updated");
-      renderUsers(root);
-    };
-  });
+      renderResults();
+      return;
+    }
 
-  area.querySelectorAll("[data-reset-pass]").forEach(btn => {
-    btn.onclick = async () => {
+    if (btn.matches("[data-reset-pass]")) {
       const name = decodeURIComponent(btn.getAttribute("data-reset-pass") || "");
       const pwd = prompt(`Enter a new password for ${name}`);
       if (!pwd) return;
       const res = await API.adminSetPassword(name, pwd).catch(() => null);
       if (!res?.ok) return toastError(res?.error || "Failed");
       toastSuccess("Password updated");
-    };
-  });
+      return;
+    }
 
-  area.querySelectorAll("[data-del-user]").forEach(btn => {
-    btn.onclick = async () => {
+    if (btn.matches("[data-del-user]")) {
       const name = decodeURIComponent(btn.getAttribute("data-del-user") || "");
       if (meNameLower && String(name || "").trim().toLowerCase() === meNameLower) {
         return toastError("You cannot delete your own admin account");
@@ -1125,9 +1114,11 @@ function bindHeaderButtons(root, routeToken) {
       users = users.filter(u => String(u.name || "").trim().toLowerCase() !== String(name).trim().toLowerCase());
       lsSet(LS_USERS_CACHE, { ts: Date.now(), users });
       toastSuccess("User deleted");
-      renderUsers(root);
-    };
-  });
+      renderResults();
+    }
+  };
+
+  renderResults();
 }
 
 function bindUserMgmt(root, routeToken) {

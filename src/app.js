@@ -4,6 +4,7 @@ import { initReloadContext } from "./nav_state.js";
 import { getCachedUser, refreshMe, updateNavForUser } from "./auth.js";
 import { API } from "./api/endpoints.js";
 import { ensurePushSubscribed } from "./push.js";
+import { showPushEnableReminder } from "./ui/push_reminder.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
@@ -154,6 +155,7 @@ function boot() {
   refreshMe()
     .then((u) => {
       updateNavForUser(u);
+      if (u) showPushEnableReminder().catch(() => {});
       checkNotificationsOnce().catch(() => {});
     })
     .catch(() => {

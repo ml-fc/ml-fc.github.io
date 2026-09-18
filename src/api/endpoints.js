@@ -12,6 +12,7 @@ export const API = {
   notifications: () => apiGet({ action: "notifications" }),
   notificationsMarkRead: (ids) => apiPost({ action: "notifications_mark_read", ids }),
   myNextMatch: () => apiGet({ action: "my_next_match" }),
+  mySeasonStats: (seasonId = "") => apiGet({ action: "my_season_stats", seasonId }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
@@ -46,6 +47,7 @@ export const API = {
   adminSetPassword: (name, password) => apiPost({ action: "admin_set_password", name, password }),
   adminDeleteUser: (name) => apiPost({ action: "admin_delete_user", name }),
   adminBroadcastNotification: (payload) => apiPost({ action: "admin_broadcast_notification", ...payload }),
+  adminAuditLog: (filters = {}) => apiGet({ action: "admin_audit_log", ...filters }),
 
   // admin: match availability management (for adding players who may not have the app)
   adminSetAvailabilityFor: (matchId, playerName, availability, note = "") =>

@@ -4,6 +4,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
+import { showPushEnableReminder } from "../ui/push_reminder.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
@@ -33,6 +34,11 @@ export async function renderLoginPage(root) {
           <button class="btn gray" id="logout">Logout</button>
         </div>
       </div>
+
+      <section class="profileStats" aria-labelledby="profileStatsTitle">
+        <div class="profileStats__head"><div><div class="small">Your season</div><div class="h1" id="profileStatsTitle">Personal statistics</div></div><span class="badge">PRIVATE</span></div>
+        <div id="profileStatsBody" class="profileStats__loading" aria-live="polite">Loading your season…</div>
+      </section>
 
       <div class="card">
         <div class="h1">Change password</div>
@@ -67,6 +73,33 @@ export async function renderLoginPage(root) {
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
+
+    API.mySeasonStats().then((out) => {
+      const host = root.querySelector("#profileStatsBody");
+      if (!host) return;
+      if (!out?.ok) { host.textContent = out?.error || "Could not load statistics."; return; }
+      const s = out.summary || {};
+      const rating = s.averageRating == null ? "—" : Number(s.averageRating).toFixed(1);
+      const matches = out.matches || [];
+      host.className = "";
+      host.innerHTML = `
+        <div class="profileStatGrid">
+          <div><strong>${Number(s.appearances || 0)}</strong><span>Appearances</span></div>
+          <div><strong>${Number(s.goals || 0)}</strong><span>Goals</span></div>
+          <div><strong>${Number(s.assists || 0)}</strong><span>Assists</span></div>
+          <div><strong>${esc(rating)}</strong><span>Avg rating</span></div>
+        </div>
+        <div class="profileStats__matches">
+          ${matches.length ? matches.map((m) => `<article class="profileMatch">
+            <div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || "Squad")}</span></div>
+            <div class="profileMatch__score">${esc(m.scoreHome)}–${esc(m.scoreAway)}</div>
+            <div class="profileMatch__numbers"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} ★</span></div>
+          </article>`).join("") : `<div class="small">No completed appearances in this season yet.</div>`}
+        </div>`;
+    }).catch(() => {
+      const host = root.querySelector("#profileStatsBody");
+      if (host) host.textContent = "Could not load statistics.";
+    });
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.
     root.querySelector("#updateApp").onclick = async () => {
@@ -423,6 +456,7 @@ export async function renderLoginPage(root) {
     setCachedUser(res.user);
     updateNavForUser(res.user);
     toastSuccess("Logged in");
+    await showPushEnableReminder(root);
     location.hash = "#/match";
   };
 
@@ -468,6 +502,7 @@ const rmsg = root.querySelector("#rmsg");
     setCachedUser(res.user);
     updateNavForUser(res.user);
     toastSuccess("Registered & logged in");
+    await showPushEnableReminder(root);
     location.hash = "#/match";
   };
 }

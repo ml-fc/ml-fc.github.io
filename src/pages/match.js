@@ -490,7 +490,9 @@ function renderNextMatchDashboard(host, data) {
   const captainLabel = assignment.isCaptain ? `Captain · ${captainTeamName}` : "";
   const action = match.contextualAction || null;
   const canRespond = Boolean(match.availability?.canRespond);
-  const showResponse = canRespond && (!action || action.type === "RESPOND");
+  const availabilityStatus = String(match.availability?.status || "NOT_RESPONDED").toUpperCase();
+  const hasAvailabilityResponse = ["YES", "NO", "WAITING"].includes(availabilityStatus);
+  const showResponse = canRespond && !hasAvailabilityResponse && (!action || action.type === "RESPOND");
   const result = data?.latestResult;
 
   host.innerHTML = `
@@ -529,8 +531,10 @@ function renderNextMatchDashboard(host, data) {
             <button class="btn quickResponse__yes" type="button" data-next-response="YES"><span aria-hidden="true">✓</span> Yes, I can play</button>
             <button class="btn quickResponse__no" type="button" data-next-response="NO"><span aria-hidden="true">×</span> No, I’m unavailable</button>
           </div>` : ""}
-        ${action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
-        ${!showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+        ${hasAvailabilityResponse && canRespond ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">Update availability</button>` : ""}
+        ${!hasAvailabilityResponse && action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
+        ${!hasAvailabilityResponse && !showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+        ${hasAvailabilityResponse && !canRespond ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
       </footer>
 
       ${result ? `<div class="nextMatch__lastResult"><span>Last result</span><b>${escapeHtml(result.title)}</b><strong>${escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>` : ""}
@@ -1036,14 +1040,20 @@ const cap = availabilityLimitForMatch(m);
     const a = Number(e?.assists ?? 0);
     if (!n) continue;
     if (!scorerMap[n]) scorerMap[n] = { goals: 0, assists: 0, team: teamForPlayer[n] || "" };
-    if (Number.isFinite(g)) scorerMap[n].goals += Math.max(0, Math.floor(g));
-    if (Number.isFinite(a)) scorerMap[n].assists += Math.max(0, Math.floor(a));
+    // Two captains may report the same event row. Match statistics count the
+    // largest submitted value once rather than doubling it.
+    if (Number.isFinite(g)) scorerMap[n].goals = Math.max(scorerMap[n].goals, Math.max(0, Math.floor(g)));
+    if (Number.isFinite(a)) scorerMap[n].assists = Math.max(scorerMap[n].assists, Math.max(0, Math.floor(a)));
     if (!scorerMap[n].team && teamForPlayer[n]) scorerMap[n].team = teamForPlayer[n];
   }
   const scorers = Object.entries(scorerMap)
     .filter(([_, v]) => (v.goals || 0) > 0)
     .sort((a, b) => (b[1].goals - a[1].goals) || a[0].localeCompare(b[0]))
     .map(([name, v]) => ({ name, goals: v.goals, assists: v.assists, team: v.team || "" }));
+  const assisters = Object.entries(scorerMap)
+    .filter(([_, v]) => (v.assists || 0) > 0)
+    .sort((a, b) => (b[1].assists - a[1].assists) || a[0].localeCompare(b[0]))
+    .map(([name, v]) => ({ name, assists: v.assists }));
 
   // Group scorers by team when possible
   const scorersByTeam = {};
@@ -1085,12 +1095,13 @@ const cap = availabilityLimitForMatch(m);
             ${
               Object.keys(scorersByTeam).length > 1
                 ? Object.entries(scorersByTeam)
-                    .map(([team, list]) => `<div style="margin-top:6px"><b>${team}:</b> ${list.map(s => `${s.name} (${s.goals})`).join(" • ")}</div>`)
+                    .map(([team, list]) => `<div style="margin-top:6px"><b>${escapeHtml(team)}:</b> ${list.map(s => `${escapeHtml(s.name)} (${s.goals})`).join(" • ")}</div>`)
                     .join("")
-                : `${scorers.map(s => `${s.name} (${s.goals})`).join(" • ")}`
+                : `${scorers.map(s => `${escapeHtml(s.name)} (${s.goals})`).join(" • ")}`
             }
           </div>
         ` : ``}
+        ${assisters.length ? `<div class="small" style="margin-top:10px"><b>Assists:</b> ${assisters.map(s => `${escapeHtml(s.name)} (${s.assists})`).join(" • ")}</div>` : ``}
       </div>
     ` : ``}
 
