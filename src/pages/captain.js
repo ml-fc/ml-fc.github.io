@@ -180,11 +180,10 @@ export async function renderCaptainPage(root, query) {
     if (p && tm) teamMap[p] = tm;
   });
 
-  // Admin: roster must match actual teams (Blue/Orange). Do NOT inject the logged-in admin.
-  // Captain flow: roster can start from availability / cached roster and can include the captain.
-  if (adminMode && Object.keys(teamMap).length) {
-    roster = uniqueSorted(Object.keys(teamMap));
-  }
+  // Admin ratings must always use the teams saved for this match. Falling back to
+  // availability creates editable rows that the API correctly rejects as unassigned.
+  // Captain flow can still start from availability / cached roster while setup is active.
+  if (adminMode) roster = uniqueSorted(Object.keys(teamMap));
 
   if (!adminMode && !roster.some(x => x.toLowerCase() === captain.toLowerCase())) {
     roster = uniqueSorted([...roster, captain]);
@@ -327,7 +326,7 @@ export async function renderCaptainPage(root, query) {
       <div class="small" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}`}</div>
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" id="openMatch">Open match</button>
+        <button class="btn gray" id="openMatch">${adminMode ? "Back to match management" : "Open match"}</button>
       </div>
       <div class="matchSteps" aria-label="Match update progress">
         <span data-step-dot="1">1 <b>Score</b></span><span data-step-dot="2">2 <b>Roster</b></span><span data-step-dot="3">3 <b>Ratings</b></span>
@@ -371,7 +370,11 @@ export async function renderCaptainPage(root, query) {
     <div class="card" id="stepRoster" style="display:none">
       <div id="rosterSetup">
       <div class="small stepEyebrow">Step 2 of 3</div><div class="h1">Confirm roster</div>
-      <div class="small">Roster starts from confirmed YES availability. Add more players if someone joins late.</div>
+      <div class="small">${adminMode
+        ? (roster.length
+          ? "Ratings use the teams saved for this match."
+          : "No saved teams found. Go back to match management, assign players to both teams, and save setup before rating.")
+        : "Roster starts from confirmed YES availability. Add more players if someone joins late."}</div>
 
       <details class="card" style="margin-top:10px">
         <summary style="font-weight:950">Players who posted availability (${postedPlayers.length})</summary>
@@ -381,11 +384,11 @@ export async function renderCaptainPage(root, query) {
       </details>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1">
+        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1" ${adminMode ? "disabled" : ""}>
           <option value="">Add player from full list…</option>
           ${(allPlayers||[]).map(p => `<option value="${p}">${p}</option>`).join("")}
         </select>
-        <button class="btn gray" id="addBtn">Add</button>
+        <button class="btn gray" id="addBtn" ${adminMode ? "disabled" : ""}>Add</button>
       </div>
 
       <div class="row" style="margin-top:10px">
@@ -393,7 +396,7 @@ export async function renderCaptainPage(root, query) {
       </div>
 
       <div id="ratingsGate" class="small" style="margin-top:12px">
-        <button class="btn primary" id="continueToRatings" ${ratingsEnabled ? "" : "disabled"}>Continue to ratings</button>
+          <button class="btn primary" id="continueToRatings" ${ratingsEnabled && roster.length ? "" : "disabled"}>Continue to ratings</button>
       </div>
       </div>
 
@@ -449,7 +452,7 @@ export async function renderCaptainPage(root, query) {
       root.querySelector("#stepRoster")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
     }
   }
-  showStage(ratingsEnabled ? (adminMode ? 3 : 2) : 1);
+  showStage(ratingsEnabled && (!adminMode || roster.length) ? (adminMode ? 3 : 2) : (adminMode ? 2 : 1));
   root.querySelector("#continueToRatings").onclick = () => showStage(3);
 
   // Prefill score UI (no extra fetch)
@@ -471,7 +474,9 @@ export async function renderCaptainPage(root, query) {
   } catch {}
 
   root.querySelector("#openMatch").onclick = () => {
-    location.hash = `#/match?code=${encodeURIComponent(code)}`;
+    location.hash = adminMode
+      ? `#/admin?view=manage&code=${encodeURIComponent(code)}&prev=open`
+      : `#/match?code=${encodeURIComponent(code)}`;
   };
 
   root.querySelector("#submitScore").onclick = async () => {
@@ -813,6 +818,7 @@ export async function renderCaptainPage(root, query) {
   searchEl.addEventListener("input", renderRows);
 
   root.querySelector("#addBtn").onclick = () => {
+    if (adminMode) return toastWarn("Assign players in match management and save setup first.");
     const sel = root.querySelector("#addFromAll");
     const p = String(sel.value || "").trim();
     if (!p) return toastWarn("Select a player to add.");

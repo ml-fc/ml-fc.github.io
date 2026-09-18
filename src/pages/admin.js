@@ -1950,8 +1950,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="h1">Ratings</div>
       <div class="small">Admin can rate all players for this match (partial submission allowed).</div>
       <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="openRatingsAdminInternal">Give ratings</button>
+        <button class="btn primary" id="openRatingsAdminInternal" ${hasAnyTeams ? "" : "disabled"}>Give ratings</button>
       </div>
+      ${hasAnyTeams ? "" : `<div class="small" style="margin-top:8px">Assign players to teams and save setup before giving ratings.</div>`}
 
       <div id="setupMsg" class="small" style="margin-top:10px"></div>
     </details>
@@ -2305,6 +2306,7 @@ function renderComboList(filterText = "") {
   const openRatingsInternal = manageBody.querySelector("#openRatingsAdminInternal");
   if (openRatingsInternal) {
     openRatingsInternal.onclick = () => {
+      if ((blue.length + orange.length) === 0) return toastWarn("Assign players to teams and save setup before giving ratings.");
       location.hash = `#/captain?code=${encodeURIComponent(m.publicCode)}&src=admin`;
     };
   }
