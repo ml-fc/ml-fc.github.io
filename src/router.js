@@ -132,6 +132,11 @@ async function renderRoute() {
 }
 
 window.addEventListener("hashchange", renderRoute);
+window.addEventListener("mlfc:rerender-route", () => {
+  const { path } = getPathQueryAndHash();
+  if (ROUTES[path]) LAST_HASH_BY_ROUTE[path] = "";
+  renderRoute();
+});
 
 export function startRouter() {
   if (!window.location.hash) window.location.hash = (getToken() ? "#/match" : "#/leaderboard");

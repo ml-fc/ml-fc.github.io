@@ -47,3 +47,20 @@ export function loadCanvasImage(url) {
     image.src = safe;
   });
 }
+
+export function invalidatePlayerPhotoCaches() {
+  const prefixes = [
+    "mlfc_match_detail_cache_v2:",
+    "mlfc_admin_manage_cache_v3:",
+    "mlfc_captain_roster_v1:",
+    "mlfc_captain_teams_v1:",
+  ];
+  const exact = new Set(["mlfc_players_cache_v2"]);
+  try {
+    Object.keys(localStorage).forEach(key => {
+      if (exact.has(key) || prefixes.some(prefix => key.startsWith(prefix))) localStorage.removeItem(key);
+    });
+  } catch {}
+  try { sessionStorage.removeItem("mlfc_match_list_ui_v1"); } catch {}
+  window.dispatchEvent(new CustomEvent("mlfc:player-photo-updated"));
+}

@@ -5,7 +5,7 @@ import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
 import { showPushEnableReminder } from "../ui/push_reminder.js";
-import { cropPhotoFile, playerPhotoHtml } from "../ui/player_photo.js";
+import { cropPhotoFile, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
@@ -91,6 +91,7 @@ export async function renderLoginPage(root) {
         const result = await API.userSetPhoto(blob);
         if (!result?.ok) throw new Error(result?.error || "Could not upload photo.");
         const updated = { ...me, photoUrl: result.photoUrl, photoUpdatedAt: result.photoUpdatedAt };
+        invalidatePlayerPhotoCaches();
         setCachedUser(updated); updateNavForUser(updated);
         toastSuccess("Profile photo updated");
         await renderLoginPage(root);
@@ -103,7 +104,7 @@ export async function renderLoginPage(root) {
       photoStatus.textContent = "Removing photo…";
       const result = await API.userRemovePhoto();
       if (!result?.ok) { photoStatus.textContent = result?.error || "Could not remove photo."; return toastError(photoStatus.textContent); }
-      const updated = { ...me, photoUrl: "" }; setCachedUser(updated); updateNavForUser(updated);
+      const updated = { ...me, photoUrl: "" }; invalidatePlayerPhotoCaches(); setCachedUser(updated); updateNavForUser(updated);
       toastSuccess("Profile photo removed"); await renderLoginPage(root);
     });
 

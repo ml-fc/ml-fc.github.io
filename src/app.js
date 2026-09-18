@@ -149,6 +149,12 @@ function ensureInitialRouteRender() {
   }
 }
 
+function rerenderPhotoSensitiveRoute() {
+  const path = (location.hash || "#/match").split("?")[0];
+  if (!["#/match", "#/admin", "#/captain"].includes(path)) return;
+  window.dispatchEvent(new CustomEvent("mlfc:rerender-route"));
+}
+
 function boot() {
   window.addEventListener("unhandledrejection", () => resetBusyButtons());
   window.addEventListener("error", () => resetBusyButtons());
@@ -190,6 +196,13 @@ function boot() {
 
   window.addEventListener("online", () => {
     checkNotificationsBadge("online").catch(() => {});
+  });
+
+  window.addEventListener("mlfc:player-photo-updated", rerenderPhotoSensitiveRoute);
+  window.addEventListener("mlfc:identity-updated", rerenderPhotoSensitiveRoute);
+  window.addEventListener("storage", event => {
+    const key = String(event.key || "");
+    if (key.startsWith("mlfc_match_detail_cache_v2:") || key.startsWith("mlfc_admin_manage_cache_v3:") || key.startsWith("mlfc_captain_teams_v1:")) rerenderPhotoSensitiveRoute();
   });
 
   // When a Web Push arrives, the Service Worker will postMessage("MLFC_PUSH") to any open tabs.
