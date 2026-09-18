@@ -252,6 +252,7 @@ export async function renderLoginPage(root) {
       list.innerHTML = items.map(n => {
         const link = safeHttpsUrl(n.linkUrl);
         const embed = safeHttpsUrl(n.embedUrl);
+        const appLink = link && new URL(link).origin === location.origin && new URL(link).hash.startsWith("#/captain?") ? new URL(link).hash : "";
         const date = new Date(n.createdAt);
         const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
         return `<div class="notificationSwipe"><div class="notificationSwipe__hint" aria-hidden="true"><span>✓ Clear</span><span>Clear ✓</span></div>
@@ -259,7 +260,7 @@ export async function renderLoginPage(root) {
             <div class="notificationCard__head"><div class="notificationCard__title">${esc(n.title || "Club update")}</div><button class="notificationCard__clear" type="button" data-close="${esc(n.id)}" aria-label="Clear notification: ${esc(n.title || "Club update")}"><span aria-hidden="true">×</span> Clear</button></div>
             <div class="notificationCard__message">${esc(n.message)}</div>
             <div class="small">${esc(when)}</div>
-            <div class="notificationCard__actions">${n.publicCode || n.matchCode ? `<button class="btn primary" data-open="${esc(n.publicCode || n.matchCode)}">Open match</button>` : `${link ? `<a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open link</a>` : ""}${embed ? `<button class="btn gray" data-embed-url="${esc(embed)}" data-embed-title="${esc(n.title || "Registration")}">Open here</button>` : ""}`}</div>
+            <div class="notificationCard__actions">${appLink ? `<button class="btn primary" data-open-captain="${esc(appLink)}">Open captain page</button>` : n.publicCode || n.matchCode ? `<button class="btn primary" data-open="${esc(n.publicCode || n.matchCode)}">Open match</button>` : `${link ? `<a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open link</a>` : ""}${embed ? `<button class="btn gray" data-embed-url="${esc(embed)}" data-embed-title="${esc(n.title || "Registration")}">Open here</button>` : ""}`}</div>
           </article></div>`;
       }).join("");
       list.querySelectorAll(".notificationCard").forEach(card => {
@@ -324,6 +325,11 @@ export async function renderLoginPage(root) {
       const button = event.target.closest("button");
       if (!button || clearing) return;
       if (button.hasAttribute("data-close")) await clearNotifications([button.dataset.close]);
+      else if (button.hasAttribute("data-open-captain")) {
+        const destination = button.dataset.openCaptain;
+        await clearNotifications([button.closest(".notificationCard").dataset.notificationId]);
+        location.hash = destination;
+      }
       else if (button.hasAttribute("data-open")) {
         const code = button.dataset.open;
         await clearNotifications([button.closest(".notificationCard").dataset.notificationId]);

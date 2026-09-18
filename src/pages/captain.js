@@ -334,7 +334,7 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
 
-    <div class="card"><div class="h1">Team positions</div><div id="captainField"></div><button class="btn primary" id="saveField">Save positions</button></div>
+    <div class="card"><div class="h1">Team positions</div><div id="captainField"></div><div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team on WhatsApp</button>`}</div></div>
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
@@ -447,6 +447,14 @@ export async function renderCaptainPage(root, query) {
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
   const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,editableTeams:ownTeams,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
+  root.querySelector("#shareCaptainTeam")?.addEventListener("click", () => {
+    const team = fieldGroups.find(group => ownTeams.includes(group.team));
+    if (!team || !team.players.length) return toastWarn("No players are assigned to your team yet.");
+    const lines = team.players.map(player => `${player === captain ? "(C) " : ""}${player}`);
+    const message = [`${m.title} · ${team.label}`, when, "", ...lines].join("\n");
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    toastInfo("WhatsApp opened with your team only.");
+  });
   root.querySelector("#saveField").onclick = async () => {
     const button = root.querySelector("#saveField"); button.disabled = true;
     try {
