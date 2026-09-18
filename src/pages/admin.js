@@ -725,7 +725,7 @@ function matchRowHtml(m, view) {
           <div class="adminMatchRow__meta">${when}<span aria-hidden="true">·</span>${m.type}</div>
         </div>
         <div class="adminMatchRow__badges">
-          <span class="badge">${m.status}</span>
+          <span class="badge${status === "OPEN" ? " badge--good" : ""}">${m.status}</span>
           ${locked ? `<span class="badge badge--bad">LOCKED</span>` : ""}
         </div>
       </div>

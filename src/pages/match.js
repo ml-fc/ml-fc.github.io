@@ -3,6 +3,7 @@ import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
+import { defaultPositions } from "../ui/team_field.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -224,24 +225,23 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function compactFormation(players) {
-  const list = [...(players || [])];
-  if (!list.length) return [];
-  const total = list.length;
-  const counts = total <= 5 ? [1, total - 1] : total <= 8 ? [1, 3, total - 4] : [1, 3, 3, total - 7];
-  let offset = 0;
-  return counts.filter(Boolean).map((count) => {
-    const row = list.slice(offset, offset + count);
-    offset += count;
-    return row;
-  });
-}
-
-function publicTeamSheet(teamName, players, tone = "blue", captain = "") {
+function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
+  const rows = [...(teamRows || [])].sort((a, b) => String(a.playerName || "").localeCompare(String(b.playerName || "")));
+  const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
+  const defaults = defaultPositions(players);
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
-    <div class="digitalTeam__pitch"><span class="digitalTeam__centre" aria-hidden="true"></span>
-      ${compactFormation(players).map((row) => `<div class="digitalTeam__line">${row.map((player) => `<div class="digitalPlayer${player === captain ? " digitalPlayer--captain" : ""}"><i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`).join("")}</div>`).join("")}
+    <div class="digitalTeam__pitch digitalTeam__pitch--positioned"><span class="digitalTeam__centre" aria-hidden="true"></span>
+      ${rows.map((row) => {
+        const player = String(row.playerName || "").trim();
+        if (!player) return "";
+        const fallback = defaults[player] || { positionX: 50, positionY: 50 };
+        const rawX = typeof row.positionX === "number" ? row.positionX : Number.NaN;
+        const rawY = typeof row.positionY === "number" ? row.positionY : Number.NaN;
+        const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
+        const y = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
+        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%"><i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`;
+      }).join("")}
     </div>
   </section>`;
 }
@@ -1110,8 +1110,10 @@ const cap = availabilityLimitForMatch(m);
   (data.teams || []).forEach(t=>{ const pn=String(t.playerName||'').trim(); const tm=String(t.team||'').trim(); if(pn&&tm) teamForPlayer[pn]=tm; });
   const homeTeamKey = String(m.type || "").toUpperCase() === "INTERNAL" ? "BLUE" : "MLFC";
   const awayTeamKey = String(m.type || "").toUpperCase() === "INTERNAL" ? "ORANGE" : "OPPONENT";
-  const homePlayers = uniqueSorted((data.teams || []).filter((team) => String(team.team || "").toUpperCase() === homeTeamKey).map((team) => String(team.playerName || "").trim()));
-  const awayPlayers = uniqueSorted((data.teams || []).filter((team) => String(team.team || "").toUpperCase() === awayTeamKey).map((team) => String(team.playerName || "").trim()));
+  const homeTeamRows = (data.teams || []).filter((team) => String(team.team || "").toUpperCase() === homeTeamKey);
+  const awayTeamRows = (data.teams || []).filter((team) => String(team.team || "").toUpperCase() === awayTeamKey);
+  const homePlayers = uniqueSorted(homeTeamRows.map((team) => String(team.playerName || "").trim()));
+  const awayPlayers = uniqueSorted(awayTeamRows.map((team) => String(team.playerName || "").trim()));
   const scoreHome = String(m.scoreHome ?? "").trim();
   const scoreAway = String(m.scoreAway ?? "").trim();
   const hasScore = scoreHome !== "" && scoreAway !== "";
@@ -1233,8 +1235,8 @@ const cap = availabilityLimitForMatch(m);
     ${teamsSelected ? `<div class="card teamSheetCard">
       <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
       <div class="digitalTeamGrid ${awayPlayers.length ? "" : "digitalTeamGrid--single"}">
-        ${publicTeamSheet(teamLabel("HOME"), homePlayers, "blue", caps.captain1)}
-        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayPlayers, "orange", caps.captain2) : ""}
+        ${publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
+        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayTeamRows, "orange", caps.captain2) : ""}
       </div>
     </div>` : ``}
 
