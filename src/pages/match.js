@@ -468,6 +468,21 @@ function availabilityPresentation(availability) {
   return { label: "Response needed", tone: "pending", detail: "Let the club know if you can play." };
 }
 
+function latestResultEventLine(result) {
+  const events = Array.isArray(result?.events) ? result.events : [];
+  const goals = events
+    .filter((event) => Number(event?.goals || 0) > 0)
+    .map((event) => `${escapeHtml(event.playerName)} (${Number(event.goals)})`);
+  const assists = events
+    .filter((event) => Number(event?.assists || 0) > 0)
+    .map((event) => `${escapeHtml(event.playerName)} (${Number(event.assists)})`);
+  if (!goals.length && !assists.length) return "";
+  return `<div class="nextMatch__lastEvents">
+    ${goals.length ? `<span><b>Goals</b> ${goals.join(" · ")}</span>` : ""}
+    ${assists.length ? `<span><b>Assists</b> ${assists.join(" · ")}</span>` : ""}
+  </div>`;
+}
+
 function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
@@ -537,7 +552,14 @@ function renderNextMatchDashboard(host, data) {
         ${hasAvailabilityResponse && !canRespond ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
       </footer>
 
-      ${result ? `<div class="nextMatch__lastResult"><span>Last result</span><b>${escapeHtml(result.title)}</b><strong>${escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>` : ""}
+      ${result ? `<div class="nextMatch__lastResult">
+        <span class="nextMatch__lastLabel">Last result</span>
+        <div class="nextMatch__lastSummary">
+          <div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>
+          ${latestResultEventLine(result)}
+        </div>
+        <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
+      </div>` : ""}
     </section>`;
 
   host.querySelectorAll("[data-next-open]").forEach((button) => {
