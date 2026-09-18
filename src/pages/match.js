@@ -543,8 +543,8 @@ function renderNextMatchDashboard(host, data) {
   const hasScore = String(score.home ?? "") !== "" && String(score.away ?? "") !== "";
   const team = String(assignment.team || "").toUpperCase();
   const teamName = String(assignment.teamName || team);
-  const captainTeamName = String(match.teamNames?.[String(assignment.captainTeam || team).toUpperCase() === "ORANGE" ? "away" : "home"] || teamName);
-  const captainLabel = assignment.isCaptain ? `Captain · ${captainTeamName}` : "";
+  const fieldRole = String(assignment.fieldRole || "").toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+  const roleLabel = assignment.isCaptain ? "Captain" : team ? "Player" : "Check back after team selection.";
   const action = match.contextualAction || null;
   const canRespond = Boolean(match.availability?.canRespond);
   const availabilityStatus = String(match.availability?.status || "NOT_RESPONDED").toUpperCase();
@@ -571,11 +571,11 @@ function renderNextMatchDashboard(host, data) {
           <strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>
           <small>${escapeHtml(availability.detail)}</small>
         </div>
-        <div class="nextMatch__state">
+        ${availabilityStatus === "YES" ? `<div class="nextMatch__state">
           <span class="nextMatch__label">Your role</span>
-          <strong>${team ? escapeHtml(`${teamName} team`) : "Team not assigned"}</strong>
-          <small>${captainLabel ? escapeHtml(captainLabel) : team ? "Player" : "Check back after team selection."}</small>
-        </div>
+          <strong>${team ? escapeHtml(`${teamName} team${fieldRole ? ` · ${fieldRole}` : ""}`) : "Team not assigned"}</strong>
+          <small>${escapeHtml(roleLabel)}</small>
+        </div>` : ""}
         <div class="nextMatch__state">
           <span class="nextMatch__label">Match status</span>
           <strong>${hasScore ? escapeHtml(`${score.home || "–"} — ${score.away || "–"}`) : "Fixture open"}</strong>
