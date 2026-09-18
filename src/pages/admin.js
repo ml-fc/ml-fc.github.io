@@ -333,14 +333,14 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
         context.fillStyle="#ffe16a";context.beginPath();context.arc(x+20,y-17,12,0,Math.PI*2);context.fill();
         context.fillStyle="#132c3b";context.font="900 16px Arial";context.fillText("C",x+20,y-11);
       }
-      context.font="800 27px Arial";
-      const lines=wrapCanvasText(context,name,180).slice(0,2);
+      context.font="800 36px Arial";
+      const lines=wrapCanvasText(context,name,200).slice(0,2).map(line => fitCanvasLabel(context,line,200));
       const labelWidth=Math.max(...lines.map(line => context.measureText(line).width))+16;
       const labelX=Math.max(left+labelWidth/2+4,Math.min(left+width-labelWidth/2-4,x));
-      const labelY=Math.min(y+25,top+height-lines.length*31-12);
-      context.fillStyle="#061e2d";context.fillRect(labelX-labelWidth/2,labelY,labelWidth,lines.length*31+8);
+      const labelY=Math.min(y+25,top+height-lines.length*40-12);
+      context.fillStyle="#061e2d";context.fillRect(labelX-labelWidth/2,labelY,labelWidth,lines.length*40+8);
       context.fillStyle="#fff";
-      lines.forEach((line,index) => context.fillText(line,labelX,labelY+27+index*31));
+      lines.forEach((line,index) => context.fillText(line,labelX,labelY+35+index*40));
     }
   }
   context.textAlign="left";
