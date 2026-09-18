@@ -572,6 +572,7 @@ function renderNextMatchDashboard(host, data) {
         ${!hasAvailabilityResponse && action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
         ${!hasAvailabilityResponse && !showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
         ${hasAvailabilityResponse && !canRespond ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+        ${hasAvailabilityResponse ? `<button class="btn whatsappBtn" type="button" data-next-share>Share to WhatsApp</button>` : ""}
       </footer>
 
       ${result ? `<div class="nextMatch__lastResult">
@@ -590,6 +591,31 @@ function renderNextMatchDashboard(host, data) {
       if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
     };
   });
+
+  const shareButton = host.querySelector("[data-next-share]");
+  if (shareButton) shareButton.onclick = async () => {
+    shareButton.disabled = true;
+    shareButton.textContent = "Preparing share…";
+    // Open during the tap so mobile browsers allow the new tab after the fetch.
+    const shareWindow = window.open("about:blank", "_blank");
+    if (shareWindow) shareWindow.opener = null;
+    try {
+      const detail = await API.getPublicMatch(match.publicCode);
+      if (!detail?.ok || !detail.match || !Array.isArray(detail.availability)) {
+        throw new Error(detail?.error || "Could not load the availability list. Try again.");
+      }
+      const message = whatsappAvailabilityMessage(detail.match, detail.availability);
+      const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      if (shareWindow && !shareWindow.closed) shareWindow.location.replace(url);
+      else window.location.assign(url);
+    } catch (error) {
+      if (shareWindow && !shareWindow.closed) shareWindow.close();
+      toastError(error?.message || "Could not prepare the WhatsApp share. Try again.");
+    } finally {
+      shareButton.disabled = false;
+      shareButton.textContent = "Share to WhatsApp";
+    }
+  };
 
   host.querySelectorAll("[data-next-response]").forEach((button) => {
     button.onclick = async () => {

@@ -1624,7 +1624,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 .statusPill--no span { color: #450a0a; background: #fca5a5; }
 .statusPill--waiting span { color: #422006; background: #fde68a; }
 .statusPill--pending span { color: #09253a; background: #bae6fd; }
-.nextMatch__actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.nextMatch__actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 .quickResponse { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .quickResponse .btn { color: #fff; border-color: rgba(255,255,255,.26); background: rgba(5, 24, 38, .5); }
 .quickResponse .btn:hover { background: rgba(255,255,255,.1); }
