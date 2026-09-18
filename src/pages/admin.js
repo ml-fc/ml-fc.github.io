@@ -1774,6 +1774,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:"MLFC",players:squad,captain:opponentCaptain}],positions:fieldPositions,pool:yesPlayers,disabled:isEditLocked,
+        onSave:() => manageBody.querySelector("#saveOpponent").click(),
+        onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
+        onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); updateOpponentDraft(); renderSquadLists(); },
         onChange:updateOpponentDraft,
         onAssign:p => { squad=uniqueSorted([...squad,p]); updateOpponentDraft(); renderSquadLists(); },
         onCaptain:p => { opponentCaptain=p; updateOpponentDraft(); renderSquadLists(); },
@@ -2369,10 +2372,13 @@ function renderComboList(filterText = "") {
     if (preview) mountTeamField(preview, {
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
       positions:fieldPositions, pool:yesPlayers, disabled:isEditLocked,
+      onSave:() => manageBody.querySelector("#saveSetup").click(),
+      onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
+      onClear:() => manageBody.querySelector("#clearTeamSelections").click(),
       onChange:updateInternalDraft,
       onAssign:(p,t) => { setTeam(p,t); renderAll(); },
       onCaptain:(p,t) => { if(t === "BLUE") captainBlue=p; else captainOrange=p; updateInternalDraft(); renderAll(); },
-      onRemove:p => { removeFromTeam(p); delete fieldPositions[p]; renderAll(); },
+      onRemove:p => { delete fieldPositions[p]; removeFromTeam(p); renderAll(); },
       onTransfer:(p,t) => { delete fieldPositions[p]; setTeam(p,t === "BLUE" ? "ORANGE" : "BLUE"); renderAll(); }
     });
 

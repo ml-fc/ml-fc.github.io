@@ -444,13 +444,13 @@ export async function renderCaptainPage(root, query) {
   `;
 
   const ownTeams = type === "INTERNAL" ? (adminMode ? ["BLUE","ORANGE"] : [captainTeam]) : ["MLFC"];
-  const fieldGroups = ownTeams.map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
+  const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,onChange:() => fieldEditor.status("Unsaved positions")});
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,editableTeams:ownTeams,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
   root.querySelector("#saveField").onclick = async () => {
     const button = root.querySelector("#saveField"); button.disabled = true;
     try {
-      for (const g of fieldGroups) {
+      for (const g of fieldGroups.filter(g => ownTeams.includes(g.team))) {
         const out = await API.saveTeamPositions(code,g.team,positionRows([g],fieldPositions));
         if (!out.ok) throw new Error(out.error || "Could not save positions");
       }

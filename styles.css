@@ -2264,3 +2264,23 @@ body.hasCompactMatchCommand .appbar {
 @media(min-width:700px){.teamField{height:440px}.fieldPlayer span{font-size:12px;max-width:100px}.fieldPlayer{width:100px}}
 
 @media(max-width:699px){.teamField{height:clamp(250px,39svh,340px)}.fieldSaveBar{position:sticky;bottom:10px;background:var(--surface,#f3f6f6);padding:8px;z-index:3;border-radius:10px}.fieldActions .btn{padding:8px 10px}.fieldTabs .btn{min-height:40px}}
+
+/* Shared match board: roster at left, both attacking directions on one pitch. */
+.fieldDialog{width:calc(100vw - 24px);max-width:1400px;height:calc(100dvh - 120px);max-height:none;margin:auto;padding:0;border:1px solid #78949c;border-radius:10px;background:#f3f6f6;color:#102c40;overflow:hidden}
+.fieldDialog::backdrop{background:rgba(3,18,29,.72)}
+.fieldWorkspace{height:100%;display:flex;flex-direction:column}
+.fieldWorkspace__head,.fieldWorkspace__tools,.fieldWorkspace__foot{display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap}
+.fieldWorkspace__head{border-bottom:1px solid #cad7dd}.fieldWorkspace__head strong{font-size:20px}.fieldWorkspace__head [data-close]{margin-left:auto}
+.fieldWorkspace__tools .btn,.fieldWorkspace__foot .btn{min-height:40px;padding:8px 12px}
+.fieldWorkspace__body{display:grid;grid-template-columns:minmax(170px,260px) minmax(0,1fr);gap:12px;flex:1;min-height:0;padding:0 14px}
+.fieldRoster{overflow:auto;background:#fff;border:1px solid #cad7dd;border-radius:5px;overscroll-behavior:contain}
+.fieldRoster table{width:100%;border-collapse:collapse;table-layout:fixed}.fieldRoster th{position:sticky;top:0;background:#e4edf1;z-index:2;text-align:left;font-size:11px;padding:10px}.fieldRoster th:last-child{width:32%}
+.fieldRoster td{padding:3px;border-bottom:1px solid #e1e8ec;overflow-wrap:anywhere}.fieldRoster button{display:block;width:100%;min-height:44px;padding:8px 5px;border:0;background:transparent;text-align:left;font:inherit;font-size:13px;font-weight:700;color:#102c40;cursor:grab;touch-action:none}.fieldRoster button:disabled{cursor:default;opacity:.65}.fieldRoster tr.isSelected{background:#fff0b5}.fieldRoster__team{font-size:10px;color:#136c9c}.fieldRoster__team.isOrange{color:#a74b0b}.fieldRoster .isDragging{background:#fff0b5}
+.sharedPitch{position:relative;min-height:0;border:2px solid #78949c;border-radius:5px;color:#fff;background:repeating-linear-gradient(0deg,#103a4c 0 10%,#123f51 10% 20%);overflow:hidden;touch-action:none}
+.sharedPitch:before{content:"";position:absolute;top:50%;left:0;right:0;border-top:1px solid #ffffff65}
+.sharedPitch:after{content:"";position:absolute;inset:0 32%;border-top:12px solid #ffffff30;border-bottom:12px solid #ffffff30;pointer-events:none}
+.sharedPitch .fieldPlayer{width:84px}.sharedPitch .fieldPlayer span{font-size:11px}.sharedPitch .fieldPlayer--orange i{background:#ff9d4d;color:#3b1b08}
+.attackDirection{position:absolute;right:8px;top:51%;color:#9fe3ff;font:800 10px/1.2 ui-monospace,monospace;pointer-events:none}.attackDirection--upper{top:auto;bottom:51%;color:#ffbc88}
+.fieldWorkspace__foot{border-top:1px solid #cad7dd;margin-top:10px}.fieldWorkspace__foot .fieldActions{margin:0;min-height:40px;flex:1}.fieldWorkspace__foot [data-field-status]{max-width:220px}
+@media(max-width:600px){.fieldDialog{width:calc(100vw - 8px);height:calc(100dvh - 104px)}.fieldWorkspace__body{grid-template-columns:110px minmax(0,1fr);padding:0 5px;gap:5px}.fieldWorkspace__head,.fieldWorkspace__tools,.fieldWorkspace__foot{padding:7px;gap:6px}.fieldWorkspace__head .small{order:3;width:100%;font-size:11px}.fieldRoster th:last-child,.fieldRoster td:last-child{display:none}.fieldRoster button{font-size:11px}.sharedPitch .fieldPlayer{width:57px;min-height:40px}.sharedPitch .fieldPlayer span{font-size:9px;max-width:57px;padding:1px 2px}.sharedPitch .fieldPlayer i{width:23px;height:23px;line-height:19px}.fieldWorkspace__foot .fieldActions{gap:5px;min-width:100%;font-size:12px}.fieldWorkspace__foot [data-save]{margin-left:auto}.attackDirection{font-size:9px;right:3px}.fieldWorkspace__tools .small{font-size:10px}}
+.fieldDragGhost{position:absolute;transform:translate(-50%,-50%);z-index:4;padding:8px;background:#fff0b5;border:2px solid #fff;border-radius:6px;color:#102c40;font-size:12px;font-weight:800;pointer-events:none}

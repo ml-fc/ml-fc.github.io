@@ -1,7 +1,7 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp = n => Math.max(7, Math.min(93, n));
 export function defaultPositions(players) {
-  const result = {};
+  const result = Object.create(null);
   const outfield = players.slice(1);
   const lines = Math.max(1, Math.ceil(outfield.length / 4));
   if (players.length) result[players[0]] = { positionX: 50, positionY: 86 };
@@ -21,74 +21,77 @@ export function positionRows(groups, positions) {
     return g.players.map(playerName => ({playerName, team:g.team, ...(positions[playerName] || defaults[playerName])}));
   });
 }
-// One field surface for assignment, captain selection and free positioning.
+// Positions stay relative to each team's attacking direction for API/share compatibility.
 export function mountTeamField(root, options) {
-  let active = options.groups.some(g => g.team === root.dataset.activeTeam) ? root.dataset.activeTeam : options.groups[0]?.team;
-  let selected = '';
-  let pending = '';
-  let drag = null;
-  let suppressClick = false;
   const positions = options.positions;
+  const groups = options.groups;
+  let selected = root.dataset.selected || '';
+  let pending = '';
+  let suppressClick = false;
   const editable = !options.disabled;
-  function group() { return options.groups.find(g => g.team === active); }
-  function changed() { options.onChange?.(); }
-  function move(name, x, y) { positions[name] = {positionX:clamp(x),positionY:clamp(y)}; changed(); }
+  const owner = name => groups.find(g => g.players.includes(name));
+  const canMove = name => editable && (!owner(name) || !options.editableTeams || options.editableTeams.includes(owner(name).team));
+  const upper = g => g.team === 'ORANGE';
+  const defaults = () => Object.assign({}, ...groups.map(g => defaultPositions(g.players)));
+  function point(name) {
+    const g = owner(name), p = positions[name] || defaults()[name];
+    return {x:upper(g) ? 100-p.positionX : p.positionX, y:upper(g) ? 50-p.positionY/2 : 50+p.positionY/2};
+  }
+  function place(name,x,y) {
+    if (!canMove(name)) return;
+    const old = owner(name);
+    const target = options.onAssign ? (groups.find(g => upper(g) === (y < 50)) || groups[0]) : old;
+    if (!target) return;
+    positions[name] = {positionX:clamp(upper(target) ? 100-x : x),positionY:clamp(upper(target) ? (50-y)*2 : (y-50)*2)};
+    selected = name; root.dataset.selected = name;
+    if (old !== target) options.onAssign(name,target.team);
+    else { options.onChange?.(); draw(); }
+  }
+  function close() { root.dataset.fieldOpen = ''; root.querySelector('dialog')?.close(); root.querySelector('[data-open]')?.focus(); }
   function draw() {
-    const g = group();
-    if (!g) return;
-    const defaults = defaultPositions(g.players);
-    root.innerHTML = `<div class="fieldTabs" role="group" aria-label="Team">${options.groups.map(t => `<button type="button" class="btn ${active === t.team ? 'primary' : 'gray'}" data-tab="${esc(t.team)}" aria-pressed="${active === t.team}">${esc(t.label)} · ${t.players.length}</button>`).join('')}</div>
-      <p class="small">${editable ? 'Drag players, or select a player then tap the field. Arrow keys move the selected player.' : 'Saved team positions'}</p>
-      ${options.pool && editable ? `<label class="field__label">Add to ${esc(g.label)}<select class="input" data-pool><option value="">Choose an unassigned player</option>${options.pool.filter(p => !options.groups.some(t => t.players.includes(p))).map(p => `<option>${esc(p)}</option>`).join('')}</select></label>` : ''}
-      <div class="teamField ${g.team === 'ORANGE' ? 'teamField--orange' : ''}" role="group" aria-label="${esc(g.label)} field"><div class="teamField__circle" aria-hidden="true"></div>${g.players.map(p => {
-        const pos = positions[p] || defaults[p];
-        return `<button type="button" class="fieldPlayer ${selected === p ? 'isSelected' : ''}" data-player="${esc(p)}" style="left:${clamp(pos.positionX)}%;top:${clamp(pos.positionY)}%" aria-label="${esc(p)}${p === g.captain ? ', captain' : ''}" aria-pressed="${selected === p}" ${editable ? '' : 'disabled'}><i>${p === g.captain ? 'C' : '•'}</i><span>${esc(p)}</span></button>`;
-      }).join('')}${!g.players.length ? '<span class="teamField__empty">Add players to build your team</span>' : ''}</div>
-      <div class="fieldActions">${selected ? `<strong>${esc(selected)}</strong>` : '<span class="small">Select a player on the field</span>'}${selected && options.onCaptain && editable ? '<button class="btn gray tiny" data-captain>Make captain</button>' : ''}${selected && options.onRemove && editable ? '<button class="btn gray tiny" data-remove>Unassign</button>' : ''}${selected && options.onTransfer && editable ? '<button class="btn gray tiny" data-transfer>Move to other team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}</div><span class="small" role="status" data-field-status>${esc(pending)}</span>`;
-    root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { active = b.dataset.tab; root.dataset.activeTeam = active; selected = ''; draw(); });
-    const pool = root.querySelector('[data-pool]');
-    if (pool) pool.onchange = () => { if (pool.value) options.onAssign(pool.value, active); };
-    const field = root.querySelector('.teamField');
-    field.onclick = e => {
-      if (!editable) return;
-      if (suppressClick) { suppressClick = false; return; }
-      const player = e.target.closest('[data-player]');
-      if (player) { selected = player.dataset.player; draw(); root.querySelectorAll('[data-player]').forEach(b => { if (b.dataset.player === selected) b.focus({preventScroll:true}); }); }
-      else if (selected) { const r = field.getBoundingClientRect(); move(selected, (e.clientX-r.left)/r.width*100, (e.clientY-r.top)/r.height*100); draw(); }
-    };
-    root.querySelectorAll('[data-player]').forEach(b => {
-      b.onkeydown = e => {
-        const delta = {ArrowLeft:[-2,0],ArrowRight:[2,0],ArrowUp:[0,-2],ArrowDown:[0,2]}[e.key];
-        if (!delta || !editable) return;
-        e.preventDefault(); selected = b.dataset.player;
-        const p = positions[selected] || defaults[selected]; move(selected,p.positionX+delta[0],p.positionY+delta[1]);
-        b.style.left = `${positions[selected].positionX}%`; b.style.top = `${positions[selected].positionY}%`;
-      };
-      b.onpointerdown = e => {
-        if (!editable || e.button !== 0) return;
-        drag = {name:b.dataset.player,x:e.clientX,y:e.clientY,moved:false}; b.setPointerCapture(e.pointerId);
-      };
-      b.onpointermove = e => {
-        if (!drag) return;
-        if (Math.hypot(e.clientX-drag.x,e.clientY-drag.y) < 5 && !drag.moved) return;
-        drag.moved = true;
-        const r = field.getBoundingClientRect();
-        const x = clamp((e.clientX-r.left)/r.width*100), y = clamp((e.clientY-r.top)/r.height*100);
-        b.style.left = `${x}%`; b.style.top = `${y}%`; drag.position = {positionX:x,positionY:y};
-      };
-      b.onpointerup = () => {
-        if (!drag) return;
-        if (drag.moved) { selected = drag.name; positions[selected] = drag.position; suppressClick = true; changed(); drag = null; draw(); setTimeout(() => { suppressClick = false; }, 0); }
-        drag = null;
-      };
-      b.onpointercancel = () => { drag = null; draw(); };
+    const isOpen = root.dataset.fieldOpen === '1';
+    const scrollTop = root.querySelector('.fieldRoster')?.scrollTop || Number(root.dataset.rosterScroll || 0);
+    const names = [...new Set([...(options.pool || []),...groups.flatMap(g => g.players)])];
+    root.querySelector('dialog')?.close();
+    root.innerHTML = `<button type="button" class="btn primary" data-open>Open team field</button>
+      <span class="small">${groups.map(g => `${esc(g.label)}: ${g.players.length}`).join(' · ')}</span>
+      <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
+      <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Drag a player, or select a name then tap the pitch.' : 'Saved positions'}</span><button class="btn gray tiny" data-close>Done</button></header>
+      <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto teams</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onClear && editable ? '<button class="btn gray tiny" data-clear>Clear teams</button>' : ''}<span class="small">${names.filter(n => !owner(n)).length} unassigned</span></div>
+      <div class="fieldWorkspace__body"><aside class="fieldRoster" aria-label="Player list"><table><thead><tr><th>Player</th><th>Team</th></tr></thead><tbody>${names.map(n => { const g=owner(n); return `<tr class="${selected===n?'isSelected':''}"><td><button type="button" data-name="${esc(n)}" ${canMove(n)?'':'disabled'}>${esc(n)}</button></td><td><span class="fieldRoster__team ${g?.team==='ORANGE'?'isOrange':''}">${g?esc(g.label):'—'}</span></td></tr>`; }).join('')}</tbody></table>${!names.length?'<p class="small">No available players yet.</p>':''}</aside>
+      <div class="sharedPitch" aria-label="Shared team field"><div class="teamField__circle" aria-hidden="true"></div>${groups.map(g => `<span class="attackDirection ${upper(g)?'attackDirection--upper':''}">${esc(g.label)} · ${g.players.length} ${upper(g)?'↓':'↑'} attacks</span>`).join('')}${groups.flatMap(g => g.players.map(n => {const p=point(n);return `<button type="button" class="fieldPlayer ${upper(g)?'fieldPlayer--orange':''} ${selected===n?'isSelected':''}" data-name="${esc(n)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(n)}, ${esc(g.label)}${g.captain===n?', captain':''}" ${canMove(n)?'':'disabled'}><i>${g.captain===n?'C':'•'}</i><span>${esc(n)}</span></button>`;})).join('')}</div></div>
+      <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Select a player')}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(g=>`<button class="btn gray tiny" data-assign="${esc(g.team)}">${esc(g.label)}</button>`).join(''):''}</div><span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary" data-save>Save changes</button>':''}</footer>
+      </div></dialog>`;
+    const dialog=root.querySelector('dialog');
+    if(isOpen) dialog.showModal();
+    const roster=root.querySelector('.fieldRoster');
+    roster.scrollTop=scrollTop;
+    roster.onscroll=()=>{root.dataset.rosterScroll=String(roster.scrollTop);};
+    const bind=(s,f)=>{const b=root.querySelector(s);if(b)b.onclick=f;};
+    bind('[data-open]',()=>{root.dataset.fieldOpen='1';dialog.showModal();});
+    bind('[data-close]',close);
+    dialog.oncancel=e=>{e.preventDefault();close();};
+    bind('[data-auto]',options.onAuto);
+    bind('[data-clear]',options.onClear);
+    bind('[data-save]',()=>{close();options.onSave();});
+    bind('[data-captain]',()=>options.onCaptain(selected,owner(selected).team));
+    bind('[data-remove]',()=>options.onRemove(selected));
+    bind('[data-reset]',()=>{for(const g of groups)for(const n of g.players)if(canMove(n))delete positions[n];options.onChange?.();draw();});
+    root.querySelectorAll('[data-assign]').forEach(b=>b.onclick=()=>options.onAssign(selected,b.dataset.assign));
+    const pitch=root.querySelector('.sharedPitch');
+    const coords=e=>{const r=pitch.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*100,y:(e.clientY-r.top)/r.height*100};};
+    pitch.onclick=e=>{if(suppressClick || e.target.closest('[data-name]') || !selected)return;const p=coords(e);place(selected,p.x,p.y);};
+    root.querySelectorAll('[data-name]').forEach(b=>{
+      const name=b.dataset.name;
+      b.onclick=()=>{if(suppressClick||!canMove(name))return;selected=name;root.dataset.selected=name;draw();root.querySelectorAll('[data-name]').forEach(el=>{if(el.dataset.name===name && el.classList.contains('fieldPlayer'))el.focus({preventScroll:true});});};
+      b.onkeydown=e=>{const d={ArrowLeft:[-2,0],ArrowRight:[2,0],ArrowUp:[0,-2],ArrowDown:[0,2]}[e.key];if(!d||!owner(name)||!canMove(name))return;e.preventDefault();const p=point(name);place(name,p.x+d[0],p.y+d[1]);root.querySelectorAll('.fieldPlayer').forEach(el=>{if(el.dataset.name===name)el.focus({preventScroll:true});});};
+      let drag;
+      b.onpointerdown=e=>{if(!canMove(name)||e.button!==0)return;drag={x:e.clientX,y:e.clientY,moved:false};b.setPointerCapture(e.pointerId);};
+      b.onpointermove=e=>{if(!drag)return;if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>5)drag.moved=true;if(!drag.moved)return;const p=coords(e);const marker=[...root.querySelectorAll('.fieldPlayer')].find(el=>el.dataset.name===name);if(!marker){let ghost=pitch.querySelector('.fieldDragGhost');if(!ghost){ghost=document.createElement('span');ghost.className='fieldDragGhost';ghost.textContent=name;pitch.append(ghost);}ghost.style.left=`${p.x}%`;ghost.style.top=`${p.y}%`;}if(marker){if(!options.onAssign){p.y=upper(owner(name))?Math.min(46.5,p.y):Math.max(53.5,p.y);}marker.style.left=`${Math.max(4,Math.min(96,p.x))}%`;marker.style.top=`${Math.max(4,Math.min(96,p.y))}%`;if(options.onAssign)marker.classList.toggle('fieldPlayer--orange',p.y<50 && groups.some(g=>upper(g)));}b.classList.add('isDragging');};
+      b.onpointerup=e=>{if(!drag)return;const moved=drag.moved;drag=null;if(!moved)return;suppressClick=true;const p=coords(e);if(p.x>=0&&p.x<=100&&p.y>=0&&p.y<=100)place(name,p.x,p.y);else if(options.onRemove && owner(name) && e.clientX<pitch.getBoundingClientRect().left)options.onRemove(name);else draw();setTimeout(()=>{suppressClick=false;},0);};
+      b.onpointercancel=()=>{drag=null;draw();};
     });
-    const bind = (selector, fn) => { const b = root.querySelector(selector); if (b) b.onclick = fn; };
-    bind('[data-captain]', () => options.onCaptain(selected,active));
-    bind('[data-remove]', () => options.onRemove(selected));
-    bind('[data-transfer]', () => options.onTransfer(selected,active));
-    bind('[data-reset]', () => { for (const p of g.players) delete positions[p]; changed(); draw(); });
   }
   draw();
-  return { status(message) { pending = message; root.querySelector('[data-field-status]').textContent = message; } };
+  return {status(message){pending=message;const el=root.querySelector('[data-field-status]');if(el)el.textContent=message;}};
 }
