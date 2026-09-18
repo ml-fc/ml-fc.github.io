@@ -137,7 +137,7 @@ function teamSheetHtml(teamName, players, captain = "", tone = "blue") {
   </section>`;
 }
 
-function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
+function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
   const lines = ["📋 *MANOR LAKES FC · DIGITAL TEAM SHEET*", "", `⚽ *${match.title}*`, `🗓️ ${when}`, ""];
   lines.push(`🔵 *${homeName.toUpperCase()}*`);
   (homePlayers.length ? homePlayers : ["Squad to be confirmed"]).forEach((player, index) => lines.push(`${index + 1}. ${player}`));
@@ -277,7 +277,7 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
   });
 }
 
-async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
+async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1350;
@@ -304,13 +304,41 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.font = "700 25px Arial";
   context.fillText(when, 70, 300);
 
-  const teams = [{ name: homeName, players: homePlayers, positions, color: "#72d7fa" }];
-  if (awayName) teams.push({ name: awayName, players: awayPlayers, positions, color: "#ff9c55" });
-  const columnWidth = teams.length === 2 ? 455 : 940;
-  teams.forEach((team, teamIndex) => {
-    const x = 70 + teamIndex * 485;
-    drawTeamSheetPitch(context, team, x, 350, columnWidth, 880);
-  });
+  const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa", captain:captains[0], upper:false }];
+  if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55", captain:captains[1], upper:true });
+  const left=70, top=390, width=940, height=800;
+  context.fillStyle="#103a4c";
+  context.fillRect(left,top,width,height);
+  context.fillStyle="#123f51";
+  for(let i=0;i<10;i+=2) context.fillRect(left,top+i*height/10,width,height/10);
+  context.strokeStyle="#78949c"; context.lineWidth=3;
+  context.strokeRect(left,top,width,height);
+  context.beginPath();context.moveTo(left,top+height/2);context.lineTo(left+width,top+height/2);context.stroke();
+  context.beginPath();context.arc(left+width/2,top+height/2,70,0,Math.PI*2);context.stroke();
+  context.strokeRect(left+width*.32,top,width*.36,50);
+  context.strokeRect(left+width*.32,top+height-50,width*.36,50);
+  context.textAlign="center";
+  for(const team of teams) {
+    context.fillStyle=team.color;context.font="900 24px Arial";
+    context.fillText(`${team.name} · ${team.players.length} · ${team.upper?'↓':'↑'} attacks`,540,team.upper?365:1230);
+    const defaults=defaultPositions(team.players);
+    for(const name of team.players) {
+      const pos=positions[name] || defaults[name];
+      const x=left+width*(team.upper?100-pos.positionX:pos.positionX)/100;
+      const y=top+height*(team.upper?50-pos.positionY/2:50+pos.positionY/2)/100;
+      context.fillStyle=team.color;context.beginPath();context.arc(x,y,19,0,Math.PI*2);context.fill();
+      context.strokeStyle="#fff";context.lineWidth=3;context.stroke();
+      if(name===team.captain) {
+        context.fillStyle="#ffe16a";context.beginPath();context.arc(x+20,y-17,12,0,Math.PI*2);context.fill();
+        context.fillStyle="#132c3b";context.font="900 16px Arial";context.fillText("C",x+20,y-11);
+      }
+      context.font="800 18px Arial";
+      const label=fitCanvasLabel(context,name,150), labelWidth=context.measureText(label).width+12;
+      context.fillStyle="#061e2d";context.fillRect(x-labelWidth/2,y+23,labelWidth,25);
+      context.fillStyle="#fff";context.fillText(label,x,y+42);
+    }
+  }
+  context.textAlign="left";
   context.fillStyle = "#bed2dc";
   context.font = "700 22px Arial";
   context.fillText("Shared by the Manor Lakes FC club desk", 70, 1305);
@@ -319,16 +347,19 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
 
-async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
-  const fallbackText = teamSheetShareText(match, when, homeName, homePlayers, awayName, awayPlayers);
-  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions).catch(() => null);
+async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
+  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions, captains);
+  if (!file) throw new Error("Could not create team sheet image");
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
     const caption = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${matchLink(match.publicCode)}`;
     await navigator.share({ title: `${match.title} team sheet`, text: caption, files: [file] });
     return "image";
   }
-  waOpenPrefill(fallbackText);
-  return "text";
+  const url=URL.createObjectURL(file);
+  const link=document.createElement("a");
+  link.href=url; link.download=file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  return "download";
 }
 
 function sameNames(a, b) {
@@ -1865,8 +1896,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       const button = manageBody.querySelector("#shareSquad");
       setDisabled(button, true, "Preparing…");
       try {
-        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions);
-        toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
+        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions, [opponentCaptain]);
+        toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
       } catch (error) {
         if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
       } finally { setDisabled(button, false); }
@@ -2502,8 +2533,8 @@ function renderComboList(filterText = "") {
     setDisabled(shareTeamsBtn, true, "Opening…");
 
   try {
-    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions);
-    toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
+    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange]);
+    toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
   } catch (error) {
     if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
   } finally { setDisabled(shareTeamsBtn, false); }
