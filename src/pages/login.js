@@ -54,13 +54,13 @@ export async function renderLoginPage(root) {
         <div class="field__message" id="passMsg" role="status" aria-live="polite"></div>
       </div>
       <div class="card">
-        <div class="h1">Notifications</div>
+        <div class="notificationHeader"><div class="h1">Notifications</div><button class="btn gray" id="clearNotifications" type="button" hidden>Clear all</button></div>
         <div class="small" id="pushStatus"></div>
         <div class="row" id="pushActions" style="margin-top:10px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="enablePush">Enable phone notifications</button>
           <button class="btn gray" id="testPush" hidden>Send test notification</button>
         </div>
-        <div class="small" id="notiMsg">Loading…</div>
+        <div class="small" id="notiMsg" role="status" aria-live="polite">Loading…</div>
         <div id="notiList" style="margin-top:10px"></div>
       </div>
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
@@ -238,119 +238,122 @@ export async function renderLoginPage(root) {
       }
     };
 
-    // notifications
+    // Notifications stay visible until the player explicitly clears or opens them.
     const msg = root.querySelector("#notiMsg");
     const list = root.querySelector("#notiList");
-
-    const renderNoti = (items = []) => {
-      if (!items.length) {
-        msg.textContent = "No notifications.";
-        list.innerHTML = "";
-        try {
-          document
-            .querySelectorAll('a[href="#/login"], [data-tab="register"], nav.bottomnav a[href="#/login"], a.bottomnav__item[href="#/login"]')
-            .forEach((a) => a.classList.remove("has-noti"));
-        } catch {}
-        return;
-      }
-
-      msg.textContent = "";
-      list.innerHTML = items
-        .map(
-          (n) => {
-          const linkUrl = safeHttpsUrl(n.linkUrl);
-          const embedUrl = safeHttpsUrl(n.embedUrl);
-          return `
-        <article class="notificationCard">
-          <div class="notificationCard__title">${esc(n.title || "Club update")}</div>
-          <div class="notificationCard__message">${esc(n.message)}</div>
-          <div class="small">${esc(n.createdAt)}</div>
-          ${(n.publicCode || n.matchCode)
-            ? `<div class="notificationCard__actions"><button class="btn primary" data-open="${esc(n.publicCode || n.matchCode)}">Open match</button><button class="btn gray iconButton" data-close="${esc(n.id)}" aria-label="Dismiss notification">×</button></div>`
-            : `<div class="notificationCard__actions">${linkUrl ? `<a class="btn primary" href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">Open link</a>` : ""}${embedUrl ? `<button class="btn gray" data-embed-url="${esc(embedUrl)}" data-embed-title="${esc(n.title || "Registration")}">Open here</button>` : ""}<button class="btn gray iconButton" data-close="${esc(n.id)}" aria-label="Dismiss notification">×</button></div>`}
-        </article>`; }
-        )
-        .join("");
+    const clearAll = root.querySelector("#clearNotifications");
+    let items = [];
+    let clearing = false;
+    const renderNoti = () => {
+      clearAll.hidden = !items.length;
+      clearAll.disabled = clearing;
+      msg.textContent = items.length ? `${items.length} notification${items.length === 1 ? "" : "s"} · Swipe left or right to clear` : "You’re all caught up.";
+      document.querySelectorAll('a[href="#/login"], [data-tab="register"]').forEach(a => a.classList.toggle("has-noti", items.length > 0));
+      list.innerHTML = items.map(n => {
+        const link = safeHttpsUrl(n.linkUrl);
+        const embed = safeHttpsUrl(n.embedUrl);
+        const date = new Date(n.createdAt);
+        const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        return `<div class="notificationSwipe"><div class="notificationSwipe__hint" aria-hidden="true"><span>✓ Clear</span><span>Clear ✓</span></div>
+          <article class="notificationCard" data-notification-id="${esc(n.id)}">
+            <div class="notificationCard__head"><div class="notificationCard__title">${esc(n.title || "Club update")}</div><button class="notificationCard__clear" type="button" data-close="${esc(n.id)}" aria-label="Clear notification: ${esc(n.title || "Club update")}"><span aria-hidden="true">×</span> Clear</button></div>
+            <div class="notificationCard__message">${esc(n.message)}</div>
+            <div class="small">${esc(when)}</div>
+            <div class="notificationCard__actions">${n.publicCode || n.matchCode ? `<button class="btn primary" data-open="${esc(n.publicCode || n.matchCode)}">Open match</button>` : `${link ? `<a class="btn primary" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open link</a>` : ""}${embed ? `<button class="btn gray" data-embed-url="${esc(embed)}" data-embed-title="${esc(n.title || "Registration")}">Open here</button>` : ""}`}</div>
+          </article></div>`;
+      }).join("");
+      list.querySelectorAll(".notificationCard").forEach(card => {
+        let gesture = null;
+        card.onpointerdown = event => {
+          if (clearing || event.pointerType === "mouse" || !event.isPrimary || event.target.closest("button, a")) return;
+          gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, axis: "" };
+        };
+        card.onpointermove = event => {
+          if (!gesture || gesture.id !== event.pointerId) return;
+          const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+          if (!gesture.axis && Math.max(Math.abs(dx), Math.abs(dy)) > 10) {
+            gesture.axis = Math.abs(dx) > Math.abs(dy) * 1.3 ? "x" : "y";
+            if (gesture.axis === "x") card.setPointerCapture(event.pointerId);
+          }
+          if (gesture.axis !== "x") return;
+          gesture.dx = dx;
+          card.classList.add("is-swiping");
+          card.style.transform = `translateX(${dx}px)`;
+        };
+        const finish = event => {
+          if (!gesture || gesture.id !== event.pointerId) return;
+          const dismiss = event.type === "pointerup" && gesture.axis === "x" && Math.abs(gesture.dx) >= Math.min(100, card.clientWidth * .3);
+          gesture = null;
+          card.classList.remove("is-swiping");
+          card.style.transform = "";
+          if (dismiss) clearNotifications([card.dataset.notificationId]);
+        };
+        card.onpointerup = finish;
+        card.onpointercancel = finish;
+        card.onlostpointercapture = finish;
+      });
     };
-
-    // Fast path: show cached notifications immediately (if any), BUT always refetch.
-    try {
-      const cachedNoti = lsGet(LS_NOTI_CACHE);
-      const cachedItems = cachedNoti?.data?.notifications || [];
-      if (Array.isArray(cachedItems) && cachedItems.length) {
-        renderNoti(cachedItems);
-      } else {
-        msg.textContent = "Loading…";
+    const clearNotifications = async ids => {
+      if (clearing || !ids.length) return false;
+      clearing = true;
+      clearAll.disabled = true;
+      list.querySelectorAll("button").forEach(button => { button.disabled = true; });
+      msg.textContent = "Clearing notifications…";
+      try {
+        const result = await API.notificationsMarkRead(ids);
+        if (!result?.ok) throw new Error(result?.error || "Could not clear notifications. Try again.");
+        const removed = new Set(ids.map(String));
+        items = items.filter(n => !removed.has(String(n.id)));
+        lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: { ok: true, notifications: items } });
+        return true;
+      } catch (error) {
+        toastError(error?.message || "Could not clear notifications. Try again.");
+        return false;
+      } finally {
+        clearing = false;
+        renderNoti();
+        (list.querySelector("[data-close]") || msg).focus({ preventScroll: true });
       }
-    } catch {
-      msg.textContent = "Loading…";
-    }
-
-    // Always refetch to avoid misleading badge vs. list mismatch.
-    const out = await API.notifications().catch(() => null);
-    if (!out?.ok) {
-      msg.textContent = out?.error || "Failed to load notifications";
-      list.innerHTML = "";
-      return;
-    }
-
-    const items = out.notifications || [];
-    lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: out });
-    renderNoti(items);
-    const removeNoti = (id) => {
-      try {
-        const el = list.querySelector(`[data-close="${id}"]`)?.closest(".notificationCard");
-        if (el) el.remove();
-      } catch {}
-      // Update cached notifications so it doesn't reappear.
-      try {
-        const c = lsGet(LS_NOTI_CACHE);
-        const remaining = (c?.data?.notifications || items).filter(x => String(x.id) !== String(id));
-        lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: { ok: true, notifications: remaining } });
-        try {
-          document
-            .querySelectorAll('a[href="#/login"], [data-tab="register"], nav.bottomnav a[href="#/login"], a.bottomnav__item[href="#/login"]')
-            .forEach((a) => a.classList.toggle("has-noti", remaining.length > 0));
-        } catch {}
-      } catch {}
     };
-
-    list.querySelectorAll("[data-open]").forEach((b) => {
-      b.onclick = async () => {
-        const code = b.getAttribute("data-open");
-        const id = b.closest(".notificationCard")?.querySelector("[data-close]")?.getAttribute("data-close");
-        if (id) {
-          await API.notificationsMarkRead([id]).catch(() => {});
-          removeNoti(id);
-        }
-        if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
-        else location.hash = "#/match";
-      };
-    });
-
-    list.querySelectorAll("[data-close]").forEach((b) => {
-      b.onclick = async () => {
-        const id = b.getAttribute("data-close");
-        if (!id) return;
-        await API.notificationsMarkRead([id]).catch(() => {});
-        removeNoti(id);
-      };
-    });
-
+    msg.tabIndex = -1;
+    clearAll.onclick = () => clearNotifications(items.map(n => n.id));
     const dialog = root.querySelector("#announcementDialog");
     const frame = root.querySelector("#announcementFrame");
     root.querySelector("#closeAnnouncementDialog")?.addEventListener("click", () => { dialog.close(); frame.src = "about:blank"; });
-    list.querySelectorAll("[data-embed-url]").forEach(button => {
-      button.onclick = () => {
+    list.onclick = async event => {
+      const button = event.target.closest("button");
+      if (!button || clearing) return;
+      if (button.hasAttribute("data-close")) await clearNotifications([button.dataset.close]);
+      else if (button.hasAttribute("data-open")) {
+        const code = button.dataset.open;
+        await clearNotifications([button.closest(".notificationCard").dataset.notificationId]);
+        location.hash = `#/match?code=${encodeURIComponent(code)}`;
+      } else if (button.hasAttribute("data-embed-url")) {
         const url = safeHttpsUrl(button.dataset.embedUrl);
         if (!url) return toastError("This registration link is not valid.");
         root.querySelector("#announcementDialogTitle").textContent = button.dataset.embedTitle || "Registration";
         frame.src = url;
         dialog.showModal();
-      };
-    });
-
-    await API.notificationsMarkRead(items.map((x) => x.id)).catch(() => {});
+      }
+    };
+    const cached = lsGet(LS_NOTI_CACHE)?.data?.notifications;
+    if (Array.isArray(cached) && cached.length) {
+      items = cached;
+      renderNoti();
+    }
+    // Keep cached cards read-only until the current list arrives.
+    clearing = true;
+    clearAll.disabled = true;
+    const out = await API.notifications().catch(() => null);
+    clearing = false;
+    if (out?.ok) {
+      items = Array.isArray(out.notifications) ? out.notifications : [];
+      lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: out });
+      renderNoti();
+    } else {
+      renderNoti();
+      msg.textContent = out?.error || "Could not refresh notifications. Try reopening this page.";
+    }
     return;
   }
 
