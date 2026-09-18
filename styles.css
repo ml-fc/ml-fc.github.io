@@ -1495,8 +1495,8 @@ body::before {
 .footer__inner { color: #8296a8; opacity: 1; }
 
 .adminMatchRow {
-  padding: 16px;
-  margin-top: 12px;
+  padding: 12px;
+  margin-top: 9px;
   background: linear-gradient(145deg, #fff 0%, #f5f8f9 100%);
   border: 1px solid #d7e0e5;
   border-radius: 7px;
@@ -1512,7 +1512,7 @@ body::before {
 .adminMatchRow__main { min-width: 0; }
 .adminMatchRow__title {
   color: #0a1726;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1.25;
 }
@@ -1529,10 +1529,10 @@ body::before {
 .adminMatchRow__actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
+  gap: 6px;
+  margin-top: 10px;
 }
-.adminMatchRow__actions .btn { width: 100%; min-width: 0; }
+.adminMatchRow__actions .btn { width: 100%; min-width: 0; min-height: 34px; padding: 7px 8px; font-size: 11px; line-height: 1.15; box-shadow: none; }
 .btn.dangerGhost {
   color: #a32631;
   background: #fff5f5;
@@ -1776,9 +1776,9 @@ details.card[open] > summary { margin-bottom: 14px; }
   .brand__title { font-size: 17px; }
   .footer { padding: 14px 14px calc(92px + var(--safe-bottom)); }
   .footer__inner { align-items: center; gap: 12px; }
-  .adminMatchRow { padding: 14px; }
+  .adminMatchRow { padding: 11px; }
   .adminMatchRow__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .adminMatchRow__actions .btn { padding-inline: 8px; font-size: 12px; }
+  .adminMatchRow__actions .btn { min-height: 32px; padding: 6px; font-size: 10px; }
   .matchBoard__header { padding: 20px 16px 15px; }
   .fixtureRow {
     grid-template-columns: 1fr;
