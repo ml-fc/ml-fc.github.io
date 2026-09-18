@@ -1,3 +1,4 @@
+import { mountTeamField, positionMap, positionRows, defaultPositions } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -136,7 +137,7 @@ function teamSheetHtml(teamName, players, captain = "", tone = "blue") {
   </section>`;
 }
 
-function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
   const lines = ["📋 *MANOR LAKES FC · DIGITAL TEAM SHEET*", "", `⚽ *${match.title}*`, `🗓️ ${when}`, ""];
   lines.push(`🔵 *${homeName.toUpperCase()}*`);
   (homePlayers.length ? homePlayers : ["Squad to be confirmed"]).forEach((player, index) => lines.push(`${index + 1}. ${player}`));
@@ -243,10 +244,12 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
 
   const rowGap = pitchHeight / (rows.length + 1);
   [...rows].reverse().forEach((row, visualRowIndex) => {
-    const playerY = pitchTop + rowGap * (visualRowIndex + 1);
+    const defaultY = pitchTop + rowGap * (visualRowIndex + 1);
     const playerGap = pitchWidth / (row.length + 1);
     row.forEach((player, playerIndex) => {
-      const playerX = pitchLeft + playerGap * (playerIndex + 1);
+      const pos = team.positions?.[player] || defaultPositions(team.players)[player];
+      const playerX = pitchLeft + pitchWidth * pos.positionX / 100;
+      const playerY = pos ? pitchTop + pitchHeight * pos.positionY / 100 : defaultY;
       const markerRadius = Math.min(compact ? 20 : 24, playerGap * .28);
       const maxLabelWidth = Math.max(46, playerGap - 8);
 
@@ -274,7 +277,7 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
   });
 }
 
-async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1350;
@@ -301,8 +304,8 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.font = "700 25px Arial";
   context.fillText(when, 70, 300);
 
-  const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa" }];
-  if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55" });
+  const teams = [{ name: homeName, players: homePlayers, positions, color: "#72d7fa" }];
+  if (awayName) teams.push({ name: awayName, players: awayPlayers, positions, color: "#ff9c55" });
   const columnWidth = teams.length === 2 ? 455 : 940;
   teams.forEach((team, teamIndex) => {
     const x = 70 + teamIndex * 485;
@@ -316,9 +319,9 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
 
-async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}) {
   const fallbackText = teamSheetShareText(match, when, homeName, homePlayers, awayName, awayPlayers);
-  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers).catch(() => null);
+  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions).catch(() => null);
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
     const caption = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${matchLink(match.publicCode)}`;
     await navigator.share({ title: `${match.title} team sheet`, text: caption, files: [file] });
@@ -1537,7 +1540,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   function availabilityLimitEditorHtml() {
     return `
-      <details class="card" open>
+      <details class="card">
         <summary style="font-weight:950">Availability limit</summary>
 
         <div class="small" style="margin-top:8px">
@@ -1716,6 +1719,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   const manageBody = manageArea.querySelector("#manageBody");
 
+  let fieldPositions = positionMap(teams);
+  const savedPositions = JSON.stringify(fieldPositions);
+
   /* ================= OPPONENT ================= */
   if (type === "OPPONENT") {
     const cap = String(captains.captain1 || "");
@@ -1734,69 +1740,30 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     let opponentCaptain = cap;
     if (!isEditLocked && opponentDraft?.type === "OPPONENT") {
       squad = uniqueSorted((opponentDraft.squad || []).filter(name => yesPlayers.includes(name)));
+      fieldPositions = opponentDraft.positions || fieldPositions;
       opponentCaptain = squad.includes(opponentDraft.captain) ? opponentDraft.captain : "";
     }
 
     function updateOpponentDraft() {
-      const dirty = !sameNames(squad, savedOpponent.squad) || opponentCaptain.toLowerCase() !== savedOpponent.captain.toLowerCase();
+      const dirty = JSON.stringify(fieldPositions) !== savedPositions || !sameNames(squad, savedOpponent.squad) || opponentCaptain.toLowerCase() !== savedOpponent.captain.toLowerCase();
       const state = manageArea.querySelector("#draftState");
       if (state) {
         state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
         state.classList.toggle("isDirty", dirty);
       }
-      if (dirty) lsSet(setupDraftKey(m.matchId), { type: "OPPONENT", squad, captain: opponentCaptain, ts: now() });
+      if (dirty) lsSet(setupDraftKey(m.matchId), { type: "OPPONENT", squad, captain: opponentCaptain, positions:fieldPositions, ts: now() });
       else lsDel(setupDraftKey(m.matchId));
     }
 
     function renderSquadLists() {
-      const pool = uniqueSorted(yesPlayers.filter(p => !squad.includes(p)));
-      const poolEl = manageBody.querySelector("#poolList");
-      const squadEl = manageBody.querySelector("#squadList");
-      const poolCount = manageBody.querySelector("#poolCount");
-      const squadCount = manageBody.querySelector("#squadCount");
-      if (poolCount) poolCount.textContent = String(pool.length);
-      if (squadCount) squadCount.textContent = String(squad.length);
-
-      if (poolEl) {
-        poolEl.innerHTML = pool.length ? pool.map(p => `
-          <div class="row" style="justify-content:space-between; gap:10px; margin-top:6px">
-            <div class="small" style="min-width:0">${p}</div>
-            <button class="btn gray tiny" data-add-squad="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>Add</button>
-          </div>
-        `).join("") : `<div class="small">No available players to add.</div>`;
-      }
-
-      if (squadEl) {
-        squadEl.innerHTML = squad.length ? squad.map(p => `
-          <div class="row" style="justify-content:space-between; gap:10px; margin-top:6px">
-            <div class="small" style="min-width:0">${p}</div>
-            <button class="btn bad tiny" data-remove-squad="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>Remove</button>
-          </div>
-        `).join("") : `<div class="small">No squad selected yet.</div>`;
-      }
-
-      manageBody.querySelectorAll("[data-add-squad]").forEach(btn => {
-        btn.onclick = () => {
-          const p = decodeURIComponent(btn.dataset.addSquad || "");
-          if (!p) return;
-          if (!squad.includes(p)) squad = uniqueSorted([...squad, p]);
-          updateOpponentDraft();
-          renderSquadLists();
-        };
+      mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
+        groups:[{team:"MLFC",label:"MLFC",players:squad,captain:opponentCaptain}],positions:fieldPositions,pool:yesPlayers,disabled:isEditLocked,
+        onChange:updateOpponentDraft,
+        onAssign:p => { squad=uniqueSorted([...squad,p]); updateOpponentDraft(); renderSquadLists(); },
+        onCaptain:p => { opponentCaptain=p; updateOpponentDraft(); renderSquadLists(); },
+        onRemove:p => { squad=squad.filter(n => n !== p); if(opponentCaptain === p) opponentCaptain=""; delete fieldPositions[p]; updateOpponentDraft(); renderSquadLists(); }
       });
-      manageBody.querySelectorAll("[data-remove-squad]").forEach(btn => {
-        btn.onclick = () => {
-          const p = decodeURIComponent(btn.dataset.removeSquad || "");
-          squad = squad.filter(x => x !== p);
-          if (opponentCaptain === p) opponentCaptain = "";
-          updateOpponentDraft();
-          renderSquadLists();
-        };
-      });
-      const preview = manageBody.querySelector("#opponentTeamPreview");
-      if (preview) preview.innerHTML = teamSheetHtml(homeTeamName || "MLFC", squad, opponentCaptain, "blue");
-      const share = manageBody.querySelector("#shareSquad");
-      if (share) share.disabled = !squad.length;
+      const share=manageBody.querySelector("#shareSquad"); if(share) share.disabled=!squad.length;
     }
 
     manageBody.innerHTML = `
@@ -1804,30 +1771,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <details class="card" open>
         <summary style="font-weight:950">Opponent match setup</summary>
 
-        <div class="h1">Captain</div>
-        <label class="field__label" for="captainSel">Select from available players</label>
-        <select id="captainSel" class="input" style="margin-top:7px" ${isEditLocked ? "disabled" : ""}>
-          <option value="">Select captain</option>
-          ${opts}
-        </select>
-
-        <div class="hr"></div>
-
-        <div class="h1">MLFC squad</div>
-        <div class="small">Pick the MLFC team list for this opponent match. Waiting list is managed via availability.</div>
-
-        <div class="row" style="gap:14px; flex-wrap:wrap; margin-top:10px">
-          <div style="flex:1; min-width:260px">
-            <div class="badge">Available (YES) - <span id="poolCount">0</span></div>
-            <div id="poolList" style="margin-top:10px"></div>
-          </div>
-          <div style="flex:1; min-width:260px">
-            <div class="badge">Selected (MLFC) - <span id="squadCount">0</span></div>
-            <div id="squadList" style="margin-top:10px"></div>
-          </div>
-        </div>
-
-        <div id="opponentTeamPreview" class="digitalTeamGrid digitalTeamGrid--single"></div>
+        <div id="opponentTeamPreview"></div>
 
         <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="saveOpponent" ${isEditLocked ? "disabled" : ""}>Save setup</button>
@@ -1868,14 +1812,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     wireAvailabilityLimitEditor();
 
-    const capSel = manageBody.querySelector("#captainSel");
-    capSel.value = opponentCaptain || "";
-    capSel.onchange = () => {
-      opponentCaptain = String(capSel.value || "").trim();
-      updateOpponentDraft();
-      renderSquadLists();
-    };
-
     renderSquadLists();
     updateOpponentDraft();
 
@@ -1889,7 +1825,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       const button = manageBody.querySelector("#shareSquad");
       setDisabled(button, true, "Preparing…");
       try {
-        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad);
+        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions);
         toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
       } catch (error) {
         if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
@@ -1899,12 +1835,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     manageBody.querySelector("#saveOpponent").onclick = async () => {
       const btn = manageBody.querySelector("#saveOpponent");
       const msg = manageBody.querySelector("#msg");
-      const selCaptain = String(capSel.value || "").trim();
+      const selCaptain = opponentCaptain;
 
       setDisabled(btn, true, "Saving…");
       msg.textContent = "Saving…";
 
-      const out = await API.adminSetupOpponent({ matchId: m.matchId, captain: selCaptain, mlfcPlayers: squad });
+      const out = await API.adminSetupOpponent({ matchId: m.matchId, captain: selCaptain, mlfcPlayers: squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
       setDisabled(btn, false);
 
       if (!out.ok) { msg.textContent = out.error || "Failed"; return toastError(out.error || "Failed"); }
@@ -2088,17 +2024,18 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const awayTeamName = String(m.teamAwayName || "Orange");
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
-  let playerFilter = "";
+
   if (!isEditLocked && internalDraft?.type === "INTERNAL") {
     const allowed = new Set(yesPlayers.map(name => name.toLowerCase()));
     blue = uniqueSorted((internalDraft.blue || []).filter(name => allowed.has(name.toLowerCase())));
     orange = uniqueSorted((internalDraft.orange || []).filter(name => allowed.has(name.toLowerCase()) && !blue.some(b => b.toLowerCase() === name.toLowerCase())));
+    fieldPositions = internalDraft.positions || fieldPositions;
     captainBlue = blue.includes(internalDraft.captainBlue) ? internalDraft.captainBlue : "";
     captainOrange = orange.includes(internalDraft.captainOrange) ? internalDraft.captainOrange : "";
   }
 
   function updateInternalDraft() {
-    const dirty = !sameNames(blue, savedInternal.blue) || !sameNames(orange, savedInternal.orange) ||
+    const dirty = JSON.stringify(fieldPositions) !== savedPositions || !sameNames(blue, savedInternal.blue) || !sameNames(orange, savedInternal.orange) ||
       captainBlue.toLowerCase() !== savedInternal.captainBlue.toLowerCase() ||
       captainOrange.toLowerCase() !== savedInternal.captainOrange.toLowerCase();
     const state = manageArea.querySelector("#draftState");
@@ -2106,7 +2043,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
       state.classList.toggle("isDirty", dirty);
     }
-    if (dirty) lsSet(setupDraftKey(m.matchId), { type: "INTERNAL", blue, orange, captainBlue, captainOrange, ts: now() });
+    if (dirty) lsSet(setupDraftKey(m.matchId), { type: "INTERNAL", blue, orange, captainBlue, captainOrange, positions: fieldPositions, ts: now() });
     else lsDel(setupDraftKey(m.matchId));
   }
 
@@ -2146,7 +2083,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   manageBody.innerHTML = `
     ${availabilityLimitEditorHtml()}
-    <details class="card" open>
+    <details class="card">
       <summary style="font-weight:950">Add players to this match (Admin)</summary>
 
       <div class="small" style="margin-top:8px">
@@ -2176,42 +2113,16 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     <details class="card" open>
       <summary style="font-weight:950">Internal setup</summary>
 
-      <div class="small" style="margin-top:8px">
-        Assign available players to ${escapeHtml(homeTeamName)} or ${escapeHtml(awayTeamName)}. Tap <b>Clear</b> to unassign.
-      </div>
-
-      <div class="field">
-        <label class="field__label" for="teamPlayerFilter">Find an available player</label>
-        <input class="input" id="teamPlayerFilter" type="search" placeholder="Search by name" autocomplete="off" />
-      </div>
-
       <div class="teamAssignTools" aria-label="Team selection tools">
-        <button class="btn gray" id="autoBalanceTeams" type="button" ${isEditLocked ? "disabled" : ""}>Auto-balance unassigned</button>
-        <button class="btn gray" id="clearTeamSelections" type="button" ${isEditLocked ? "disabled" : ""}>Reset selections</button>
+        <button class="btn gray" id="autoBalanceTeams" type="button" ${isEditLocked ? "disabled" : ""}>Auto teams</button>
+        <button class="btn gray" id="clearTeamSelections" type="button" ${isEditLocked ? "disabled" : ""}>Clear teams</button>
         <span id="unassignedCount" class="small"></span>
       </div>
 
-      <div style="margin-top:12px">
-        <div id="teamAssignList" class="assignList"></div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row" style="gap:14px; align-items:flex-start; flex-wrap:wrap">
-        <div style="flex:1; min-width:260px">
-          <div class="badge assignBadge--blue">${escapeHtml(homeTeamName)} · <span id="blueCount">0</span></div>
-          <div id="blueList" style="margin-top:10px"></div>
-        </div>
-        <div style="flex:1; min-width:260px">
-          <div class="badge assignBadge--orange">${escapeHtml(awayTeamName)} · <span id="orangeCount">0</span></div>
-          <div id="orangeList" style="margin-top:10px"></div>
-        </div>
-      </div>
-
-      <div class="digitalTeamGrid" id="digitalTeamPreview" aria-live="polite"></div>
+      <div id="digitalTeamPreview"></div>
 
       <!-- Requested: Save + Share after lists -->
-      <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
+      <div class="row fieldSaveBar" style="margin-top:14px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="saveSetup" ${isEditLocked ? "disabled" : ""}>Save setup</button>
         <button class="btn whatsappBtn" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share team sheet</button>
          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
@@ -2430,137 +2341,24 @@ function renderComboList(filterText = "") {
     };
   }
 
-  // Mobile-friendly assignment UI: no horizontal scrolling, and team can be changed directly.
-  function renderTeamAssignList() {
-    const box = manageBody.querySelector("#teamAssignList");
-    if (!box) return;
-
-    if (!yesPlayers.length) {
-      box.innerHTML = `<div class="card"><div class="small">No available players yet.</div></div>`;
-      return;
-    }
-
-    const visiblePlayers = playerFilter ? yesPlayers.filter(p => p.toLowerCase().includes(playerFilter)) : yesPlayers;
-    if (!visiblePlayers.length) {
-      box.innerHTML = `<div class="emptyInline">No available players match “${escapeHtml(playerFilter)}”.</div>`;
-      return;
-    }
-
-    box.innerHTML = visiblePlayers.map(p => {
-      const a = assignedTeam(p);
-      const badgeCls = a === "BLUE" ? "assignBadge assignBadge--blue"
-        : a === "ORANGE" ? "assignBadge assignBadge--orange"
-        : "assignBadge";
-      const badgeText = a === "BLUE" ? homeTeamName : a === "ORANGE" ? awayTeamName : "Unassigned";
-
-      const blueActive = a === "BLUE" ? "primary" : "gray";
-      const orangeActive = a === "ORANGE" ? "primary" : "gray";
-
-      return `
-        <div class="assignCard">
-          <div class="assignCard__head">
-            <div style="min-width:0">
-              <div class="assignCard__name">${p} ${playerDeclaredNo(p) ? '<span title="Player marked NOT available" style="margin-left:6px">⚠️</span>' : ''}</div>
-              <div class="assignCard__meta">Assigned: <b>${badgeText}</b></div>
-            </div>
-            <div class="${badgeCls}">${badgeText}</div>
-          </div>
-
-          <div class="assignBtns">
-            <button class="btn ${blueActive} tiny" data-team-btn="BLUE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>${escapeHtml(homeTeamName)}</button>
-            <button class="btn ${orangeActive} tiny" data-team-btn="ORANGE" data-player="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""}>${escapeHtml(awayTeamName)}</button>
-            <button class="btn ghost tiny" data-remove="${encodeURIComponent(p)}" ${isEditLocked ? "disabled" : ""} ${a ? "" : "disabled"}>Clear</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    box.querySelectorAll("[data-team-btn]").forEach(b => {
-      b.onclick = () => {
-        const team = b.getAttribute("data-team-btn");
-        const p = decodeURIComponent(b.getAttribute("data-player"));
-        setTeam(p, team);
-        renderAll();
-      };
-    });
-
-    box.querySelectorAll("[data-remove]").forEach(b => {
-      b.onclick = () => {
-        const p = decodeURIComponent(b.getAttribute("data-remove"));
-        removeFromTeam(p);
-        renderAll();
-      };
-    });
-  }
-
-  function renderLists() {
-    const blueEl = manageBody.querySelector("#blueList");
-    const orangeEl = manageBody.querySelector("#orangeList");
-    const blueCountEl = manageBody.querySelector("#blueCount");
-    const orangeCountEl = manageBody.querySelector("#orangeCount");
-
-    if (blueCountEl) blueCountEl.textContent = String(blue.length);
-    if (orangeCountEl) orangeCountEl.textContent = String(orange.length);
-
-    function listHtml(players, teamName) {
-      if (!players.length) return `<div class="small">No players yet.</div>`;
-      return players.map(p => {
-        const isCap = (teamName === "BLUE" ? captainBlue === p : captainOrange === p);
-        const disabled = isEditLocked ? "disabled" : "";
-        return `
-          <div class="teamMiniRow">
-            <div class="teamMiniRow__name" title="${p}">${p}${playerDeclaredNo(p) ? ' <span title="Player marked NOT available">⚠️</span>' : ''}</div>
-
-            <div class="teamMiniRow__cap">
-              <label class="small" style="display:flex; gap:6px; align-items:center">
-                <input type="checkbox" data-cap="${teamName}" data-player="${encodeURIComponent(p)}" aria-label="Make ${p} ${teamName} captain" ${isCap ? "checked" : ""} ${disabled}/>
-                Captain
-              </label>
-            </div>
-
-            <button class="teamMiniRow__x" data-remove="${encodeURIComponent(p)}" ${disabled} aria-label="Remove ${p}">×</button>
-          </div>
-        `;
-      }).join("");
-    }
-
-    blueEl.innerHTML = listHtml(blue, "BLUE");
-    orangeEl.innerHTML = listHtml(orange, "ORANGE");
-
-    manageBody.querySelectorAll("[data-cap]").forEach(cb => {
-      cb.onchange = () => {
-        const teamName = cb.getAttribute("data-cap");
-        const p = decodeURIComponent(cb.getAttribute("data-player"));
-        if (cb.checked && playerDeclaredNo(p)) {
-          toastWarn(`${p} marked NOT available — captain assignment allowed, but double-check.`);
-        }
-        if (teamName === "BLUE") captainBlue = cb.checked ? p : "";
-        if (teamName === "ORANGE") captainOrange = cb.checked ? p : "";
-        updateInternalDraft();
-        renderAll();
-      };
-    });
-
-    manageBody.querySelectorAll("[data-remove]").forEach(btn => {
-      btn.onclick = () => {
-        const p = decodeURIComponent(btn.getAttribute("data-remove"));
-        removeFromTeam(p);
-        renderAll();
-      };
-    });
-  }
-
   function renderAll() {
     blue = uniqueSorted(blue);
     orange = uniqueSorted(orange);
-    renderTeamAssignList();
-    renderLists();
+
 
     const unassigned = yesPlayers.filter((player) => !assignedTeam(player));
     const count = manageBody.querySelector("#unassignedCount");
     if (count) count.textContent = `${unassigned.length} unassigned`;
     const preview = manageBody.querySelector("#digitalTeamPreview");
-    if (preview) preview.innerHTML = `${teamSheetHtml(homeTeamName, blue, captainBlue, "blue")}${teamSheetHtml(awayTeamName, orange, captainOrange, "orange")}`;
+    if (preview) mountTeamField(preview, {
+      groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
+      positions:fieldPositions, pool:yesPlayers, disabled:isEditLocked,
+      onChange:updateInternalDraft,
+      onAssign:(p,t) => { setTeam(p,t); renderAll(); },
+      onCaptain:(p,t) => { if(t === "BLUE") captainBlue=p; else captainOrange=p; updateInternalDraft(); renderAll(); },
+      onRemove:p => { removeFromTeam(p); delete fieldPositions[p]; renderAll(); },
+      onTransfer:(p,t) => { delete fieldPositions[p]; setTeam(p,t === "BLUE" ? "ORANGE" : "BLUE"); renderAll(); }
+    });
 
     const shareBtn = manageBody.querySelector("#shareTeams");
     if (shareBtn) {
@@ -2571,14 +2369,6 @@ function renderComboList(filterText = "") {
 
   renderAll();
   updateInternalDraft();
-
-  const teamPlayerFilter = manageBody.querySelector("#teamPlayerFilter");
-  if (teamPlayerFilter) {
-    teamPlayerFilter.oninput = () => {
-      playerFilter = String(teamPlayerFilter.value || "").trim().toLowerCase();
-      renderTeamAssignList();
-    };
-  }
 
   const autoBalanceTeams = manageBody.querySelector("#autoBalanceTeams");
   if (autoBalanceTeams) autoBalanceTeams.onclick = () => {
@@ -2601,6 +2391,7 @@ function renderComboList(filterText = "") {
     orange = [];
     captainBlue = "";
     captainOrange = "";
+    fieldPositions = {};
     updateInternalDraft();
     renderAll();
   };
@@ -2635,7 +2426,8 @@ function renderComboList(filterText = "") {
       bluePlayers: blue,
       orangePlayers: orange,
       captainBlue,
-      captainOrange
+      captainOrange,
+      positions: positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
     });
 
     setDisabled(btn, false);
@@ -2667,7 +2459,7 @@ function renderComboList(filterText = "") {
     setDisabled(shareTeamsBtn, true, "Opening…");
 
   try {
-    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange);
+    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions);
     toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
   } catch (error) {
     if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");

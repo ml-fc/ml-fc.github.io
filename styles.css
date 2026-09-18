@@ -2051,6 +2051,8 @@ details.card[open] > summary { margin-bottom: 14px; }
 
 /* The sticky match controller collapses once its full context has scrolled by. */
 .manageCommand.isCompact {
+  top: 0;
+  z-index: 31;
   padding: 8px 11px;
   border-radius: 0 0 7px 7px;
   box-shadow: 0 7px 18px rgba(0, 0, 0, .3);
@@ -2234,3 +2236,22 @@ details.card[open] > summary { margin-bottom: 14px; }
   #ratingsSection .rosterGrid > div:first-child { grid-column: 1 / -1; }
   .notificationCard__actions .btn, .notificationCard__actions a.btn { flex: 1 1 120px; }
 }
+
+/* The field is the team editor, with one team visible on small screens. */
+.fieldTabs,.fieldActions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fieldTabs .btn{flex:1}
+.fieldActions{min-height:48px;margin-top:10px}
+.teamField{position:relative;height:360px;margin-top:12px;border:2px solid #78949c;border-radius:8px;overflow:hidden;background:repeating-linear-gradient(90deg,#103a4c 0 16.66%,#123f51 16.66% 33.33%);color:#fff}
+.teamField--orange{background:repeating-linear-gradient(90deg,#433021 0 16.66%,#503b29 16.66% 33.33%)}
+.teamField:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid #ffffff40}
+.teamField__circle{position:absolute;width:80px;height:80px;border:1px solid #ffffff40;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+.fieldPlayer{position:absolute;transform:translate(-50%,-50%);width:80px;min-height:48px;border:0;background:transparent;color:#fff;padding:2px;touch-action:none;cursor:grab;z-index:1}
+.fieldPlayer i{display:block;margin:auto auto 3px;width:28px;height:28px;line-height:24px;border-radius:50%;border:2px solid #fff;background:#69d5ff;color:#082b40;font-style:normal;font-weight:900}
+.teamField--orange .fieldPlayer i{background:#ff9d4d}
+.fieldPlayer span{display:inline-block;max-width:80px;padding:2px 4px;border-radius:3px;background:#061e2d;font-size:10px;line-height:1.15;overflow-wrap:anywhere}
+.fieldPlayer.isSelected i,.fieldPlayer:focus-visible i{outline:3px solid #ffe16a;outline-offset:3px}
+.fieldPlayer:disabled{opacity:1;cursor:default}
+.teamField__empty{position:absolute;top:45%;width:100%;text-align:center;font-size:13px}
+@media(min-width:700px){.teamField{height:440px}.fieldPlayer span{font-size:12px;max-width:100px}.fieldPlayer{width:100px}}
+
+@media(max-width:699px){.teamField{height:clamp(250px,39svh,340px)}.fieldSaveBar{position:sticky;bottom:10px;background:var(--surface,#f3f6f6);padding:8px;z-index:3;border-radius:10px}.fieldActions .btn{padding:8px 10px}.fieldTabs .btn{min-height:40px}}

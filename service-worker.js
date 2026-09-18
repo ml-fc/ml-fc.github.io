@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   "/src/prefetch.js",
   "/src/push.js",
   "/src/ui/toast.js",
+  "/src/ui/team_field.js",
   "/src/ui/push_reminder.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
@@ -37,6 +38,11 @@ const STATIC_ASSETS = [
   "/src/pages/season.js",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
+  "/assets/icons/apple-touch-icon-120.png",
+  "/assets/icons/apple-touch-icon-152.png",
+  "/assets/icons/apple-touch-icon-167.png",
+  "/assets/icons/apple-touch-icon-180.png",
+  "/assets/icons/maskable-192.png",
   "/assets/icons/maskable-512.png",
   "/assets/icons/notification-badge.png"
 ];

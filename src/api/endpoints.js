@@ -57,6 +57,8 @@ export const API = {
   // user self-service
   userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
 
+  saveTeamPositions: (code, team, positions) => apiPost({action:"save_team_positions",code,team,positions}),
+
   // captain
   captainSubmitScore: (code, mode, a, b, scope = "CAPTAIN") => apiPost({ action: "captain_submit_score", code, mode, scoreA: a, scoreB: b, scope }),
   adminSubmitScore: (code, mode, a, b) => apiPost({ action: "admin_submit_score", code, mode, scoreA: a, scoreB: b }),

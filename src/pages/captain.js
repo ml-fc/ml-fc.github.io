@@ -1,3 +1,4 @@
+import { mountTeamField, positionMap, positionRows } from "../ui/team_field.js";
 // src/pages/captain.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -333,6 +334,7 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
 
+    <div class="card"><div class="h1">Team positions</div><div id="captainField"></div><button class="btn primary" id="saveField">Save positions</button></div>
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
@@ -440,6 +442,22 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
   `;
+
+  const ownTeams = type === "INTERNAL" ? (adminMode ? ["BLUE","ORANGE"] : [captainTeam]) : ["MLFC"];
+  const fieldGroups = ownTeams.map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
+  const fieldPositions = positionMap(data.teams);
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,onChange:() => fieldEditor.status("Unsaved positions")});
+  root.querySelector("#saveField").onclick = async () => {
+    const button = root.querySelector("#saveField"); button.disabled = true;
+    try {
+      for (const g of fieldGroups) {
+        const out = await API.saveTeamPositions(code,g.team,positionRows([g],fieldPositions));
+        if (!out.ok) throw new Error(out.error || "Could not save positions");
+      }
+      fieldEditor.status("Positions saved"); toastSuccess("Team positions saved.");
+    } catch(e) { fieldEditor.status(e.message); toastError(e.message); }
+    finally { button.disabled = false; }
+  };
 
   function showStage(stage) {
     root.querySelector("#stepScore").style.display = stage === 1 ? "block" : "none";
