@@ -108,6 +108,127 @@ function escapeHtml(value) {
   })[char]);
 }
 
+function formationRows(players) {
+  const list = [...(players || [])];
+  const total = list.length;
+  if (!total) return [];
+  const counts = total <= 5 ? [1, total - 1]
+    : total <= 7 ? [1, 2, total - 3]
+      : total <= 9 ? [1, 3, total - 4]
+        : [1, 3, 3, total - 7];
+  let offset = 0;
+  return counts.filter(Boolean).map((count) => {
+    const row = list.slice(offset, offset + count);
+    offset += count;
+    return row;
+  });
+}
+
+function teamSheetHtml(teamName, players, captain = "", tone = "blue") {
+  const rows = formationRows(players);
+  return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} digital team sheet">
+    <header class="digitalTeam__head"><div><span>Digital team sheet</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
+    <div class="digitalTeam__pitch">
+      <span class="digitalTeam__centre" aria-hidden="true"></span>
+      ${rows.length ? rows.map((row) => `<div class="digitalTeam__line">${row.map((player) => `<div class="digitalPlayer${player === captain ? " digitalPlayer--captain" : ""}"><i aria-hidden="true">${player === captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`).join("")}</div>`).join("") : `<div class="digitalTeam__empty">Select players to build the team sheet</div>`}
+    </div>
+  </section>`;
+}
+
+function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+  const lines = ["📋 *MANOR LAKES FC · DIGITAL TEAM SHEET*", "", `⚽ *${match.title}*`, `🗓️ ${when}`, ""];
+  lines.push(`🔵 *${homeName.toUpperCase()}*`);
+  (homePlayers.length ? homePlayers : ["Squad to be confirmed"]).forEach((player, index) => lines.push(`${index + 1}. ${player}`));
+  if (awayName) {
+    lines.push("", `🟠 *${awayName.toUpperCase()}*`);
+    (awayPlayers.length ? awayPlayers : ["Squad to be confirmed"]).forEach((player, index) => lines.push(`${index + 1}. ${player}`));
+  }
+  lines.push("", `Open match: ${matchLink(match.publicCode)}`, "", "Shared by the Manor Lakes FC club desk.");
+  return lines.join("\n");
+}
+
+function wrapCanvasText(context, text, maxWidth) {
+  const words = String(text || "").split(/\s+/);
+  const lines = [];
+  let line = "";
+  words.forEach((word) => {
+    const next = line ? `${line} ${word}` : word;
+    if (line && context.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  const gradient = context.createLinearGradient(0, 0, 1080, 1350);
+  gradient.addColorStop(0, "#061724");
+  gradient.addColorStop(1, "#0e3a52");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 1080, 1350);
+  context.strokeStyle = "rgba(114,215,250,.25)";
+  context.lineWidth = 3;
+  context.beginPath(); context.arc(940, 250, 280, 0, Math.PI * 2); context.stroke();
+
+  context.fillStyle = "#72d7fa";
+  context.font = "900 24px Arial";
+  context.fillText("MANOR LAKES FC · DIGITAL TEAM SHEET", 70, 80);
+  context.fillStyle = "#ffffff";
+  context.font = "900 58px Arial";
+  const titleLines = wrapCanvasText(context, match.title, 900).slice(0, 2);
+  titleLines.forEach((line, index) => context.fillText(line.toUpperCase(), 70, 155 + index * 64));
+  context.fillStyle = "#bed2dc";
+  context.font = "700 25px Arial";
+  context.fillText(when, 70, 300);
+
+  const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa" }];
+  if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55" });
+  const columnWidth = teams.length === 2 ? 455 : 940;
+  teams.forEach((team, teamIndex) => {
+    const x = 70 + teamIndex * 485;
+    const top = 370;
+    context.fillStyle = "rgba(3,20,32,.72)";
+    context.fillRect(x, top, columnWidth, 860);
+    context.fillStyle = team.color;
+    context.fillRect(x, top, columnWidth, 10);
+    context.font = "900 34px Arial";
+    context.fillText(String(team.name || "Team").toUpperCase(), x + 28, top + 66);
+    context.font = "800 25px Arial";
+    (team.players.length ? team.players : ["Squad to be confirmed"]).forEach((player, playerIndex) => {
+      const y = top + 125 + playerIndex * 57;
+      context.fillStyle = team.color;
+      context.beginPath(); context.arc(x + 42, y - 8, 15, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#ffffff";
+      context.fillText(`${playerIndex + 1}. ${player}`, x + 72, y);
+    });
+  });
+  context.fillStyle = "#bed2dc";
+  context.font = "700 22px Arial";
+  context.fillText("Shared by the Manor Lakes FC club desk", 70, 1305);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
+async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = []) {
+  const text = teamSheetShareText(match, when, homeName, homePlayers, awayName, awayPlayers);
+  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers).catch(() => null);
+  if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: `${match.title} team sheet`, text, files: [file] });
+    return "image";
+  }
+  waOpenPrefill(text);
+  return "text";
+}
+
 function sameNames(a, b) {
   return uniqueSorted(a).map(x => x.toLowerCase()).join("|") === uniqueSorted(b).map(x => x.toLowerCase()).join("|");
 }
@@ -1542,6 +1663,10 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           renderSquadLists();
         };
       });
+      const preview = manageBody.querySelector("#opponentTeamPreview");
+      if (preview) preview.innerHTML = teamSheetHtml(homeTeamName || "MLFC", squad, opponentCaptain, "blue");
+      const share = manageBody.querySelector("#shareSquad");
+      if (share) share.disabled = !squad.length;
     }
 
     manageBody.innerHTML = `
@@ -1572,9 +1697,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           </div>
         </div>
 
+        <div id="opponentTeamPreview" class="digitalTeamGrid digitalTeamGrid--single"></div>
+
         <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="saveOpponent" ${isEditLocked ? "disabled" : ""}>Save setup</button>
-          <button class="btn primary" id="shareSquad">Share squad</button>
+          <button class="btn whatsappBtn" id="shareSquad" ${squad.length ? "" : "disabled"}>Share team sheet</button>
           ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
         </div>
 
@@ -1616,6 +1743,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     capSel.onchange = () => {
       opponentCaptain = String(capSel.value || "").trim();
       updateOpponentDraft();
+      renderSquadLists();
     };
 
     renderSquadLists();
@@ -1626,10 +1754,16 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       location.hash = `#/captain?code=${encodeURIComponent(m.publicCode)}&src=admin`;
     };
 
-    manageBody.querySelector("#shareSquad").onclick = () => {
-      const list = squad.length ? squad.join("\n") : "(no squad selected)";
-      waOpenPrefill(`Manor Lakes FC squad (${m.title}):\n\n${list}\n\nMatch link:\n${matchLink(m.publicCode)}`);
-      toastInfo("WhatsApp opened.");
+    manageBody.querySelector("#shareSquad").onclick = async () => {
+      if (!squad.length) return toastWarn("Select the MLFC squad first.");
+      const button = manageBody.querySelector("#shareSquad");
+      setDisabled(button, true, "Preparing…");
+      try {
+        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad);
+        toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
+      } catch (error) {
+        if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
+      } finally { setDisabled(button, false); }
     };
 
     manageBody.querySelector("#saveOpponent").onclick = async () => {
@@ -1921,6 +2055,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <input class="input" id="teamPlayerFilter" type="search" placeholder="Search by name" autocomplete="off" />
       </div>
 
+      <div class="teamAssignTools" aria-label="Team selection tools">
+        <button class="btn gray" id="autoBalanceTeams" type="button" ${isEditLocked ? "disabled" : ""}>Auto-balance unassigned</button>
+        <button class="btn gray" id="clearTeamSelections" type="button" ${isEditLocked ? "disabled" : ""}>Reset selections</button>
+        <span id="unassignedCount" class="small"></span>
+      </div>
+
       <div style="margin-top:12px">
         <div id="teamAssignList" class="assignList"></div>
       </div>
@@ -1938,10 +2078,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         </div>
       </div>
 
+      <div class="digitalTeamGrid" id="digitalTeamPreview" aria-live="polite"></div>
+
       <!-- Requested: Save + Share after lists -->
       <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="saveSetup" ${isEditLocked ? "disabled" : ""}>Save setup</button>
-        <button class="btn primary" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share teams</button>
+        <button class="btn whatsappBtn" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share team sheet</button>
          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
       </div>
 
@@ -2284,6 +2426,12 @@ function renderComboList(filterText = "") {
     renderTeamAssignList();
     renderLists();
 
+    const unassigned = yesPlayers.filter((player) => !assignedTeam(player));
+    const count = manageBody.querySelector("#unassignedCount");
+    if (count) count.textContent = `${unassigned.length} unassigned`;
+    const preview = manageBody.querySelector("#digitalTeamPreview");
+    if (preview) preview.innerHTML = `${teamSheetHtml(homeTeamName, blue, captainBlue, "blue")}${teamSheetHtml(awayTeamName, orange, captainOrange, "orange")}`;
+
     const shareBtn = manageBody.querySelector("#shareTeams");
     if (shareBtn) {
       const ok = (blue.length + orange.length) > 0;
@@ -2301,6 +2449,31 @@ function renderComboList(filterText = "") {
       renderTeamAssignList();
     };
   }
+
+  const autoBalanceTeams = manageBody.querySelector("#autoBalanceTeams");
+  if (autoBalanceTeams) autoBalanceTeams.onclick = () => {
+    const unassigned = yesPlayers.filter((player) => !assignedTeam(player));
+    if (!unassigned.length) return toastInfo("Every available player is already assigned.");
+    unassigned.forEach((player) => {
+      if (blue.length <= orange.length) blue.push(player);
+      else orange.push(player);
+    });
+    updateInternalDraft();
+    renderAll();
+    toastSuccess(`${unassigned.length} players balanced across both teams.`);
+  };
+
+  const clearTeamSelections = manageBody.querySelector("#clearTeamSelections");
+  if (clearTeamSelections) clearTeamSelections.onclick = () => {
+    if (!(blue.length || orange.length)) return;
+    if (!window.confirm("Reset both team selections? The saved setup will not change until you select Save setup.")) return;
+    blue = [];
+    orange = [];
+    captainBlue = "";
+    captainOrange = "";
+    updateInternalDraft();
+    renderAll();
+  };
 
   // Admin ratings entry point (internal matches)
   const openRatingsInternal = manageBody.querySelector("#openRatingsAdminInternal");
@@ -2357,37 +2530,18 @@ function renderComboList(filterText = "") {
 
   // Share teams (after saved)
   const shareTeamsBtn = manageBody.querySelector("#shareTeams");
-  shareTeamsBtn.onclick = () => {
+  shareTeamsBtn.onclick = async () => {
     const ok = (blue.length + orange.length) > 0;
     if (!ok) return toastWarn("Assign players to Blue/Orange first.");
 
     setDisabled(shareTeamsBtn, true, "Opening…");
 
-  const lines = [];
-  lines.push(`Match: ${m.title}`);
-  lines.push(`When: ${when}`);
-  lines.push(`Type: INTERNAL`);
-  lines.push(`Link: ${matchLink(m.publicCode)}`);
-  lines.push("");
-  lines.push(`⚠️ Shared from Admin portal. Please do NOT edit or re-share this message.`);
-  lines.push(`Post your availability from your Match home screen.`);
-  lines.push("");
-  lines.push(`Captain remains anonymous.`);
-  lines.push(`Captain for each match will receive notification. Please check and provide genuine ratings.`);
-  lines.push("");
-
-  // Do NOT reveal captain names in the shared message
-  lines.push(`${homeTeamName} Team`);
-  blue.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
-  lines.push("");
-  lines.push(`${awayTeamName} Team`);
-  orange.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
-  lines.push("");
-
-  waOpenPrefill(lines.join("\n"));
-  toastInfo("WhatsApp opened.");
-
-  setTimeout(() => setDisabled(shareTeamsBtn, false), 900);
+  try {
+    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange);
+    toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "WhatsApp opened.");
+  } catch (error) {
+    if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
+  } finally { setDisabled(shareTeamsBtn, false); }
   };
 
   const so = manageBody.querySelector("#shareOrangeCap");

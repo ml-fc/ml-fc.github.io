@@ -10,7 +10,7 @@
 
   <!-- Keep the shell stylesheet release-addressed so an older service worker
        cannot paint a stale desktop layout while the new worker activates. -->
-  <link rel="stylesheet" href="./styles.css?v=2026-09-18.10" />
+  <link rel="stylesheet" href="./styles.css?v=2026-09-18.13" />
   <link rel="icon" href="./assets/icons/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png">
@@ -47,10 +47,11 @@
       </a>
 
       <nav class="tabs" aria-label="Primary navigation">
-        <a class="tab" href="#/match" data-tab="match">Match centre</a>
-        <a class="tab" href="#/leaderboard" data-tab="leaderboard">Standings</a>
+        <a class="tab" href="#/match" data-tab="match">Home</a>
+        <a class="tab" href="#/leaderboard" data-tab="leaderboard">Ladder</a>
+        <a class="tab" href="#/season" data-tab="season">My season</a>
         <a class="tab" href="#/admin" data-tab="admin">Club desk</a>
-        <a class="tab tab--account" href="#/login" data-tab="register">Login</a>
+        <a class="tab tab--account" href="#/login" data-tab="register">Sign in</a>
       </nav>
     </div>
   </header>
@@ -87,15 +88,19 @@
   <nav class="bottomnav" aria-label="Bottom navigation">
     <a class="bottomnav__item" href="#/match">
       <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 7v10l7 4 7-4V7l-7-4Zm0 5.1 3.7 2.7-1.4 4.3H9.7l-1.4-4.3L12 8.1Z"/></svg>
-      <span class="bottomnav__label">Matches</span>
+      <span class="bottomnav__label">Home</span>
     </a>
     <a class="bottomnav__item" href="#/login">
       <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0H5Z"/></svg>
-      <span class="bottomnav__label">Login</span>
+      <span class="bottomnav__label">Sign in</span>
     </a>
     <a class="bottomnav__item" href="#/leaderboard">
       <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v3h3v2c0 3.2-1.7 5.4-4.7 6.1A5.1 5.1 0 0 1 13 16.8V19h4v2H7v-2h4v-2.2a5.1 5.1 0 0 1-2.3-2.7C5.7 13.4 4 11.2 4 8V6h3V3Zm10 5v3.7c.7-.5 1-1.5 1-3V8h-1ZM6 8v.7c0 1.5.3 2.5 1 3V8H6Z"/></svg>
-      <span class="bottomnav__label">Standings</span>
+      <span class="bottomnav__label">Ladder</span>
+    </a>
+    <a class="bottomnav__item" href="#/season">
+      <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5V3Zm3 4v2h8V7H8Zm0 4v2h5v-2H8Zm0 4v2h8v-2H8Z"/></svg>
+      <span class="bottomnav__label">My season</span>
     </a>
     <a class="bottomnav__item" href="#/admin">
       <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h10v2H4V5Zm0 6h16v2H4v-2Zm0 6h7v2H4v-2Zm14-1 3 3-1.4 1.4-3-3L18 16Z"/></svg>
@@ -191,6 +196,6 @@
       });
     }
   </script>
-  <script type="module" src="./src/app.js?v=2026-09-18.10"></script>
+  <script type="module" src="./src/app.js?v=2026-09-18.13"></script>
 </body>
 </html>

@@ -30,15 +30,11 @@ export async function renderLoginPage(root) {
         <div class="small">Logged in as <b>${me.name}</b>${me.isAdmin ? " • <span class=\"badge\">ADMIN</span>" : ""}</div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
+          <button class="btn gray" id="goSeason">My season</button>
           <button class="btn gray" id="updateApp">Update app</button>
           <button class="btn gray" id="logout">Logout</button>
         </div>
       </div>
-
-      <details class="profileStats" open>
-        <summary class="profileStats__head"><div><div class="small">Your season</div><div class="h1" id="profileStatsTitle">Personal statistics</div></div><span class="badge">PRIVATE</span></summary>
-        <div id="profileStatsBody" class="profileStats__loading" aria-live="polite">Loading your season…</div>
-      </details>
 
       <div class="card">
         <div class="h1">Change password</div>
@@ -70,56 +66,10 @@ export async function renderLoginPage(root) {
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
-      <dialog id="statsHistoryDialog" class="playerDialog statsHistoryDialog" aria-labelledby="statsHistoryTitle">
-        <div class="statsHistorySheet">
-          <div class="statsHistorySheet__head"><div><div class="small">Your season</div><div class="h1" id="statsHistoryTitle">Full match history</div></div><button class="btn gray" id="closeStatsHistory">Close</button></div>
-          <div id="statsHistoryBody" class="profileStats__loading" aria-live="polite">Loading match history…</div>
-        </div>
-      </dialog>
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
-
-    API.mySeasonStats().then((out) => {
-      const host = root.querySelector("#profileStatsBody");
-      if (!host) return;
-      if (!out?.ok) { host.textContent = out?.error || "Could not load statistics."; return; }
-      const s = out.summary || {};
-      const rating = s.averageRating == null ? "—" : Number(s.averageRating).toFixed(1);
-      host.className = "";
-      host.innerHTML = `
-        <div class="profileStatGrid">
-          <div><strong>${Number(s.appearances || 0)}</strong><span>Appearances</span></div>
-          <div><strong>${Number(s.goals || 0)}</strong><span>Goals</span></div>
-          <div><strong>${Number(s.assists || 0)}</strong><span>Assists</span></div>
-          <div><strong>${esc(rating)}</strong><span>Avg rating</span></div>
-        </div>
-        <button class="btn profileStats__historyButton" id="openStatsHistory" type="button">View full match history</button>`;
-      root.querySelector("#openStatsHistory")?.addEventListener("click", async () => {
-        const dialog = root.querySelector("#statsHistoryDialog");
-        const historyHost = root.querySelector("#statsHistoryBody");
-        if (!dialog || !historyHost) return;
-        historyHost.className = "profileStats__loading";
-        historyHost.textContent = "Loading match history…";
-        dialog.showModal();
-        const history = await API.mySeasonStats(out.seasonId, true).catch(() => null);
-        if (!history?.ok) { historyHost.textContent = history?.error || "Could not load match history."; return; }
-        const matches = history.matches || [];
-        historyHost.className = "profileStats__matches";
-        historyHost.innerHTML = matches.length ? matches.map((m) => `<article class="profileMatch">
-          <div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || "Squad")}</span></div>
-          <div class="profileMatch__score">${esc(m.scoreHome)}–${esc(m.scoreAway)}</div>
-          <div class="profileMatch__numbers"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} ★</span></div>
-        </article>`).join("") : `<div class="small statsHistoryEmpty">No completed appearances in this season yet.</div>`;
-      });
-    }).catch(() => {
-      const host = root.querySelector("#profileStatsBody");
-      if (host) host.textContent = "Could not load statistics.";
-    });
-    root.querySelector("#closeStatsHistory")?.addEventListener("click", () => root.querySelector("#statsHistoryDialog")?.close());
-    root.querySelector("#statsHistoryDialog")?.addEventListener("click", (event) => {
-      if (event.target === event.currentTarget) event.currentTarget.close();
-    });
+    root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.
     root.querySelector("#updateApp").onclick = async () => {
@@ -407,26 +357,26 @@ export async function renderLoginPage(root) {
   // Not logged in: show login/register
   updateNavForUser(null);
   root.innerHTML = `
-    <div class="card">
-      <div class="h1">Login</div>
-      <div class="small">Login to post availability, view captain tools, and (if admin) access the admin panel.</div>
-    </div>
+    <section class="authWelcome">
+      <div class="authWelcome__mark">ML</div>
+      <div class="authWelcome__eyebrow">Your matchday starts here</div>
+      <h1>Welcome back</h1>
+      <p>Sign in to confirm availability, see your team and follow your season.</p>
+    </section>
 
-    <div class="card">
+    <form class="card authForm" id="loginForm">
       <div class="field">
         <label class="field__label" for="name">Player name</label>
         <input id="name" class="input" autocomplete="username" maxlength="80" />
       </div>
       <div class="field">
         <label class="field__label" for="password">Password</label>
-        <input id="password" type="password" class="input" autocomplete="current-password" />
+        <div class="passwordField"><input id="password" type="password" class="input" autocomplete="current-password" /><button class="passwordField__toggle" id="togglePassword" type="button" aria-pressed="false">Show</button></div>
       </div>
-      <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-        <button id="loginBtn" class="btn primary">Login</button>
-        <button id="showReg" class="btn gray">Register</button>
-      </div>
+      <button id="loginBtn" class="btn primary authForm__submit" type="submit">Sign in</button>
+      <button id="showReg" class="authForm__register" type="button">New player? Create an account</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
-    </div>
+    </form>
 
     <div class="card" id="regCard" style="display:none">
       <div class="h1">Register</div>
@@ -446,6 +396,13 @@ export async function renderLoginPage(root) {
   const passEl = root.querySelector("#password");
   const msgEl = root.querySelector("#msg");
 
+  root.querySelector("#togglePassword").onclick = (event) => {
+    const show = passEl.type === "password";
+    passEl.type = show ? "text" : "password";
+    event.currentTarget.textContent = show ? "Hide" : "Show";
+    event.currentTarget.setAttribute("aria-pressed", String(show));
+  };
+
   const regCard = root.querySelector("#regCard");
   root.querySelector("#showReg").onclick = () => {
     regCard.style.display = "block";
@@ -453,7 +410,8 @@ export async function renderLoginPage(root) {
   };
   root.querySelector("#hideReg").onclick = () => (regCard.style.display = "none");
 
-  root.querySelector("#loginBtn").onclick = async () => {
+  root.querySelector("#loginForm").onsubmit = async (event) => {
+    event.preventDefault();
     const name = nameEl.value.replace(/\s+/g, " ").trim();
     const password = passEl.value;
     nameEl.removeAttribute("aria-invalid");
@@ -468,8 +426,8 @@ export async function renderLoginPage(root) {
     msgEl.textContent = "Signing in…";
     const res = await API.login(name, password);
     if (!res?.ok) {
-      msgEl.textContent = res?.error || "Login failed";
-      toastError(res?.error || "Login failed");
+      msgEl.textContent = res?.error || "Sign in failed";
+      toastError(res?.error || "Sign in failed");
       return;
     }
     setToken(res.token);

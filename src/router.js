@@ -4,6 +4,7 @@ import { renderLeaderboardPage } from "./pages/leaderboard.js";
 import { renderAdminPage } from "./pages/admin.js";
 import { renderCaptainPage } from "./pages/captain.js";
 import { renderLoginPage } from "./pages/login.js";
+import { renderSeasonPage } from "./pages/season.js";
 import { getToken, getCachedUser, refreshMe } from "./auth.js";
 
 const ROUTES = {
@@ -12,6 +13,7 @@ const ROUTES = {
   "#/admin": renderAdminPage,
   "#/captain": renderCaptainPage,
   "#/login": renderLoginPage,
+  "#/season": renderSeasonPage,
 };
 
 const PAGE_CONTAINERS = {};   // route -> div

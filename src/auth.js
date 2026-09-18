@@ -51,15 +51,20 @@ export function updateNavForUser(user) {
     el.style.display = user ? "" : "none";
   });
 
+  const seasonTabs = document.querySelectorAll('[data-tab="season"], a[href="#/season"], .bottomnav__item[href="#/season"]');
+  seasonTabs.forEach(el => {
+    el.style.display = user ? "" : "none";
+  });
+
   // Toggle Admin tab visibility
   const adminTabs = document.querySelectorAll('[data-tab="admin"], a[href="#/admin"], .bottomnav__item[href="#/admin"]');
   adminTabs.forEach(el => {
     el.style.display = user && user.isAdmin ? "" : "none";
   });
 
-  // Rename Register tab label to Account/Login
+  // Profile is the home for account, security and notification settings.
   document.querySelectorAll('[data-tab="register"]')
-    .forEach(a => { a.textContent = user ? "Account" : "Login"; a.setAttribute("href", "#/login"); });
+    .forEach(a => { a.textContent = user ? "Profile" : "Sign in"; a.setAttribute("href", "#/login"); });
   document.querySelectorAll('a.bottomnav__item[href="#/login"]')
-    .forEach(a => { a.querySelector('.bottomnav__label') && (a.querySelector('.bottomnav__label').textContent = user ? "Account" : "Login"); });
+    .forEach(a => { a.querySelector('.bottomnav__label') && (a.querySelector('.bottomnav__label').textContent = user ? "Profile" : "Sign in"); });
 }

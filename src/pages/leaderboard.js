@@ -184,42 +184,30 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
   let sortMode = showRating ? "rating" : "goals";
 
-  const ratingToggleHtml = `
-    <label class="row" style="gap:10px; align-items:center; margin-top:12px">
-      <input type="checkbox" id="toggleRating" ${showRating ? "checked" : ""} />
-      <div class="small"><b>Show rating</b></div>
-    </label>
-  `;
+  const ratingToggleHtml = `<label class="ladderToggle"><input type="checkbox" id="toggleRating" ${showRating ? "checked" : ""} /><span>Ratings</span></label>`;
 
-  const sortRatingBtnHtml = showRating ? `<button class="btn gray" id="sortRating">Sort Rating</button>` : "";
+  const sortRatingBtnHtml = showRating ? `<button class="btn gray" id="sortRating">Rating</button>` : "";
 
   root.innerHTML = `
-    <div class="card">
-      <div class="h1">Leaderboard</div>
-      <div id="seasonBlock"></div>
-      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <button class="btn primary" id="refresh">Refresh</button>
+    <div class="card ladderControls">
+      <div class="ladderControls__head"><div><div class="stepEyebrow">Season competition</div><div class="h1">Ladder</div></div><button class="btn gray ladderRefresh" id="refresh" aria-label="Refresh ladder">↻ <span>Refresh</span></button></div>
+      <div class="ladderControls__season" id="seasonBlock"></div>
+      <div class="ladderFilterBar">
+        <div class="ladderSort" role="group" aria-label="Sort ladder">
+          <button class="btn gray" id="sortGoals">Goals</button>
+          <button class="btn gray" id="sortAssists">Assists</button>
+          ${sortRatingBtnHtml}
+        </div>
+        <label class="ladderMinimum" for="minimumMatches"><span>Min. games</span><input class="input" id="minimumMatches" name="minimumMatches" type="number" min="1" max="100" step="1" inputmode="numeric" value="${minimumMatches}" aria-describedby="minimumMatchesHelp minimumMatchesError" /></label>
+        ${ratingToggleHtml}
       </div>
-      ${ratingToggleHtml}
-      <div class="row" style="gap:10px; align-items:flex-end; margin-top:12px; flex-wrap:wrap">
-        <label for="minimumMatches">
-          <span class="field__label">Minimum matches</span>
-          <input class="input" id="minimumMatches" name="minimumMatches" type="number" min="1" max="100" step="1" inputmode="numeric" value="${minimumMatches}" aria-describedby="minimumMatchesHelp minimumMatchesError" style="width:120px" />
-        </label>
-        <span class="small" id="minimumMatchesHelp">Only eligible players are included in rankings.</span>
-      </div>
+      <span class="visuallyHidden" id="minimumMatchesHelp">Only eligible players are included in rankings.</span>
       <div class="small" id="minimumMatchesError" role="status" aria-live="polite"></div>
       <div class="small" id="msg" style="margin-top:8px"></div>
-
-      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" id="sortGoals">Sort Goals</button>
-        <button class="btn gray" id="sortAssists">Sort Assists</button>
-        ${sortRatingBtnHtml}
-      </div>
     </div>
 
     <div class="card">
-      <div class="h1">Season Stats</div>
+      <div class="h1">Season leaders</div>
       <div class="small" id="eligibilitySummary" aria-live="polite" style="margin:6px 0 10px"></div>
       <div class="lb__tableWrap">
         <table class="lb__table">

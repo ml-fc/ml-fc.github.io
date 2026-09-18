@@ -34,6 +34,7 @@ const STATIC_ASSETS = [
   "/src/pages/leaderboard.js",
   "/src/pages/admin.js",
   "/src/pages/captain.js",
+  "/src/pages/season.js",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
   "/assets/icons/maskable-512.png",
@@ -103,6 +104,12 @@ self.addEventListener("push", (event) => {
       const raw = event.data?.text() || "";
       try { data = JSON.parse(raw); } catch { data = { body: raw }; }
     } catch {}
+  }
+
+  // Older API releases double-encoded the payload. Keep those queued pushes
+  // readable while subscriptions and push-service queues roll forward.
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch { data = { body: data }; }
   }
 
   // Accept both our direct payload and the common { notification: { ... } }

@@ -224,6 +224,28 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function compactFormation(players) {
+  const list = [...(players || [])];
+  if (!list.length) return [];
+  const total = list.length;
+  const counts = total <= 5 ? [1, total - 1] : total <= 8 ? [1, 3, total - 4] : [1, 3, 3, total - 7];
+  let offset = 0;
+  return counts.filter(Boolean).map((count) => {
+    const row = list.slice(offset, offset + count);
+    offset += count;
+    return row;
+  });
+}
+
+function publicTeamSheet(teamName, players, tone = "blue") {
+  return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
+    <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
+    <div class="digitalTeam__pitch"><span class="digitalTeam__centre" aria-hidden="true"></span>
+      ${compactFormation(players).map((row) => `<div class="digitalTeam__line">${row.map((player) => `<div class="digitalPlayer"><i aria-hidden="true">•</i><span>${escapeHtml(player)}</span></div>`).join("")}</div>`).join("")}
+    </div>
+  </section>`;
+}
+
 // Handle both normalized and Sheets Date-string formats
 function normalizeDateStr(dateStr) {
   const s = String(dateStr || "").trim();
@@ -1037,6 +1059,10 @@ const cap = availabilityLimitForMatch(m);
   const hideAvailability = false;
   const teamForPlayer = {};
   (data.teams || []).forEach(t=>{ const pn=String(t.playerName||'').trim(); const tm=String(t.team||'').trim(); if(pn&&tm) teamForPlayer[pn]=tm; });
+  const homeTeamKey = String(m.type || "").toUpperCase() === "INTERNAL" ? "BLUE" : "MLFC";
+  const awayTeamKey = String(m.type || "").toUpperCase() === "INTERNAL" ? "ORANGE" : "OPPONENT";
+  const homePlayers = uniqueSorted((data.teams || []).filter((team) => String(team.team || "").toUpperCase() === homeTeamKey).map((team) => String(team.playerName || "").trim()));
+  const awayPlayers = uniqueSorted((data.teams || []).filter((team) => String(team.team || "").toUpperCase() === awayTeamKey).map((team) => String(team.playerName || "").trim()));
   const scoreHome = String(m.scoreHome ?? "").trim();
   const scoreAway = String(m.scoreAway ?? "").trim();
   const hasScore = scoreHome !== "" && scoreAway !== "";
@@ -1103,7 +1129,7 @@ const cap = availabilityLimitForMatch(m);
     ${hasScore ? `
       <div class="card">
         <div class="row" style="justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
-          <div class="h1">Match result</div>
+          <div class="h1">Match recap</div>
           <div class="small"><b>${resultInline()}</b></div>
         </div>
 
@@ -1124,8 +1150,21 @@ const cap = availabilityLimitForMatch(m);
           </div>
         ` : ``}
         ${assisters.length ? `<div class="small" style="margin-top:10px"><b>Assists:</b> ${assisters.map(s => `${escapeHtml(s.name)} (${s.assists})`).join(" • ")}</div>` : ``}
+        ${(scorers.length || assisters.length) ? `<div class="matchTimeline" aria-label="Match contributions">
+          ${scorers.map((item) => `<div class="matchTimeline__item"><span>⚽</span><div><b>${escapeHtml(item.name)}</b><small>${item.goals} ${item.goals === 1 ? "goal" : "goals"}</small></div></div>`).join("")}
+          ${assisters.map((item) => `<div class="matchTimeline__item"><span>↗</span><div><b>${escapeHtml(item.name)}</b><small>${item.assists} ${item.assists === 1 ? "assist" : "assists"}</small></div></div>`).join("")}
+        </div>` : ``}
+        <button class="btn whatsappBtn" id="shareResult" type="button" style="margin-top:14px">Share match recap</button>
       </div>
     ` : ``}
+
+    ${teamsSelected ? `<div class="card teamSheetCard">
+      <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
+      <div class="digitalTeamGrid ${awayPlayers.length ? "" : "digitalTeamGrid--single"}">
+        ${publicTeamSheet(teamLabel("HOME"), homePlayers, "blue")}
+        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayPlayers, "orange") : ""}
+      </div>
+    </div>` : ``}
 
     ${hideAvailability ? `` : `
       <div class="card">
@@ -1184,6 +1223,16 @@ const cap = availabilityLimitForMatch(m);
       toastInfo("WhatsApp opened.");
     };
   }
+
+  const shareResult = detail.querySelector("#shareResult");
+  if (shareResult) shareResult.onclick = () => {
+    const lines = [`⚽ *${m.title}*`, `*${resultInline()}*`, when];
+    if (scorers.length) lines.push("", `Scorers: ${scorers.map((item) => `${item.name} (${item.goals})`).join(" · ")}`);
+    if (assisters.length) lines.push(`Assists: ${assisters.map((item) => `${item.name} (${item.assists})`).join(" · ")}`);
+    lines.push("", `${baseUrl()}#/match?code=${m.publicCode}`);
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+    toastInfo("WhatsApp opened.");
+  };
 
   const capBtn = detail.querySelector("#openCaptain");
   if (capBtn) capBtn.onclick = () => {
