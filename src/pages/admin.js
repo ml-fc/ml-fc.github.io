@@ -895,36 +895,22 @@ async function openManageView(root, code, routeToken, prevView) {
   listArea.style.display = "none";
   manageArea.style.display = "block";
 
-  // Render from cache instantly if present
-  const cached = lsGet(manageKey(code));
-  if (cached?.data?.ok) {
-    renderManageUI(root, cached.data, routeToken, { fromCache: true, prevView });
-
-    // Reload match details from API only on a browser refresh.
-    // In iOS installed app (Add to Home Screen), treat this as always-fresh.
-    if (isIOSStandalone() || isReloadForAdminMatchCode(code) || (cached.data.potm?.openedAt && !cached.data.potm?.closed)) {
-      API.getPublicMatch(code)
-        .then(fresh => {
-          if (!stillOnAdmin(routeToken)) return;
-          if (!fresh?.ok) return;
-          lsSet(manageKey(code), { ts: now(), data: fresh });
-          renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-        })
-        .catch(() => {});
-    }
-
-    return;
+  // Availability can change on another device. Refresh before mounting the editor
+  // so a cached YES cannot reappear in the unassigned pool or a saved draft.
+  manageArea.innerHTML = `<div class="card"><div class="h1">Loading match…</div><div class="small">Refreshing availability and teams…</div></div>`;
+  let fresh;
+  try {
+    fresh = await API.getPublicMatch(code);
+  } catch {
+    fresh = { ok: false, error: "Could not refresh the match. Reopen it to try again." };
   }
-
-  // No cache: show loading, then fetch ONCE
-  manageArea.innerHTML = `<div class="card"><div class="h1">Loading match…</div><div class="small">Fetching details…</div></div>`;
-
-  const fresh = await API.getPublicMatch(code);
   if (!stillOnAdmin(routeToken)) return;
-  if (!fresh.ok) {
-    manageArea.innerHTML = `<div class="card"><div class="h1">Error</div><div class="small">${fresh.error}</div></div>`;
-    return toastError(fresh.error || "Failed to load match");
+  if (!fresh?.ok) {
+    const message = fresh?.error || "Could not refresh the match. Reopen it to try again.";
+    manageArea.innerHTML = `<div class="card"><div class="h1">Unable to load match</div><div class="small">${escapeHtml(message)}</div></div>`;
+    return toastError(message);
   }
+
   lsSet(manageKey(code), { ts: now(), data: fresh });
   renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
 }
