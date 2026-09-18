@@ -1770,12 +1770,20 @@ details.card[open] > summary { margin-bottom: 14px; }
     padding: 17px 16px 17px 21px;
   }
   .fixtureRow__open { width: 100%; }
-  .nextMatch { margin-inline: -2px; padding: 20px 16px; }
-  .nextMatch__head { display: grid; gap: 14px; }
+  .nextMatch { margin-inline: -2px; padding: 16px; }
+  .nextMatch__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: end; }
+  .nextMatch h1 { margin-top: 4px; font-size: clamp(25px, 8vw, 34px); line-height: .98; }
+  .nextMatch__head p { font-size: 13px; line-height: 1.35; }
   .nextMatch__countdown { width: fit-content; }
-  .nextMatch__stateGrid { grid-template-columns: 1fr; }
-  .nextMatch__state { min-height: 0; padding: 14px; }
-  .quickResponse { grid-template-columns: 1fr; }
+  .nextMatch__stateGrid { grid-template-columns: 1fr; margin-top: 14px; }
+  .nextMatch__state { grid-template-columns: minmax(112px, .8fr) 1.2fr; gap: 3px 10px; min-height: 0; padding: 10px 12px; }
+  .nextMatch__state > .nextMatch__label { grid-row: 1 / span 2; align-self: center; }
+  .nextMatch__state > strong { font-size: 15px; }
+  .nextMatch__state small { font-size: 11px; }
+  .nextMatch__actions { margin-top: 12px; }
+  .quickResponse { gap: 8px; }
+  .quickResponse .btn { min-width: 0; padding-inline: 8px; font-size: 12px; }
+  .nextMatch__lastResult { margin-top: 12px; padding-top: 11px; }
   .nextMatch__primary { width: 100%; }
   .nextMatch--empty,
   .nextMatch--error { display: grid; }
@@ -2054,6 +2062,9 @@ details.card[open] > summary { margin-bottom: 14px; }
 #ratingsSection .rosterCard { margin-top: 8px; padding: 14px; border-radius: 5px; background: #f4f7f8; }
 #ratingsSection .rosterGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #ratingsSection .rosterGrid .input { min-width: 0; }
+#ratingsSection .teamPills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+#ratingsSection .teamPills .btn { min-width: 0; padding-inline: 6px; }
+#ratingsSection .teamPills [data-remove] { margin-left: 0 !important; }
 #submitRatings { min-width: 190px; }
 
 @media (min-width: 820px) {

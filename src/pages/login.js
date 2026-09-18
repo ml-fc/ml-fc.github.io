@@ -3,6 +3,7 @@ import { clearAuth, setCachedUser, setToken, getToken, getCachedUser, refreshMe,
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
+import { ensurePushSubscribed, pushSupport } from "../push.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 
@@ -52,6 +53,11 @@ export async function renderLoginPage(root) {
       </div>
       <div class="card">
         <div class="h1">Notifications</div>
+        <div class="small" id="pushStatus"></div>
+        <div class="row" id="pushActions" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+          <button class="btn primary" id="enablePush">Enable phone notifications</button>
+          <button class="btn gray" id="testPush" hidden>Send test notification</button>
+        </div>
         <div class="small" id="notiMsg">Loading…</div>
         <div id="notiList" style="margin-top:10px"></div>
       </div>
@@ -171,6 +177,62 @@ export async function renderLoginPage(root) {
       toastSuccess("Password updated");
       root.querySelector("#oldPass").value = "";
       root.querySelector("#newPass").value = "";
+    };
+
+    const pushStatus = root.querySelector("#pushStatus");
+    const enablePush = root.querySelector("#enablePush");
+    const testPush = root.querySelector("#testPush");
+    const support = pushSupport();
+    const updatePushUi = () => {
+      const permission = support.supported ? Notification.permission : "unsupported";
+      if (!support.supported) {
+        pushStatus.textContent = support.reason;
+        enablePush.hidden = true;
+        return;
+      }
+      if (permission === "granted") {
+        pushStatus.textContent = "Phone notifications are enabled on this device.";
+        enablePush.hidden = true;
+        testPush.hidden = false;
+      } else if (permission === "denied") {
+        pushStatus.textContent = "Notifications are blocked. Allow them for this app in your phone settings.";
+        enablePush.textContent = "Try again";
+      } else {
+        pushStatus.textContent = "Enable alerts to receive updates even when the app is closed. On iPhone, first add this site to your Home Screen and open it there.";
+      }
+    };
+    updatePushUi();
+
+    enablePush.onclick = async () => {
+      enablePush.disabled = true;
+      pushStatus.textContent = "Enabling notifications…";
+      try {
+        const result = await ensurePushSubscribed({ requestPermission: true });
+        if (!result.ok) throw new Error(result.error);
+        updatePushUi();
+        toastSuccess("Phone notifications enabled");
+      } catch (e) {
+        pushStatus.textContent = e?.message || "Could not enable phone notifications.";
+        toastError(pushStatus.textContent);
+      } finally {
+        enablePush.disabled = false;
+      }
+    };
+
+    testPush.onclick = async () => {
+      testPush.disabled = true;
+      pushStatus.textContent = "Sending a test notification…";
+      try {
+        await ensurePushSubscribed();
+        const result = await API.pushTest();
+        if (!result?.ok || !result.sent) throw new Error(result?.errors?.[0] || "No push subscription was reached.");
+        pushStatus.textContent = "Test sent. It should appear in your phone notifications shortly.";
+      } catch (e) {
+        pushStatus.textContent = e?.message || "Could not send the test notification.";
+        toastError(pushStatus.textContent);
+      } finally {
+        testPush.disabled = false;
+      }
     };
 
     // notifications

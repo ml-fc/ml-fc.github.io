@@ -614,12 +614,10 @@ export async function renderCaptainPage(root, query) {
           ? `<button class="btn gray tinyBtn" data-move="${encodeURIComponent(p)}" data-move-to="OPP">Move to opponent</button>`
           : `<button class="btn gray tinyBtn" data-move="${encodeURIComponent(p)}" data-move-to="MY">Move to my team</button>`;
       } else if (!isOpponentMatch) {
-        // admin/internal or legacy: keep Blue/Orange assignment
+        // Admin/internal or legacy: use this fixture's configured team names.
         moveBtns = `
-          <div class="row" style="gap:6px; flex-wrap:wrap">
-            <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
-            <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>${awayTeamName}</button>
-          </div>
+          <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
+          <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>${awayTeamName}</button>
         `;
       } else {
         // opponent match: no team buttons

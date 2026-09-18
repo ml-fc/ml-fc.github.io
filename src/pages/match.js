@@ -264,9 +264,16 @@ function openMatchSortKey(m) {
   return { type: "dt", v: Number.isNaN(dt) ? Number.MAX_SAFE_INTEGER : dt };
 }
 
+function isUpcomingFixture(match, referenceTime = Date.now()) {
+  const kickoff = openMatchSortKey(match).v;
+  const hasFinalScore = String(match?.scoreHome ?? "").trim() !== "" &&
+    String(match?.scoreAway ?? "").trim() !== "";
+  return !hasFinalScore && kickoff !== Number.MAX_SAFE_INTEGER && kickoff >= referenceTime;
+}
+
 // Find the next scheduled match.
 function getLatestOpenCode(openMatches) {
-  const list = Array.isArray(openMatches) ? openMatches.slice() : [];
+  const list = (Array.isArray(openMatches) ? openMatches : []).filter((match) => isUpcomingFixture(match));
   list.sort((a, b) => openMatchSortKey(a).v - openMatchSortKey(b).v);
   return list[0]?.publicCode || "";
 }
@@ -773,14 +780,13 @@ function renderMatchList(root, seasonId, openMatches) {
   list.style.display = "block";
   detail.style.display = "none";
 
-  const latestCode = getLatestOpenCode(openMatches);
-
-  const open = (openMatches || []).slice().sort((a, b) => {
+  const open = (openMatches || []).filter((match) => isUpcomingFixture(match)).sort((a, b) => {
     const ak = openMatchSortKey(a);
     const bk = openMatchSortKey(b);
 
     return ak.v - bk.v;
   });
+  const latestCode = getLatestOpenCode(open);
 
   list.innerHTML = `
     <div id="nextMatchDashboard" class="nextMatchHost" aria-live="polite">

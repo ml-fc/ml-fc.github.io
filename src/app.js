@@ -3,77 +3,14 @@ import { warmAppData } from "./prefetch.js";
 import { initReloadContext } from "./nav_state.js";
 import { getCachedUser, refreshMe, updateNavForUser } from "./auth.js";
 import { API } from "./api/endpoints.js";
+import { ensurePushSubscribed } from "./push.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
-const LS_PUSH_SYNC = "mlfc_push_sync_v1";
 
 let __mlfcNotiLastCheck = 0;
 let __mlfcNotiInflight = null;
 const NOTIFICATION_REFRESH_COOLDOWN_MS = 30 * 1000;
-const PUSH_SYNC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  return Uint8Array.from([...raw].map((ch) => ch.charCodeAt(0)));
-}
-
-async function ensurePushSubscribed() {
-  if (!("serviceWorker" in navigator)) return;
-  if (!("PushManager" in window)) return;
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-
-  const reg = await navigator.serviceWorker.ready;
-
-  // already subscribed?
-  const existing = await reg.pushManager.getSubscription();
-  if (existing) {
-    const user = getCachedUser();
-    let lastSync = null;
-    try { lastSync = JSON.parse(localStorage.getItem(LS_PUSH_SYNC) || "null"); } catch {}
-    const endpoint = String(existing.endpoint || "");
-    const alreadySynced = lastSync?.endpoint === endpoint
-      && lastSync?.playerName === String(user?.name || "")
-      && Date.now() - Number(lastSync?.ts || 0) < PUSH_SYNC_MAX_AGE_MS;
-    if (!alreadySynced) {
-      const out = await API.pushSubscribe(existing, navigator.userAgent).catch(() => null);
-      if (out?.ok) {
-        try {
-          localStorage.setItem(LS_PUSH_SYNC, JSON.stringify({
-            endpoint,
-            playerName: String(user?.name || ""),
-            ts: Date.now(),
-          }));
-        } catch {}
-      }
-    }
-    return;
-  }
-
-  const out = await API.pushPublicKey().catch(() => null);
-  if (!out?.ok || !out?.publicKey) return;
-  const publicKey = out.publicKey;
-
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
-  });
-
-  const subscribeResult = await API.pushSubscribe(sub, navigator.userAgent);
-  if (subscribeResult?.ok) {
-    try {
-      localStorage.setItem(LS_PUSH_SYNC, JSON.stringify({
-        endpoint: String(sub.endpoint || ""),
-        playerName: String(getCachedUser()?.name || ""),
-        ts: Date.now(),
-      }));
-    } catch {}
-  }
-}
-
 function notifyDesktop(title, body) {
   try {
     if (!("Notification" in window)) return;

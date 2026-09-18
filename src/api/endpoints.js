@@ -63,6 +63,7 @@ export const API = {
     pushPublicKey: () => apiGet({ action: "push_public_key" }),
   pushSubscribe: (subscription, userAgent) =>
     apiPost({ action: "push_subscribe", subscription, userAgent }),
+  pushTest: () => apiPost({ action: "push_test" }),
   pushUnsubscribe: (endpoint) =>
     apiPost({ action: "push_unsubscribe", endpoint }),
 

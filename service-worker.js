@@ -24,6 +24,7 @@ const STATIC_ASSETS = [
   "/src/cache_cleanup.js",
   "/src/config.js",
   "/src/prefetch.js",
+  "/src/push.js",
   "/src/ui/toast.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
@@ -89,6 +90,46 @@ self.addEventListener("message", (event) => {
       })()
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data?.json() || {}; } catch {
+    try { data = { body: event.data?.text() || "You have a new update." }; } catch {}
+  }
+
+  const title = String(data.title || "Manor Lakes FC");
+  const options = {
+    body: String(data.body || "You have a new update."),
+    icon: "/assets/icons/icon-192.png",
+    badge: "/assets/icons/icon-192.png",
+    tag: String(data.tag || "mlfc-update"),
+    data: { url: String(data.url || "/#/login") },
+  };
+
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, options);
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    clients.forEach((client) => client.postMessage({ type: "MLFC_PUSH" }));
+  })());
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const target = new URL(event.notification?.data?.url || "/#/login", self.location.origin).href;
+    const isSameOrigin = new URL(target).origin === self.location.origin;
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (isSameOrigin) {
+      for (const client of clients) {
+        if ("focus" in client) {
+          if ("navigate" in client) await client.navigate(target);
+          return client.focus();
+        }
+      }
+    }
+    return self.clients.openWindow ? self.clients.openWindow(target) : undefined;
+  })());
 });
 
 // Cache-first for same-origin static requests (but HTML navigations are network-first)
