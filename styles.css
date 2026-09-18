@@ -2050,6 +2050,9 @@ details.card[open] > summary { margin-bottom: 14px; }
 }
 
 /* The sticky match controller collapses once its full context has scrolled by. */
+#manageArea.hasCompactCommand {
+  padding-top: var(--manage-command-space, 0px);
+}
 .manageCommand.isCompact {
   position: fixed;
   top: 0;

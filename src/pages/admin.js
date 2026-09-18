@@ -354,7 +354,27 @@ function installManageCommandScrollBehavior(manageArea) {
   if (!command) return;
 
   let scheduled = false;
+  let compact = false;
   let handler = null;
+  const setCompact = (nextCompact) => {
+    if (nextCompact === compact) return;
+
+    // A fixed element leaves normal document flow. Reserve its expanded space
+    // before fixing it so the page height and scroll position cannot oscillate.
+    if (nextCompact) {
+      const styles = getComputedStyle(command);
+      const outerHeight = command.getBoundingClientRect().height
+        + Number.parseFloat(styles.marginTop || "0")
+        + Number.parseFloat(styles.marginBottom || "0");
+      manageArea.style.setProperty("--manage-command-space", `${Math.ceil(outerHeight)}px`);
+    }
+
+    compact = nextCompact;
+    manageArea.classList.toggle("hasCompactCommand", compact);
+    command.classList.toggle("isCompact", compact);
+    command.dataset.display = compact ? "compact" : "expanded";
+    document.body.classList.toggle("hasCompactMatchCommand", compact);
+  };
   const syncCompactBounds = () => {
     const bounds = manageArea.getBoundingClientRect();
     const edge = window.innerWidth <= 819 ? 4 : 0;
@@ -367,16 +387,17 @@ function installManageCommandScrollBehavior(manageArea) {
       window.removeEventListener("scroll", handler);
       window.removeEventListener("resize", handler);
       window.removeEventListener("hashchange", handler);
+      manageArea.classList.remove("hasCompactCommand");
       document.body.classList.remove("hasCompactMatchCommand");
       if (MANAGE_COMMAND_SCROLL_HANDLER === handler) MANAGE_COMMAND_SCROLL_HANDLER = null;
       return;
     }
     const routeActive = currentHashPath() === "#/admin" && manageArea.offsetParent !== null;
-    const compact = routeActive && window.scrollY > 140;
-    if (compact) syncCompactBounds();
-    command.classList.toggle("isCompact", compact);
-    command.dataset.display = compact ? "compact" : "expanded";
-    document.body.classList.toggle("hasCompactMatchCommand", compact);
+    // Separate collapse/expand thresholds prevent tiny scroll movements from
+    // rapidly toggling the banner at the boundary on touch devices.
+    const nextCompact = routeActive && (compact ? window.scrollY > 72 : window.scrollY > 140);
+    if (nextCompact) syncCompactBounds();
+    setCompact(nextCompact);
   };
   handler = () => {
     if (scheduled) return;
