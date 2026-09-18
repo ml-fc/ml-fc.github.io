@@ -347,22 +347,36 @@ function setDisabled(btn, disabled, busyText) {
 function installManageCommandScrollBehavior(manageArea) {
   if (MANAGE_COMMAND_SCROLL_HANDLER) {
     window.removeEventListener("scroll", MANAGE_COMMAND_SCROLL_HANDLER);
+    window.removeEventListener("resize", MANAGE_COMMAND_SCROLL_HANDLER);
+    window.removeEventListener("hashchange", MANAGE_COMMAND_SCROLL_HANDLER);
   }
   const command = manageArea?.querySelector(".manageCommand");
   if (!command) return;
 
   let scheduled = false;
   let handler = null;
+  const syncCompactBounds = () => {
+    const bounds = manageArea.getBoundingClientRect();
+    const edge = window.innerWidth <= 819 ? 4 : 0;
+    command.style.setProperty("--manage-command-left", `${Math.max(0, bounds.left - edge)}px`);
+    command.style.setProperty("--manage-command-width", `${Math.min(window.innerWidth, bounds.width + edge * 2)}px`);
+  };
   const update = () => {
     scheduled = false;
     if (!document.body.contains(command)) {
       window.removeEventListener("scroll", handler);
+      window.removeEventListener("resize", handler);
+      window.removeEventListener("hashchange", handler);
+      document.body.classList.remove("hasCompactMatchCommand");
       if (MANAGE_COMMAND_SCROLL_HANDLER === handler) MANAGE_COMMAND_SCROLL_HANDLER = null;
       return;
     }
-    const compact = window.scrollY > 140;
+    const routeActive = currentHashPath() === "#/admin" && manageArea.offsetParent !== null;
+    const compact = routeActive && window.scrollY > 140;
+    if (compact) syncCompactBounds();
     command.classList.toggle("isCompact", compact);
     command.dataset.display = compact ? "compact" : "expanded";
+    document.body.classList.toggle("hasCompactMatchCommand", compact);
   };
   handler = () => {
     if (scheduled) return;
@@ -371,6 +385,8 @@ function installManageCommandScrollBehavior(manageArea) {
   };
   MANAGE_COMMAND_SCROLL_HANDLER = handler;
   window.addEventListener("scroll", handler, { passive: true });
+  window.addEventListener("resize", handler, { passive: true });
+  window.addEventListener("hashchange", handler);
   update();
 }
 

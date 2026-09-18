@@ -2051,11 +2051,20 @@ details.card[open] > summary { margin-bottom: 14px; }
 
 /* The sticky match controller collapses once its full context has scrolled by. */
 .manageCommand.isCompact {
+  position: fixed;
   top: 0;
+  left: var(--manage-command-left, 10px);
   z-index: 31;
+  width: var(--manage-command-width, calc(100% - 20px));
+  margin-inline: 0;
   padding: 8px 11px;
   border-radius: 0 0 7px 7px;
   box-shadow: 0 7px 18px rgba(0, 0, 0, .3);
+}
+body.hasCompactMatchCommand .appbar {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
 }
 .manageCommand.isCompact > .row {
   display: flex;
