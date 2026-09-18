@@ -75,6 +75,7 @@ function sortRows(rows, mode, showRating) {
   const r = (rows||[]).slice();
   if (mode === "goals") r.sort((a,b)=>(b.goals||0)-(a.goals||0));
   else if (mode === "assists") r.sort((a,b)=>(b.assists||0)-(a.assists||0));
+  else if (mode === "potm") r.sort((a,b)=>(b.potmAwards||0)-(a.potmAwards||0) || (b.goals||0)-(a.goals||0));
   else if (showRating) r.sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
   else r.sort((a,b)=>(b.goals||0)-(a.goals||0));
   return r;
@@ -85,7 +86,7 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches) {
   const eligibleRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
   const sorted = sortRows(eligibleRows, sortMode, showRating);
 
-  const cols = showRating ? 6 : 4;
+  const cols = showRating ? 7 : 5;
   const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
   const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
   const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
@@ -95,6 +96,7 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches) {
       maxGoals > 0 && Number(x.goals || 0) === maxGoals ? `<span class="playerAward playerAward--boot" title="Golden Boot — top scorer" aria-label="Golden Boot — top scorer">●</span>` : "",
       maxAssists > 0 && Number(x.assists || 0) === maxAssists ? `<span class="playerAward" title="Top assists" aria-label="Top assists">🎯</span>` : "",
       Number(x.matchesRated || 0) > 0 && Number(x.avgRating || 0) === maxRating ? `<span class="playerAward" title="Top rated" aria-label="Top rated">⭐</span>` : "",
+      Number(x.potmAwards || 0) > 0 ? `<span class="playerAward" title="${Number(x.potmAwards)} Player of the Match award${Number(x.potmAwards) === 1 ? "" : "s"}" aria-label="Player of the Match awards">🏆</span>` : "",
     ].join("");
     const ratingCols = showRating ? `
       <td class="lb__cell lb__num">${(x.avgRating || 0).toFixed(2)}</td>
@@ -106,6 +108,7 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches) {
         <td class="lb__cell lb__player"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></td>
         <td class="lb__cell lb__num">${x.goals || 0}</td>
         <td class="lb__cell lb__num">${x.assists || 0}</td>
+        <td class="lb__cell lb__num">${x.potmAwards || 0}</td>
         ${ratingCols}
       </tr>
     `;
@@ -127,11 +130,11 @@ function renderPlayerHistory(dialog, data) {
     <div class="playerSheet">
       <div class="playerSheet__head"><div><div class="small">Season player card</div><div class="h1">${esc(data.playerName)}</div></div><button class="btn gray" data-close-history aria-label="Close player history">Close</button></div>
       <div class="playerSummary">
-        <div><b>${matches.length}</b><span>Played</span></div><div><b>${goals}</b><span>Goals</span></div><div><b>${assists}</b><span>Assists</span></div><div><b>${avg == null ? "—" : avg.toFixed(2)}</b><span>Rating</span></div>
+        <div><b>${matches.length}</b><span>Played</span></div><div><b>${goals}</b><span>Goals</span></div><div><b>${assists}</b><span>Assists</span></div><div><b>${matches.reduce((n,m)=>n+Number(m.potmAward||0),0)}</b><span>POTM</span></div><div><b>${avg == null ? "—" : avg.toFixed(2)}</b><span>Rating</span></div>
       </div>
       <div class="playerMatchList">${matches.map(m => {
         const score = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "" ? `${esc(m.scoreHome)}–${esc(m.scoreAway)}` : "—";
-        return `<div class="playerMatch"><div><b>${esc(m.title || "Match")}</b><span>${esc(m.date || "")} · ${esc(m.team || m.type || "")}</span></div><div class="playerMatch__score">${score}</div><div class="playerMatch__stats"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} R</span></div></div>`;
+        return `<div class="playerMatch"><div><b>${esc(m.title || "Match")}${Number(m.potmAward) ? " 🏆" : ""}</b><span>${esc(m.date || "")} · ${esc(m.team || m.type || "")}</span></div><div class="playerMatch__score">${score}</div><div class="playerMatch__stats"><span>${Number(m.goals || 0)} G</span><span>${Number(m.assists || 0)} A</span><span>${m.rating == null ? "—" : Number(m.rating).toFixed(1)} R</span><span>${Number(m.potmVotes || 0)} votes</span></div></div>`;
       }).join("") || `<div class="emptyState"><b>No matches yet</b><span>This player has no recorded season history.</span></div>`}</div>
     </div>`;
   dialog.querySelector("[data-close-history]").onclick = () => dialog.close();
@@ -196,6 +199,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
         <div class="ladderSort" role="group" aria-label="Sort ladder">
           <button class="btn gray" id="sortGoals">Goals</button>
           <button class="btn gray" id="sortAssists">Assists</button>
+          <button class="btn gray" id="sortPotm">POTM</button>
           ${sortRatingBtnHtml}
         </div>
         <label class="ladderMinimum" for="minimumMatches"><span>Min. games</span><input class="input" id="minimumMatches" name="minimumMatches" type="number" min="1" max="100" step="1" inputmode="numeric" value="${minimumMatches}" aria-describedby="minimumMatchesHelp minimumMatchesError" /></label>
@@ -217,6 +221,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
               <th class="lb__th lb__player">Player</th>
               <th class="lb__th lb__num">G</th>
               <th class="lb__th lb__num">A</th>
+              <th class="lb__th lb__num">POTM</th>
               ${ showRating ? `
                 <th class="lb__th lb__num">R</th>
                 <th class="lb__th lb__num">Rated</th>
@@ -329,6 +334,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
   root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
   root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
+  root.querySelector("#sortPotm").onclick = () => { sortMode = "potm"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
   const sortRatingBtn = root.querySelector("#sortRating");
   if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
 

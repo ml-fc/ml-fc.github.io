@@ -1008,7 +1008,7 @@ async function renderMatchDetail(root, code) {
   } catch {}
 
   // Fetch match details only on browser reload of this match, or if not cached.
-  const shouldFetch = isReloadForMatchCode(code) || !data?.ok || metaChanged;
+  const shouldFetch = isReloadForMatchCode(code) || !data?.ok || !data?.potm || metaChanged || (!!data?.potm?.openedAt && !data?.potm?.closed);
 
   if (shouldFetch) {
     if (!data?.ok) {
@@ -1092,6 +1092,10 @@ const cap = availabilityLimitForMatch(m);
   const scoreHome = String(m.scoreHome ?? "").trim();
   const scoreAway = String(m.scoreAway ?? "").trim();
   const hasScore = scoreHome !== "" && scoreAway !== "";
+  let potm = data.potm || null;
+  const potmCandidates = Array.isArray(potm?.candidates) ? potm.candidates : [];
+  const potmDeadline = potm?.deadlineAt ? new Date(potm.deadlineAt) : null;
+  const potmWinnerRows = (potm?.winners || []).map((name) => potmCandidates.find((row) => String(row.playerName).toLowerCase() === String(name).toLowerCase()) || {playerName:name});
 
   function teamLabel(side) {
     // side: "HOME" | "AWAY"
@@ -1184,6 +1188,25 @@ const cap = availabilityLimitForMatch(m);
       </div>
     ` : ``}
 
+    ${hasScore && potm?.openedAt ? `<div class="card potmCard">
+      <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "3 HOURS"}</span></div>
+      ${potm.closed ? `
+        ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
+          const result = (potm.results || []).find((row) => String(row.candidateName).toLowerCase() === String(winner.playerName).toLowerCase());
+          return `<div class="potmWinner"><span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(result?.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
+        }).join("")}</div>` : `<div class="small">No votes were cast.</div>`}
+      ` : potm.canVote ? `
+        <div class="small">Choose any player from either team except yourself. You can change your vote until ${potmDeadline && !Number.isNaN(potmDeadline.getTime()) ? potmDeadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "the window closes"}.</div>
+        <div class="row potmVoteRow">
+          <select class="input" id="potmCandidate" aria-label="Player of the Match candidate">
+            <option value="">Select a player</option>
+            ${potmCandidates.filter((candidate) => String(candidate.playerName).toLowerCase() !== meName.toLowerCase()).map((candidate) => `<option value="${escapeHtml(candidate.playerName)}" ${String(candidate.playerName).toLowerCase() === String(potm.myVote || "").toLowerCase() ? "selected" : ""}>${escapeHtml(candidate.playerName)} · ${escapeHtml(candidate.team)}</option>`).join("")}
+          </select>
+          <button class="btn primary" id="submitPotm" type="button">${potm.myVote ? "Change vote" : "Vote"}</button>
+        </div><div class="small" id="potmMessage">${potm.myVote ? `Your current vote: ${escapeHtml(potm.myVote)}` : "Votes stay private until voting closes."}</div>
+      ` : `<div class="small">${meName ? "Only players listed in this match can vote." : "Sign in to vote if you played in this match."} Voting closes ${potmDeadline && !Number.isNaN(potmDeadline.getTime()) ? potmDeadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "three hours after it opens"}.</div>`}
+    </div>` : ``}
+
     ${teamsSelected ? `<div class="card teamSheetCard">
       <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
       <div class="digitalTeamGrid ${awayPlayers.length ? "" : "digitalTeamGrid--single"}">
@@ -1264,6 +1287,21 @@ const cap = availabilityLimitForMatch(m);
   if (capBtn) capBtn.onclick = () => {
     if (!captainPageEnabled) return toastWarn("Captain page unlocks after availability is closed by admin.");
     location.hash = `#/captain?code=${encodeURIComponent(code)}&src=match`;
+  };
+
+  const potmButton = detail.querySelector("#submitPotm");
+  if (potmButton) potmButton.onclick = async () => {
+    const select = detail.querySelector("#potmCandidate");
+    const candidateName = String(select?.value || "").trim();
+    if (!candidateName) return toastWarn("Choose a player first.");
+    setDisabled(potmButton, true, "Saving…");
+    const response = await API.votePotm(code, candidateName);
+    setDisabled(potmButton, false);
+    if (!response?.ok) return toastError(response?.error || "Could not save your vote");
+    potm = response.potm;
+    lsDel(detailKey(code));
+    toastSuccess("POTM vote saved. You can change it until voting closes.");
+    await renderMatchDetail(root, code);
   };
 
   if (!hideAvailability) {

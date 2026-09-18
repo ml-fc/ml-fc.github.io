@@ -28,6 +28,7 @@ export const API = {
   players: () => apiGet({ action: "players" }),
   getPublicMatch: (code) => apiGet({ action: "public_match", code }),
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
+  votePotm: (code, candidateName) => apiPost({ action: "potm_vote", code, candidateName }),
   // admin
   adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
   adminUpdateTeamNames: (payload) => apiPost({ action: "admin_update_team_names", ...payload }),

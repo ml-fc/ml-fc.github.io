@@ -367,6 +367,59 @@ async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "",
   return "download";
 }
 
+async function potmImageFile(match, when, player, voteCount) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080; canvas.height = 1350;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const gradient = context.createLinearGradient(0,0,1080,1350);
+  gradient.addColorStop(0,"#061724"); gradient.addColorStop(1,"#0e536b");
+  context.fillStyle=gradient; context.fillRect(0,0,1080,1350);
+  context.strokeStyle="rgba(114,215,250,.28)"; context.lineWidth=4;
+  context.beginPath(); context.arc(890,220,260,0,Math.PI*2); context.stroke();
+  context.fillStyle="#72d7fa"; context.font="900 28px Arial";
+  context.fillText("MANOR LAKES FC",70,90);
+  context.fillStyle="#ffffff"; context.font="900 48px Arial";
+  context.fillText("PLAYER OF THE MATCH",70,175);
+  context.fillStyle="#ffe16a"; context.font="900 150px Arial";
+  context.fillText("🏆",70,390);
+  context.fillStyle="#ffffff"; context.font="900 76px Arial";
+  wrapCanvasText(context,player.playerName,900).slice(0,2).forEach((line,index)=>context.fillText(line,70,510+index*82));
+  context.fillStyle="#bed2dc"; context.font="700 28px Arial";
+  context.fillText(`${match.title} · ${when}`,70,705);
+  const stats=[
+    [String(voteCount),voteCount===1?"VOTE":"VOTES"],
+    [String(Number(player.goals||0)),"GOALS"],
+    [String(Number(player.assists||0)),"ASSISTS"],
+    [Number(player.ratingCount||0)?Number(player.rating).toFixed(1):"—","RATING"],
+  ];
+  stats.forEach(([value,label],index)=>{
+    const x=70+index*235;
+    context.fillStyle="rgba(3,20,32,.72)"; context.fillRect(x,790,210,190);
+    context.fillStyle="#ffffff"; context.font="900 62px Arial"; context.fillText(value,x+25,875);
+    context.fillStyle="#72d7fa"; context.font="900 20px Arial"; context.fillText(label,x+25,935);
+  });
+  context.fillStyle="#ffffff"; context.font="900 38px Arial";
+  context.fillText(`${match.teamHomeName || "Home"} ${match.scoreHome} – ${match.scoreAway} ${match.teamAwayName || "Away"}`,70,1090);
+  context.fillStyle="#bed2dc"; context.font="700 24px Arial";
+  context.fillText("Voted by the players · Manor Lakes FC",70,1270);
+  const blob=await new Promise((resolve)=>canvas.toBlob(resolve,"image/png"));
+  return blob ? new File([blob],`mlfc-potm-${match.publicCode}.png`,{type:"image/png"}) : null;
+}
+
+async function sharePotm(match, when, player, voteCount) {
+  const file=await potmImageFile(match,when,player,voteCount);
+  if (!file) throw new Error("Could not create POTM image");
+  const caption=`🏆 Player of the Match: ${player.playerName}\n${voteCount} vote${voteCount===1?"":"s"} · ${Number(player.goals||0)} goals · ${Number(player.assists||0)} assists · ${Number(player.ratingCount||0)?Number(player.rating).toFixed(1):"—"} rating\n\n${matchLink(match.publicCode)}`;
+  if (navigator.share && navigator.canShare?.({files:[file]})) {
+    await navigator.share({title:`${player.playerName} · Player of the Match`,text:caption,files:[file]});
+    return "image";
+  }
+  const url=URL.createObjectURL(file); const link=document.createElement("a");
+  link.href=url; link.download=file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000); waOpenPrefill(caption); return "download";
+}
+
 function sameNames(a, b) {
   return uniqueSorted(a).map(x => x.toLowerCase()).join("|") === uniqueSorted(b).map(x => x.toLowerCase()).join("|");
 }
@@ -846,7 +899,7 @@ async function openManageView(root, code, routeToken, prevView) {
 
     // Reload match details from API only on a browser refresh.
     // In iOS installed app (Add to Home Screen), treat this as always-fresh.
-    if (isIOSStandalone() || isReloadForAdminMatchCode(code)) {
+    if (isIOSStandalone() || isReloadForAdminMatchCode(code) || (cached.data.potm?.openedAt && !cached.data.potm?.closed)) {
       API.getPublicMatch(code)
         .then(fresh => {
           if (!stillOnAdmin(routeToken)) return;
@@ -1595,6 +1648,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
+  const potm = data.potm || {};
+  const potmResults = Array.isArray(potm.results) ? potm.results : [];
+  const potmTopVotes = Math.max(0,...potmResults.map((row)=>Number(row.voteCount||0)));
+  const potmLeaders = potmResults.filter((row)=>Number(row.voteCount||0)===potmTopVotes && potmTopVotes>0);
+  const potmLead = potmLeaders[0];
+  const potmPlayer = (potm.candidates || []).find((row)=>String(row.playerName).toLowerCase()===String(potmLead?.candidateName||"").toLowerCase());
 
   const type = String(m.type || "").toUpperCase();
   const homeTeamName = String(m.teamHomeName || (type === "OPPONENT" ? "MLFC" : "Blue"));
@@ -1708,6 +1767,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : "Ready to complete once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
+    ${hasBothScores ? `<section class="card potmAdminCard">
+      <div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? "Voting closed" : "Voting open"}</div>
+      <div class="small">${Number(potm.voteCount||0)} votes cast${potm.deadlineAt ? ` · closes ${new Date(potm.deadlineAt).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}` : ""}${potmLeaders.length>1 ? ` · ${potmLeaders.length}-way tie` : ""}</div>
+      ${potmLead ? `<div class="potmAdminLeader"><span>🏆</span><div><b>${escapeHtml(potmLead.candidateName)}</b><small>${Number(potmLead.voteCount)} votes · ${Number(potmPlayer?.goals||0)} G · ${Number(potmPlayer?.assists||0)} A · ${Number(potmPlayer?.ratingCount||0)?`${Number(potmPlayer.rating).toFixed(1)} rating`:"No rating"}</small></div></div>` : `<div class="small" style="margin-top:10px">No votes yet.</div>`}
+      <button class="btn whatsappBtn" id="sharePotm" type="button" ${potmLead && potm.closed ? "" : "disabled"}>${potm.closed ? "Share POTM image" : "Share after voting closes"}</button>
+    </section>` : ""}
 
     <details class="card">
       <summary style="font-weight:950">Team names</summary>
@@ -1720,6 +1785,17 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
+
+  const sharePotmButton=manageArea.querySelector("#sharePotm");
+  if (sharePotmButton) sharePotmButton.onclick=async()=>{
+    if (!potmPlayer || !potmLead || !potm.closed) return;
+    setDisabled(sharePotmButton,true,"Creating…");
+    try {
+      const mode=await sharePotm(m,when,potmPlayer,Number(potmLead.voteCount||0));
+      toastInfo(mode==="image"?"Choose WhatsApp to share the POTM image.":"POTM image downloaded and WhatsApp opened.");
+    } catch(error) { if(error?.name!=="AbortError") toastError("POTM image could not be shared."); }
+    finally { setDisabled(sharePotmButton,false); }
+  };
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
     const button = manageArea.querySelector("#saveTeamNames");
