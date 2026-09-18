@@ -32,6 +32,7 @@ let ADMIN_AUTO_REFRESH_INSTALLED = false;
 let ADMIN_LAST_REFRESH_TS = 0;
 let ADMIN_REFRESH_INFLIGHT = false;
 let ACTIVE_ADMIN = { root: null, routeToken: "", view: "", refreshList: null };
+let MANAGE_COMMAND_SCROLL_HANDLER = null;
 
 function now() { return Date.now(); }
 function currentHashPath() { return (location.hash || "#/match").split("?")[0]; }
@@ -240,6 +241,36 @@ function setDisabled(btn, disabled, busyText) {
     if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
     btn.textContent = disabled ? busyText : btn.dataset.origText;
   }
+}
+
+function installManageCommandScrollBehavior(manageArea) {
+  if (MANAGE_COMMAND_SCROLL_HANDLER) {
+    window.removeEventListener("scroll", MANAGE_COMMAND_SCROLL_HANDLER);
+  }
+  const command = manageArea?.querySelector(".manageCommand");
+  if (!command) return;
+
+  let scheduled = false;
+  let handler = null;
+  const update = () => {
+    scheduled = false;
+    if (!document.body.contains(command)) {
+      window.removeEventListener("scroll", handler);
+      if (MANAGE_COMMAND_SCROLL_HANDLER === handler) MANAGE_COMMAND_SCROLL_HANDLER = null;
+      return;
+    }
+    const compact = window.scrollY > 140;
+    command.classList.toggle("isCompact", compact);
+    command.dataset.display = compact ? "compact" : "expanded";
+  };
+  handler = () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(update);
+  };
+  MANAGE_COMMAND_SCROLL_HANDLER = handler;
+  window.addEventListener("scroll", handler, { passive: true });
+  update();
 }
 
 
@@ -1504,6 +1535,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     <div id="manageBody"></div>
   `;
+  installManageCommandScrollBehavior(manageArea);
 
   // Admin manage view
 

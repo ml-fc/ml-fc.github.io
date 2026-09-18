@@ -1970,6 +1970,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
   .nextMatch__skeleton { animation: none; }
+  .manageCommand { transition: none; }
 }
 
 /* Sessions 5–7: matchday operations workspace */
@@ -1987,6 +1988,7 @@ details.card[open] > summary { margin-bottom: 14px; }
   border-left: 5px solid var(--accent);
   border-radius: 8px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .28);
+  transition: padding .18s ease, border-radius .18s ease, box-shadow .18s ease;
 }
 .manageCommand__eyebrow {
   color: var(--accent);
@@ -2045,6 +2047,50 @@ details.card[open] > summary { margin-bottom: 14px; }
 @media (max-width: 480px) {
   .manageCommand > .row { display: grid; }
   .manageCommand__state { justify-self: start; }
+}
+
+/* The sticky match controller collapses once its full context has scrolled by. */
+.manageCommand.isCompact {
+  padding: 8px 11px;
+  border-radius: 0 0 7px 7px;
+  box-shadow: 0 7px 18px rgba(0, 0, 0, .3);
+}
+.manageCommand.isCompact > .row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center !important;
+  gap: 9px;
+}
+.manageCommand.isCompact > .row > div:first-child {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.manageCommand.isCompact .manageCommand__eyebrow,
+.manageCommand.isCompact .manageCommand__meta,
+.manageCommand.isCompact .manageCommand__actions,
+.manageCommand.isCompact .manageCommand__notice,
+.manageCommand.isCompact .draftState {
+  display: none;
+}
+.manageCommand.isCompact .manageCommand__title {
+  overflow: hidden;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manageCommand.isCompact .manageCommand__state {
+  flex: 0 0 auto;
+  min-height: 27px;
+  padding: 5px 7px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.manageCommand.isCompact .statusDot {
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 2px rgba(70, 220, 146, .14);
 }
 
 /* Expanded match centre and communications */
