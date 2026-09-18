@@ -30,6 +30,7 @@ export const API = {
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
   // admin
   adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
+  adminUpdateTeamNames: (payload) => apiPost({ action: "admin_update_team_names", ...payload }),
   adminCreateMatch: (payload) => apiPost({ action: "admin_create_match", ...payload }),
   adminCreateSeason: (payload) => apiPost({ action: "admin_create_season", ...payload }),
   adminUpdateSeason: (payload) => apiPost({ action: "admin_update_season", ...payload }),

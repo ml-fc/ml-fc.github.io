@@ -237,11 +237,11 @@ function compactFormation(players) {
   });
 }
 
-function publicTeamSheet(teamName, players, tone = "blue") {
+function publicTeamSheet(teamName, players, tone = "blue", captain = "") {
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
     <div class="digitalTeam__pitch"><span class="digitalTeam__centre" aria-hidden="true"></span>
-      ${compactFormation(players).map((row) => `<div class="digitalTeam__line">${row.map((player) => `<div class="digitalPlayer"><i aria-hidden="true">•</i><span>${escapeHtml(player)}</span></div>`).join("")}</div>`).join("")}
+      ${compactFormation(players).map((row) => `<div class="digitalTeam__line">${row.map((player) => `<div class="digitalPlayer${player === captain ? " digitalPlayer--captain" : ""}"><i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : "•"}</i><span>${escapeHtml(player)}</span></div>`).join("")}</div>`).join("")}
     </div>
   </section>`;
 }
@@ -1161,8 +1161,8 @@ const cap = availabilityLimitForMatch(m);
     ${teamsSelected ? `<div class="card teamSheetCard">
       <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
       <div class="digitalTeamGrid ${awayPlayers.length ? "" : "digitalTeamGrid--single"}">
-        ${publicTeamSheet(teamLabel("HOME"), homePlayers, "blue")}
-        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayPlayers, "orange") : ""}
+        ${publicTeamSheet(teamLabel("HOME"), homePlayers, "blue", caps.captain1)}
+        ${awayPlayers.length ? publicTeamSheet(teamLabel("AWAY"), awayPlayers, "orange", caps.captain2) : ""}
       </div>
     </div>` : ``}
 

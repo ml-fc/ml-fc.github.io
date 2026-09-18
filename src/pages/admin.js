@@ -279,11 +279,12 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
 
 async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 1350;
+  canvas.width = 2160;
+  canvas.height = 2700;
   const context = canvas.getContext("2d");
   if (!context) return null;
 
+  context.scale(2, 2);
   const gradient = context.createLinearGradient(0, 0, 1080, 1350);
   gradient.addColorStop(0, "#061724");
   gradient.addColorStop(1, "#0e3a52");
@@ -332,10 +333,14 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
         context.fillStyle="#ffe16a";context.beginPath();context.arc(x+20,y-17,12,0,Math.PI*2);context.fill();
         context.fillStyle="#132c3b";context.font="900 16px Arial";context.fillText("C",x+20,y-11);
       }
-      context.font="800 18px Arial";
-      const label=fitCanvasLabel(context,name,150), labelWidth=context.measureText(label).width+12;
-      context.fillStyle="#061e2d";context.fillRect(x-labelWidth/2,y+23,labelWidth,25);
-      context.fillStyle="#fff";context.fillText(label,x,y+42);
+      context.font="800 27px Arial";
+      const lines=wrapCanvasText(context,name,180).slice(0,2);
+      const labelWidth=Math.max(...lines.map(line => context.measureText(line).width))+16;
+      const labelX=Math.max(left+labelWidth/2+4,Math.min(left+width-labelWidth/2-4,x));
+      const labelY=Math.min(y+25,top+height-lines.length*31-12);
+      context.fillStyle="#061e2d";context.fillRect(labelX-labelWidth/2,labelY,labelWidth,lines.length*31+8);
+      context.fillStyle="#fff";
+      lines.forEach((line,index) => context.fillText(line,labelX,labelY+27+index*31));
     }
   }
   context.textAlign="left";
@@ -733,7 +738,7 @@ function renderAdminShell(root, view) {
       <div class="field"><label class="field__label" for="title">Match title</label><input id="title" class="input" placeholder="For example, Friday night football" /></div>
       <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
       <div class="field"><label class="field__label" for="type">Match type</label><select id="type" class="input">
-        <option value="INTERNAL" selected>Internal (Blue vs Orange)</option>
+        <option value="INTERNAL" selected>Internal</option>
         <option value="OPPONENT">Against opponents (1 captain)</option>
       </select></div>
 
@@ -1592,6 +1597,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
 
   const type = String(m.type || "").toUpperCase();
+  const homeTeamName = String(m.teamHomeName || (type === "OPPONENT" ? "MLFC" : "Blue"));
+  const awayTeamName = String(m.teamAwayName || (type === "OPPONENT" ? "Opponent" : "Orange"));
   const availability = data.availability || [];
   const yesPlayers = uniqueSorted(availability
     .filter(a => String(a.availability).toUpperCase() === "YES")
@@ -1702,9 +1709,37 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
 
+    <details class="card">
+      <summary style="font-weight:950">Team names</summary>
+      <div class="formGrid formGrid--two" style="margin-top:12px">
+        <div class="field"><label class="field__label" for="editTeamHomeName">Home team name</label><input class="input" id="editTeamHomeName" maxlength="40" value="${escapeHtml(m.teamHomeName || (type === "OPPONENT" ? "MLFC" : "Blue"))}" ${isEditLocked ? "disabled" : ""} /></div>
+        <div class="field"><label class="field__label" for="editTeamAwayName">Away team name</label><input class="input" id="editTeamAwayName" maxlength="40" value="${escapeHtml(m.teamAwayName || (type === "OPPONENT" ? "Opponent" : "Orange"))}" ${isEditLocked ? "disabled" : ""} /></div>
+      </div>
+      <button class="btn primary" id="saveTeamNames" type="button" ${isEditLocked ? "disabled" : ""}>Save team names</button>
+    </details>
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
+
+  manageArea.querySelector("#saveTeamNames").onclick = async () => {
+    const button = manageArea.querySelector("#saveTeamNames");
+    const payload = {matchId:m.matchId, teamHomeName:manageArea.querySelector("#editTeamHomeName").value.trim(), teamAwayName:manageArea.querySelector("#editTeamAwayName").value.trim()};
+    setDisabled(button, true, "Saving…");
+    try {
+      const out = await API.adminUpdateTeamNames(payload);
+      if (!out.ok) return toastError(out.error || "Could not save team names");
+      Object.assign(m, {teamHomeName:out.teamHomeName,teamAwayName:out.teamAwayName});
+      MEM.matches = (MEM.matches || []).map(item => String(item.matchId) === String(m.matchId) ? {...item, teamHomeName:out.teamHomeName,teamAwayName:out.teamAwayName} : item);
+      lsSet(matchesKey(MEM.selectedSeasonId), {ts:now(),matches:MEM.matches});
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+      lsSet(manageKey(m.publicCode), {ts:now(),data});
+      if (stillOnAdmin(routeToken)) renderManageUI(root, data, routeToken, {fromCache:false,prevView});
+      toastSuccess("Team names updated.");
+    } catch (error) {
+      toastError(error.message || "Could not save team names");
+    } finally { setDisabled(button, false); }
+  };
 
   // Admin manage view
 
@@ -1825,7 +1860,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
-        groups:[{team:"MLFC",label:"MLFC",players:squad,captain:opponentCaptain}],positions:fieldPositions,pool:yesPlayers,disabled:isEditLocked,
+        groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,pool:yesPlayers,disabled:isEditLocked,
         onSave:() => manageBody.querySelector("#saveOpponent").click(),
         onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
         onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); updateOpponentDraft(); renderSquadLists(); },
@@ -2091,8 +2126,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   let orange = uniqueSorted(teams.filter(t => String(t.team).toUpperCase() === "ORANGE").map(t => String(t.playerName || "").trim()));
   let captainBlue = String(captains.captain1 || "");
   let captainOrange = String(captains.captain2 || "");
-  const homeTeamName = String(m.teamHomeName || "Blue");
-  const awayTeamName = String(m.teamAwayName || "Orange");
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
 
