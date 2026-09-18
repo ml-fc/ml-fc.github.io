@@ -505,15 +505,35 @@ function latestResultEventLine(result) {
   </div>`;
 }
 
+function potmVoteBannerHtml(vote) {
+  if (!vote?.publicCode) return "";
+  const deadline = new Date(vote.deadlineAt || "");
+  const closes = Number.isNaN(deadline.getTime()) ? "soon" : deadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  return `<section class="potmPrompt" aria-labelledby="potmPromptTitle">
+    <span class="potmPrompt__trophy" aria-hidden="true">🏆</span>
+    <div><div class="nextMatch__eyebrow">Voting is open</div><h2 id="potmPromptTitle">Choose your Player of the Match</h2><p>${escapeHtml(vote.title)} · closes ${escapeHtml(closes)}${vote.currentVote ? ` · current vote: ${escapeHtml(vote.currentVote)}` : ""}</p></div>
+    <button class="btn potmPrompt__button" type="button" data-potm-open="${escapeHtml(vote.publicCode)}">${vote.currentVote ? "Change vote" : "Vote now"}</button>
+  </section>`;
+}
+
+function wirePotmVoteBanner(host) {
+  host.querySelector("[data-potm-open]")?.addEventListener("click", (event) => {
+    const code=event.currentTarget.getAttribute("data-potm-open");
+    if (code) location.hash=`#/match?code=${encodeURIComponent(code)}&focus=potm`;
+  });
+}
+
 function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
   if (!match) {
     host.innerHTML = `
+      ${potmVoteBannerHtml(data?.potmVote)}
       <section class="nextMatch nextMatch--empty" aria-labelledby="nextMatchTitle">
         <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
         <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
       </section>`;
+    wirePotmVoteBanner(host);
     return;
   }
 
@@ -533,6 +553,7 @@ function renderNextMatchDashboard(host, data) {
   const result = data?.latestResult;
 
   host.innerHTML = `
+    ${potmVoteBannerHtml(data?.potmVote)}
     <section class="nextMatch" aria-labelledby="nextMatchTitle">
       <div class="nextMatch__pitch" aria-hidden="true"></div>
       <header class="nextMatch__head">
@@ -584,6 +605,8 @@ function renderNextMatchDashboard(host, data) {
         <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
       </div>` : ""}
     </section>`;
+
+  wirePotmVoteBanner(host);
 
   host.querySelectorAll("[data-next-open]").forEach((button) => {
     button.onclick = () => {
@@ -1188,7 +1211,7 @@ const cap = availabilityLimitForMatch(m);
       </div>
     ` : ``}
 
-    ${hasScore && potm?.openedAt ? `<div class="card potmCard">
+    ${hasScore && potm?.openedAt ? `<div class="card potmCard" id="potmVoting">
       <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "3 HOURS"}</span></div>
       ${potm.closed ? `
         ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
@@ -1387,6 +1410,9 @@ export async function renderMatchPage(root, query) {
   const code = query.get("code");
   if (code) {
     await renderMatchDetail(root, code);
+    if (query.get("focus") === "potm") {
+      setTimeout(() => root.querySelector("#potmVoting")?.scrollIntoView({behavior:"smooth",block:"start"}), 0);
+    }
     return;
   }
 

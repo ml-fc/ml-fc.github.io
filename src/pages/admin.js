@@ -709,6 +709,8 @@ function matchRowHtml(m, view) {
   const isCompleted = status === "COMPLETED";
   const isEditLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
+  const potmVotingClosed = Number(m.potmVotingClosed || 0) === 1 || isCompleted;
+  const potmVoteCount = Number(m.potmVoteCount || 0);
 
   // If locked/completed: disable Manage + scoring.
   const disableManage = isEditLocked;
@@ -731,6 +733,7 @@ function matchRowHtml(m, view) {
       <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
         <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked ? "disabled" : ""}>Score & ratings</button>
+        ${hasBothScores ? `<button class="btn ${potmVotingClosed && potmVoteCount > 0 ? "whatsappBtn" : "gray"}" data-share-potm-card="${m.publicCode}" ${potmVotingClosed && potmVoteCount > 0 ? "" : "disabled"}>${potmVotingClosed ? (potmVoteCount > 0 ? "Share POTM" : "No POTM votes") : "Share POTM after voting"}</button>` : ""}
         ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
         <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
@@ -1529,6 +1532,26 @@ function bindListButtons(root, view) {
     };
   });
 
+  root.querySelectorAll('[data-share-potm-card]:not([disabled])').forEach(btn => {
+    btn.onclick = async () => {
+      const code = btn.getAttribute("data-share-potm-card");
+      setDisabled(btn,true,"Creating…");
+      try {
+        const detail = await API.getPublicMatch(code);
+        if (!detail?.ok) throw new Error(detail?.error || "Could not load POTM result");
+        const results = Array.isArray(detail.potm?.results) ? detail.potm.results : [];
+        const topVotes = Math.max(0,...results.map((row)=>Number(row.voteCount||0)));
+        const leader = results.find((row)=>Number(row.voteCount||0)===topVotes && topVotes>0);
+        const player = (detail.potm?.candidates || []).find((row)=>String(row.playerName).toLowerCase()===String(leader?.candidateName||"").toLowerCase());
+        if (!leader || !player || !detail.potm?.closed) throw new Error("POTM voting has not produced a final result yet");
+        const mode = await sharePotm(detail.match,formatHumanDateTime(detail.match.date,detail.match.time),player,Number(leader.voteCount||0));
+        toastInfo(mode==="image"?"Choose WhatsApp to share the POTM image.":"POTM image downloaded and WhatsApp opened.");
+      } catch(error) {
+        if(error?.name!=="AbortError") toastError(error?.message || "POTM image could not be shared.");
+      } finally { setDisabled(btn,false); }
+    };
+  });
+
   // Lock ratings
   root.querySelectorAll('[data-lock]:not([disabled])').forEach(btn => {
     btn.onclick = async () => {
@@ -1537,7 +1560,7 @@ function bindListButtons(root, view) {
 
       const matchId = btn.getAttribute("data-lock");
       const match = (MEM.matches || []).find(item => String(item.matchId) === String(matchId));
-      if (!confirm(`Complete “${match?.title || "this match"}”?\n\nTeams, availability, scores and ratings will become read-only and the final result will be published.`)) return;
+      if (!confirm(`Complete “${match?.title || "this match"}”?\n\nThis will close POTM voting immediately. Teams, availability, scores and ratings will become read-only and the final result will be published.`)) return;
       setDisabled(btn, true, "Locking…");
 
       const out = await API.adminLockRatings(matchId);
@@ -1556,7 +1579,7 @@ function bindListButtons(root, view) {
       // so we update MEM locally (fast) and save.
       MEM.matches = (MEM.matches || []).map(m => {
         if (String(m.matchId) !== String(matchId)) return m;
-        return { ...m, status: "COMPLETED", ratingsLocked: "TRUE" };
+        return { ...m, status: "COMPLETED", ratingsLocked: "TRUE", potmVotingClosed: 1 };
       });
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
@@ -1866,7 +1889,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     if (!stillOnAdmin(routeToken)) return;
 
     const confirmed = confirm(
-      `Complete “${m.title || "this match"}”?\n\nThis will:\n• lock team and availability changes\n• lock scores and ratings\n• publish the final result\n• mark the match completed\n\nAn admin can unlock it later, but availability will stay closed while scores exist.`
+      `Complete “${m.title || "this match"}”?\n\nThis will:\n• close POTM voting immediately\n• lock team and availability changes\n• lock scores and ratings\n• publish the final result\n• mark the match completed\n\nAn admin can unlock the match later, but POTM voting will remain closed.`
     );
     if (!confirmed) return;
 

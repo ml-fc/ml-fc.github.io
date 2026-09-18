@@ -1577,6 +1577,8 @@ details.card[open] > summary { margin-bottom: 14px; }
 
 /* Match centre — fixture-board layout inspired by the team-room whiteboard. */
 .nextMatchHost { grid-column: 1 / -1; min-width: 0; }
+.potmPrompt{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;margin-bottom:12px;padding:16px 18px;border:1px solid #d7b73e;border-radius:8px;background:linear-gradient(120deg,#3c3107,#78600b);color:#fff;box-shadow:0 12px 30px rgba(7,17,30,.16)}
+.potmPrompt__trophy{font-size:34px}.potmPrompt h2{margin:3px 0;color:#fff;font-size:20px}.potmPrompt p{margin:0;color:#f4e9ae;font-size:12px;font-weight:700}.potmPrompt__button{min-width:130px;color:#19202a;background:#f4cf4f;border-color:#ffe990}
 .nextMatch {
   position: relative;
   isolation: isolate;
@@ -1836,6 +1838,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 .potmWinner>span,.potmAdminLeader>span{font-size:34px}.potmWinner div,.potmAdminLeader div{display:grid;gap:3px}.potmWinner small,.potmAdminLeader small{color:#bed2dc}
 .potmAdminCard{border-left:5px solid #f0c94b}.potmAdminLeader{margin:12px 0}
 @media(max-width:560px){.potmVoteRow{align-items:stretch}.potmVoteRow .input,.potmVoteRow .btn{width:100%}.playerSummary>div:last-child{grid-column:1/-1}}
+@media(max-width:560px){.potmPrompt{grid-template-columns:auto minmax(0,1fr);padding:13px}.potmPrompt__trophy{font-size:28px}.potmPrompt h2{font-size:17px}.potmPrompt__button{grid-column:1/-1;width:100%}}
 .matchSteps { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:16px; }
 .matchSteps span { display:flex; align-items:center; gap:6px; padding:8px; color:#617684; background:#edf3f5; border-bottom:3px solid #cad7dd; border-radius:4px 4px 0 0; font:800 11px/1.1 ui-monospace,monospace; }
 .matchSteps span.isActive { color:#fff; background:var(--blue); border-color:#f4c84b; }
