@@ -2334,11 +2334,11 @@ body.hasCompactMatchCommand .appbar {
 /* Versioned player identity photos. The dark outer ring reads like a shirt
    badge and keeps portraits legible against both halves of the pitch. */
 .playerPhoto{position:relative;display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;overflow:hidden;border-radius:50%;color:#08283b;background:#d9e8ee;border:2px solid #fff;box-shadow:0 0 0 3px rgba(114,215,250,.28),0 5px 14px rgba(0,0,0,.25);font:900 12px/1 Arial,sans-serif}
-.playerPhoto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 32%;z-index:1}
-.playerPhoto__initials{position:relative;z-index:0}
+.playerPhoto::after{content:"";position:absolute;inset:0;z-index:1;background:var(--player-photo) center 32%/cover no-repeat;pointer-events:none}
+.playerPhoto__initials{position:relative;z-index:0;color:#08283b;text-shadow:0 1px 0 rgba(255,255,255,.65)}
 .playerPhoto>span{max-width:none!important;padding:0!important;color:inherit!important;background:transparent!important;border-radius:0!important;font-size:inherit!important;line-height:1!important}
 .playerPhoto--field{width:34px;height:34px;font-size:10px}
-.fieldPlayer>.playerPhoto{margin:0 auto 3px}.fieldPlayer>.playerPhoto+span{display:inline-block}.fieldPlayer.isSelected>.playerPhoto,.fieldPlayer:focus-visible>.playerPhoto{outline:3px solid #ffe16a;outline-offset:2px}
+.fieldPlayer{display:flex;flex-direction:column;align-items:center;justify-content:center}.fieldPlayer>.playerPhoto{margin:0 auto 3px}.fieldPlayer>.playerPhoto+span{display:block}.fieldPlayer.isSelected>.playerPhoto,.fieldPlayer:focus-visible>.playerPhoto{outline:3px solid #ffe16a;outline-offset:2px}
 .fieldPlayer>.playerPhoto{border:3px solid #55ddff;box-shadow:0 0 0 2px #04334b,0 0 13px rgba(85,221,255,.9),0 5px 14px rgba(0,0,0,.35)}
 .fieldPlayer--orange>.playerPhoto{border-color:#ff8a2b;box-shadow:0 0 0 2px #542000,0 0 13px rgba(255,138,43,.95),0 5px 14px rgba(0,0,0,.35)}
 .digitalPlayer>.playerPhoto{margin:auto}.digitalPlayer--positioned>i{position:absolute;top:-4px;left:calc(50% + 10px);width:17px;height:17px;font-size:10px;z-index:2}.digitalPlayer>.playerPhoto+ i:empty{display:none}.digitalPlayer>span:last-child{display:inline-block}

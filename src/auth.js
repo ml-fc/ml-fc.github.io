@@ -76,9 +76,22 @@ export function updateNavForUser(user) {
   let photo = "";
   try { const parsed = new URL(String(user?.photoUrl || "")); if (parsed.protocol === "https:" || ["localhost", "127.0.0.1"].includes(parsed.hostname)) photo = parsed.href; } catch {}
   if (image) {
-    image.hidden = !photo;
-    image.src = photo || "";
-    image.onerror = () => { image.hidden = true; if (fallback) fallback.hidden = false; };
+    image.hidden = true;
+    image.removeAttribute("src");
+    image.dataset.pendingPhoto = photo;
+    if (fallback) fallback.hidden = false;
+    if (photo) {
+      const probe = new Image();
+      probe.onload = () => {
+        if (image.dataset.pendingPhoto !== photo) return;
+        image.src = photo;
+        image.hidden = false;
+        if (fallback) fallback.hidden = true;
+      };
+      probe.onerror = () => {
+        if (image.dataset.pendingPhoto === photo && fallback) fallback.hidden = false;
+      };
+      probe.src = photo;
+    }
   }
-  if (fallback) fallback.hidden = Boolean(photo);
 }
