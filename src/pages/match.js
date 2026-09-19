@@ -478,15 +478,19 @@ async function availabilityImageFile(match, availability) {
   const headerHeight = 170;
   const availableHeight = 104 + availableRows * rowHeight + 24;
   const lowerHeight = 104 + lowerRows * rowHeight + 24;
+  const logicalWidth = 1080;
+  const logicalHeight = Math.max(1350, headerHeight + availableHeight + lowerHeight + 112);
+  const renderScale = 2;
   const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = Math.max(1350, headerHeight + availableHeight + lowerHeight + 112);
+  canvas.width = logicalWidth * renderScale;
+  canvas.height = logicalHeight * renderScale;
   const context = canvas.getContext("2d");
   if (!context) return null;
+  context.scale(renderScale, renderScale);
 
-  const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+  const gradient = context.createLinearGradient(0, 0, logicalWidth, logicalHeight);
   gradient.addColorStop(0, "#061724"); gradient.addColorStop(1, "#0e3a52");
-  context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = gradient; context.fillRect(0, 0, logicalWidth, logicalHeight);
   if (logo) context.drawImage(logo, 48, 34, 104, 104);
   context.fillStyle = "#72d7fa"; context.font = "900 22px Arial";
   context.fillText("MANOR LAKES FC", 178, 55);
@@ -549,12 +553,12 @@ async function availabilityImageFile(match, availability) {
     });
   };
 
-  drawPanel(available, margin, contentTop, canvas.width - margin * 2, availableHeight, 2);
+  drawPanel(available, margin, contentTop, logicalWidth - margin * 2, availableHeight, 2);
   const lowerTop = contentTop + availableHeight + gap;
-  const lowerWidth = (canvas.width - margin * 2 - gap) / 2;
+  const lowerWidth = (logicalWidth - margin * 2 - gap) / 2;
   lowerGroups.forEach((group, index) => drawPanel(group, margin + index * (lowerWidth + gap), lowerTop, lowerWidth, lowerHeight, lowerColumns[index]));
   context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
-  context.fillText("Generated from the live MLFC availability list", 54, canvas.height - 35);
+  context.fillText("Generated from the live MLFC availability list", 54, logicalHeight - 35);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
   return blob ? new File([blob], `mlfc-availability-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
