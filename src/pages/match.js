@@ -457,7 +457,7 @@ function whatsappAvailabilityMessage(match, availability) {
 
 async function availabilityImageFile(match, availability) {
   const groups = availabilityGroups(availability);
-  const available = { title: "AVAILABLE", names: groups.yes, color: "#72d7fa" };
+  const available = { title: "AVAILABLE", names: groups.yes, color: "#45dc8a" };
   const lowerGroups = [
     { title: "WAITING LIST", names: groups.waiting, color: "#ffe16a" },
     { title: "UNAVAILABLE", names: groups.no, color: "#ff8b78" },
@@ -468,10 +468,14 @@ async function availabilityImageFile(match, availability) {
     [...new Set(allGroups.flatMap(group => group.names))].map(async name => [name, await loadCanvasImage(photoByName.get(name.toLowerCase()))])
   ));
   const logo = await loadCanvasImage("./assets/icons/icon-192.png");
-  const rowHeight = 72;
+  // Keep the common 22-player case within WhatsApp's 4:5 message preview.
+  // Secondary lists switch to two columns as they grow instead of making the
+  // image increasingly tall (and therefore cropped in the chat bubble).
+  const rowHeight = 56;
+  const lowerColumns = lowerGroups.map(group => group.names.length > 6 ? 2 : 1);
   const availableRows = Math.max(1, Math.ceil(available.names.length / 2));
-  const lowerRows = Math.max(1, ...lowerGroups.map(group => group.names.length));
-  const headerHeight = 190;
+  const lowerRows = Math.max(1, ...lowerGroups.map((group, index) => Math.ceil(group.names.length / lowerColumns[index])));
+  const headerHeight = 170;
   const availableHeight = 104 + availableRows * rowHeight + 24;
   const lowerHeight = 104 + lowerRows * rowHeight + 24;
   const canvas = document.createElement("canvas");
@@ -483,7 +487,7 @@ async function availabilityImageFile(match, availability) {
   const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
   gradient.addColorStop(0, "#061724"); gradient.addColorStop(1, "#0e3a52");
   context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
-  if (logo) context.drawImage(logo, 42, 30, 112, 112);
+  if (logo) context.drawImage(logo, 48, 34, 104, 104);
   context.fillStyle = "#72d7fa"; context.font = "900 22px Arial";
   context.fillText("MANOR LAKES FC", 178, 55);
   context.fillStyle = "#ffffff"; context.font = "900 42px Arial";
@@ -519,31 +523,36 @@ async function availabilityImageFile(match, availability) {
       const column = Math.floor(index / rows);
       const row = index % rows;
       const itemX = x + column * itemWidth;
-      const cy = y + 112 + row * rowHeight;
+      const cy = y + 106 + row * rowHeight;
       const portrait = portraits.get(name);
-      context.save(); context.beginPath(); context.arc(itemX + 38, cy, 26, 0, Math.PI * 2); context.clip();
+      const portraitSize = columns > 1 && width < 600 ? 44 : 48;
+      const portraitRadius = portraitSize / 2;
+      const portraitX = itemX + 18 + portraitRadius;
+      context.save(); context.beginPath(); context.arc(portraitX, cy, portraitRadius, 0, Math.PI * 2); context.clip();
       if (portrait) {
-        const scale = Math.max(52 / portrait.width, 52 / portrait.height);
-        const width = portrait.width * scale, height = portrait.height * scale;
-        context.drawImage(portrait, itemX + 38 - width / 2, cy - height / 2, width, height);
+        const scale = Math.max(portraitSize / portrait.width, portraitSize / portrait.height);
+        const photoWidth = portrait.width * scale, photoHeight = portrait.height * scale;
+        context.drawImage(portrait, portraitX - photoWidth / 2, cy - photoHeight / 2, photoWidth, photoHeight);
       } else {
-        context.fillStyle = group.color; context.fillRect(itemX + 12, cy - 26, 52, 52);
+        context.fillStyle = "#102c38"; context.fillRect(portraitX - portraitRadius, cy - portraitRadius, portraitSize, portraitSize);
       }
       context.restore();
-      context.strokeStyle = "rgba(255,255,255,.82)"; context.lineWidth = 2; context.beginPath(); context.arc(itemX + 38, cy, 26, 0, Math.PI * 2); context.stroke();
-      context.fillStyle = name === "No players" ? "#78949c" : "#ffffff"; context.font = "800 28px Arial";
-      const maxWidth = itemWidth - 94;
+      context.strokeStyle = group.color; context.lineWidth = 4; context.beginPath(); context.arc(portraitX, cy, portraitRadius, 0, Math.PI * 2); context.stroke();
+      context.fillStyle = name === "No players" ? "#78949c" : "#ffffff";
+      context.font = `800 ${columns > 1 && width < 600 ? 24 : 28}px Arial`;
+      const labelX = portraitX + portraitRadius + 12;
+      const maxWidth = itemX + itemWidth - 14 - labelX;
       let label = name;
       while (label.length > 1 && context.measureText(`${label}…`).width > maxWidth) label = label.slice(0, -1);
       if (label !== name) label += "…";
-      context.fillText(label, itemX + 78, cy + 9);
+      context.fillText(label, labelX, cy + 9);
     });
   };
 
   drawPanel(available, margin, contentTop, canvas.width - margin * 2, availableHeight, 2);
   const lowerTop = contentTop + availableHeight + gap;
   const lowerWidth = (canvas.width - margin * 2 - gap) / 2;
-  lowerGroups.forEach((group, index) => drawPanel(group, margin + index * (lowerWidth + gap), lowerTop, lowerWidth, lowerHeight));
+  lowerGroups.forEach((group, index) => drawPanel(group, margin + index * (lowerWidth + gap), lowerTop, lowerWidth, lowerHeight, lowerColumns[index]));
   context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
   context.fillText("Generated from the live MLFC availability list", 54, canvas.height - 35);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
