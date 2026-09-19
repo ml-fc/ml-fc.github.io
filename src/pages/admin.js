@@ -1480,7 +1480,7 @@ async function renderUsers(root, opts = {}) {
 
     if (btn.matches("[data-reset-pass]")) {
       const name = decodeURIComponent(btn.getAttribute("data-reset-pass") || "");
-      const pwd = prompt(`Enter a new password for ${name}`);
+      const pwd = prompt(`Enter a new password for ${name}`)?.trim();
       if (!pwd) return;
       const res = await API.adminSetPassword(name, pwd).catch(() => null);
       if (!res?.ok) return toastError(res?.error || "Failed");

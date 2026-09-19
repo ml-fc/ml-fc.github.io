@@ -46,15 +46,15 @@ export async function renderLoginPage(root) {
 
       <div class="card">
         <div class="h1">Change password</div>
-        <div class="small">Use at least 8 characters. Updating it signs in securely on this device.</div>
+        <div class="small">Choose any password you will remember.</div>
         <div class="field">
           <label class="field__label" for="oldPass">Current password</label>
           <input id="oldPass" type="password" class="input" autocomplete="current-password" />
         </div>
         <div class="field">
           <label class="field__label" for="newPass">New password</label>
-          <input id="newPass" type="password" class="input" autocomplete="new-password" minlength="8" aria-describedby="passHelp passMsg" />
-          <div class="field__help" id="passHelp">At least 8 characters.</div>
+          <input id="newPass" type="password" class="input" autocomplete="new-password" aria-describedby="passHelp passMsg" />
+          <div class="field__help" id="passHelp">Any non-empty password is accepted.</div>
         </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="changePass">Update password</button>
@@ -218,9 +218,9 @@ export async function renderLoginPage(root) {
       const newPasswordEl = root.querySelector("#newPass");
       const msg = root.querySelector("#passMsg");
       newPasswordEl.removeAttribute("aria-invalid");
-      if (newPassword.length < 8) {
+      if (!newPassword) {
         newPasswordEl.setAttribute("aria-invalid", "true");
-        msg.textContent = "Enter a new password with at least 8 characters.";
+        msg.textContent = "Enter a new password.";
         newPasswordEl.focus();
         return;
       }
@@ -441,10 +441,10 @@ export async function renderLoginPage(root) {
 
     <div class="card" id="regCard" style="display:none">
       <div class="h1">Register</div>
-      <div class="small">Create your player account. Use at least 8 characters for your password.</div>
+      <div class="small">Create your player account with any password you will remember.</div>
       <div class="field"><label class="field__label" for="rname">Player name</label><input id="rname" class="input" autocomplete="username" maxlength="80" /></div>
       <div class="field"><label class="field__label" for="rphone">Phone <span class="field__optional">Optional</span></label><input id="rphone" class="input" inputmode="numeric" pattern="[0-9]*" maxlength="15" autocomplete="tel" /></div>
-      <div class="field"><label class="field__label" for="rpass">Password</label><input id="rpass" type="password" class="input" autocomplete="new-password" minlength="8" maxlength="128" aria-describedby="rpassHelp rmsg" /><div class="field__help" id="rpassHelp">Use at least 8 characters.</div></div>
+      <div class="field"><label class="field__label" for="rpass">Password</label><input id="rpass" type="password" class="input" autocomplete="new-password" aria-describedby="rpassHelp rmsg" /><div class="field__help" id="rpassHelp">Any non-empty password is accepted.</div></div>
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="regBtn" class="btn primary">Create account</button>
         <button id="hideReg" class="btn gray">Cancel</button>
@@ -474,7 +474,7 @@ export async function renderLoginPage(root) {
   root.querySelector("#loginForm").onsubmit = async (event) => {
     event.preventDefault();
     const name = nameEl.value.replace(/\s+/g, " ").trim();
-    const password = passEl.value;
+    const password = passEl.value.trim();
     nameEl.removeAttribute("aria-invalid");
     passEl.removeAttribute("aria-invalid");
     if (!name || !password) {
@@ -519,7 +519,7 @@ const rmsg = root.querySelector("#rmsg");
     const rpassEl = root.querySelector("#rpass");
     const name = rnameEl.value.replace(/\s+/g, " ").trim();
     const phone = root.querySelector("#rphone").value.trim();
-    const password = rpassEl.value;
+    const password = rpassEl.value.trim();
     rnameEl.removeAttribute("aria-invalid");
     rpassEl.removeAttribute("aria-invalid");
     if (!name) {
@@ -528,9 +528,9 @@ const rmsg = root.querySelector("#rmsg");
       rnameEl.focus();
       return;
     }
-    if (password.length < 8) {
+    if (!password) {
       rpassEl.setAttribute("aria-invalid", "true");
-      rmsg.textContent = "Enter a password with at least 8 characters.";
+      rmsg.textContent = "Enter a password.";
       rpassEl.focus();
       return;
     }
