@@ -204,14 +204,16 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       <div class="ladderControls__season" id="seasonBlock"></div>
       <div class="ladderFilterBar">
         <div class="ladderSearch"><label class="visuallyHidden" for="playerSearch">Search players</label><span aria-hidden="true">⌕</span><input class="input" id="playerSearch" type="search" placeholder="Search players" autocomplete="off" /></div>
-        <button class="btn gray ladderFilterButton" id="filterButton" type="button" aria-expanded="false" aria-controls="ladderFilterPanel">Filters<span id="filterCount" aria-hidden="true"></span></button>
-        <div class="ladderSort" role="group" aria-label="Sort ladder">
-          <button class="btn gray" id="sortGoals">Goals</button>
-          <button class="btn gray" id="sortAssists">Assists</button>
-          <button class="btn gray" id="sortPotm">POTM</button>
-          ${sortRatingBtnHtml}
+        <button class="btn gray ladderFilterButton" id="filterButton" type="button" aria-label="Filter players" aria-expanded="false" aria-controls="ladderFilterPanel"><span class="ladderFilterButton__icon" aria-hidden="true">≡</span><span class="ladderFilterButton__label">Filters</span><span id="filterCount" aria-hidden="true"></span></button>
+        <div class="ladderMetrics">
+          <div class="ladderSort" role="group" aria-label="Sort ladder">
+            <button class="btn gray" id="sortGoals">Goals</button>
+            <button class="btn gray" id="sortAssists">Assists</button>
+            <button class="btn gray" id="sortPotm">POTM</button>
+            ${sortRatingBtnHtml}
+          </div>
+          ${ratingToggleHtml}
         </div>
-        ${ratingToggleHtml}
         <div class="ladderFilterPanel" id="ladderFilterPanel" hidden>
           <label class="ladderMinimum" for="minimumMatches"><span>Minimum games</span><select class="input" id="minimumMatches" name="minimumMatches" aria-describedby="minimumMatchesHelp"><option value="0" ${minimumMatches === 0 ? "selected" : ""}>All players</option><option value="1" ${minimumMatches === 1 ? "selected" : ""}>1+</option><option value="3" ${minimumMatches === 3 ? "selected" : ""}>3+</option><option value="5" ${minimumMatches === 5 ? "selected" : ""}>5+</option><option value="10" ${minimumMatches === 10 ? "selected" : ""}>10+</option></select></label>
           <button class="btn gray" id="clearFilters" type="button">Clear filters</button>
