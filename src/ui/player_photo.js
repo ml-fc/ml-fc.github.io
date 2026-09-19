@@ -49,12 +49,12 @@ export async function choosePhotoCrop(file, container = document.body) {
     <div class="photoCropSheet">
       <div class="stepEyebrow">Profile photo</div>
       <div class="h1" id="photoCropTitle">Crop around your face</div>
-      <p class="photoCropHelp" id="photoCropHelp">Move and zoom so your face fills the circle. The guide turns green when the crop is ready and red when it needs adjusting.</p>
+      <p class="photoCropHelp" id="photoCropHelp">Move and zoom so your face fills the circle. It reaches the photo edge and turns green when ready or red when it needs adjusting.</p>
       <div class="photoCropViewport">
         <canvas width="${previewSize}" height="${previewSize}" aria-label="Photo crop preview" aria-describedby="photoCropHelp"></canvas>
         <span class="photoCropGuide" aria-hidden="true"></span>
       </div>
-      <label class="photoCropZoom">Zoom <input type="range" min="1" max="3" step="0.01" value="1" aria-label="Photo zoom"></label>
+      <label class="photoCropZoom">Zoom <input type="range" min="1" max="6" step="0.01" value="1" aria-label="Photo zoom"></label>
       <div class="photoCropCheck isChecking" role="status" aria-live="polite"><span aria-hidden="true"></span><b>Loading private face check…</b></div>
       <p class="photoCropPrivacy">Face detection runs only on this device. Nothing is uploaded until you use the crop.</p>
       <div class="photoCropActions">
@@ -77,6 +77,7 @@ export async function choosePhotoCrop(file, container = document.body) {
   let checkTimer = null;
   let checkSequence = 0;
   let faceCheckReady = false;
+  let cropQuality = "checking";
 
   const dimensions = () => {
     const baseScale = Math.max(previewSize / bitmap.width, previewSize / bitmap.height);
@@ -96,11 +97,18 @@ export async function choosePhotoCrop(file, container = document.body) {
     context.drawImage(bitmap, (previewSize - width) / 2 + offsetX, (previewSize - height) / 2 + offsetY, width, height);
   };
   const updateCheck = (quality, message) => {
+    cropQuality = quality;
     dialog.dataset.cropQuality = quality;
     check.className = `photoCropCheck is${quality[0].toUpperCase()}${quality.slice(1)}`;
     checkMessage.textContent = message;
-    useButton.disabled = quality === "checking";
-    useButton.textContent = quality === "warning" ? "Continue anyway" : "Use this crop";
+    useButton.disabled = quality !== "good" && quality !== "unavailable";
+    useButton.textContent = quality === "warning"
+      ? "Adjust crop first"
+      : quality === "checking"
+        ? "Checking photo…"
+        : quality === "unavailable"
+          ? "Use without face check"
+          : "Use this crop";
   };
   const runFaceCheck = async () => {
     const sequence = ++checkSequence;
@@ -182,6 +190,7 @@ export async function choosePhotoCrop(file, container = document.body) {
     dialog.querySelector("[data-cancel]").onclick = () => finish(null);
     dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
     useButton.onclick = async event => {
+      if (cropQuality !== "good" && cropQuality !== "unavailable") return;
       event.currentTarget.disabled = true;
       event.currentTarget.textContent = "Preparing…";
       try { finish(await encodeCrop()); }

@@ -11,6 +11,64 @@
 const SW_URL = new URL(self.location);
 const BUILD_ID = SW_URL.searchParams.get("b") || "dev";
 const CACHE_NAME = `mlfc-static-${BUILD_ID}`;
+const NOTIFICATION_DB = "mlfc-notification-state-v1";
+const DISMISSED_STORE = "dismissed";
+
+function openNotificationDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(NOTIFICATION_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(DISMISSED_STORE, { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function storeDismissedNotification(id) {
+  if (id === null || id === undefined || id === "") return false;
+  const value = Number(id);
+  if (!Number.isFinite(value)) return false;
+  const db = await openNotificationDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(DISMISSED_STORE, "readwrite");
+    transaction.objectStore(DISMISSED_STORE).put({ id: value });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+  return true;
+}
+
+async function dismissedNotificationIds() {
+  const db = await openNotificationDb();
+  const ids = await new Promise((resolve, reject) => {
+    const request = db.transaction(DISMISSED_STORE).objectStore(DISMISSED_STORE).getAllKeys();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return ids;
+}
+
+async function removeDismissedNotifications(ids) {
+  const values = (Array.isArray(ids) ? ids : []).map(Number).filter(Number.isFinite);
+  if (!values.length) return;
+  const db = await openNotificationDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(DISMISSED_STORE, "readwrite");
+    values.forEach((id) => transaction.objectStore(DISMISSED_STORE).delete(id));
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function broadcastDismissedNotification(id) {
+  let stored = false;
+  try { stored = await storeDismissedNotification(id); } catch {}
+  if (!stored) return;
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  windows.forEach((client) => client.postMessage({ type: "MLFC_NOTIFICATION_DISMISSED", ids: [Number(id)] }));
+}
 
 const STATIC_ASSETS = [
   "/",
@@ -93,6 +151,18 @@ self.addEventListener("message", (event) => {
     return;
   }
 
+  if (type === "GET_DISMISSED_NOTIFICATIONS") {
+    event.waitUntil(dismissedNotificationIds()
+      .then((ids) => event.source?.postMessage({ type: "MLFC_NOTIFICATION_DISMISSED", ids }))
+      .catch(() => {}));
+    return;
+  }
+
+  if (type === "ACK_DISMISSED_NOTIFICATIONS") {
+    event.waitUntil(removeDismissedNotifications(data.ids).catch(() => {}));
+    return;
+  }
+
   if (type === "CLEAR_CACHES" || type === "CLEAR_ALL") {
     event.waitUntil(
       (async () => {
@@ -132,7 +202,10 @@ self.addEventListener("push", (event) => {
     icon: "/assets/icons/icon-192.png",
     badge: "/assets/icons/notification-badge.png",
     tag: String(notification?.tag || data?.tag || "mlfc-update"),
-    data: { url: String(notification?.url || data?.url || "/#/login") },
+    data: {
+      url: String(notification?.url || data?.url || "/#/login"),
+      notificationId: notification?.notificationId ?? data?.notificationId ?? null,
+    },
   };
   const image = String(notification?.image || data?.image || "");
   if (/^https:\/\//i.test(image)) options.image = image;
@@ -145,8 +218,10 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  const notificationId = event.notification?.data?.notificationId;
   event.notification.close();
   event.waitUntil((async () => {
+    await broadcastDismissedNotification(notificationId);
     const target = new URL(event.notification?.data?.url || "/#/login", self.location.origin).href;
     const isSameOrigin = new URL(target).origin === self.location.origin;
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -160,6 +235,10 @@ self.addEventListener("notificationclick", (event) => {
     }
     return self.clients.openWindow ? self.clients.openWindow(target) : undefined;
   })());
+});
+
+self.addEventListener("notificationclose", (event) => {
+  event.waitUntil(broadcastDismissedNotification(event.notification?.data?.notificationId));
 });
 
 // Cache-first for same-origin static requests (but HTML navigations are network-first)

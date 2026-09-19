@@ -174,6 +174,9 @@ export async function renderCaptainPage(root, query) {
 
   const cachedTeams = lsGet(teamsKey(code));
   let teamMap = (cachedTeams?.teamMap && typeof cachedTeams.teamMap === "object") ? cachedTeams.teamMap : {};
+  const savedMatchRoster = uniqueSorted((data.teams || [])
+    .filter(t => type === "OPPONENT" ? safeUpper(t.team) === "MLFC" : true)
+    .map(t => String(t.playerName || "").trim()));
 
   (data.teams || []).forEach(t => {
     const p = String(t.playerName || "").trim();
@@ -184,9 +187,12 @@ export async function renderCaptainPage(root, query) {
   // Admin ratings must always use the teams saved for this match. Falling back to
   // availability creates editable rows that the API correctly rejects as unassigned.
   // Captain flow can still start from availability / cached roster while setup is active.
-  if (adminMode) roster = uniqueSorted(Object.keys(teamMap));
+  // The saved team sheet is authoritative for opponent matches. Using YES
+  // availability or a stale device draft here can expose players who were not
+  // selected and omit players whom the API requires the captain to rate.
+  if (adminMode || type === "OPPONENT") roster = savedMatchRoster;
 
-  if (!adminMode && !roster.some(x => x.toLowerCase() === captain.toLowerCase())) {
+  if (!adminMode && type === "INTERNAL" && !roster.some(x => x.toLowerCase() === captain.toLowerCase())) {
     roster = uniqueSorted([...roster, captain]);
   }
 
@@ -376,7 +382,9 @@ export async function renderCaptainPage(root, query) {
         ? (roster.length
           ? "Ratings use the teams saved for this match."
           : "No saved teams found. Go back to match management, assign players to both teams, and save setup before rating.")
-        : "Roster starts from confirmed YES availability. Add more players if someone joins late."}</div>
+        : type === "OPPONENT"
+          ? "This is the saved MLFC team sheet. Ask an admin to change the selected squad."
+          : "Roster starts from confirmed YES availability. Add more players if someone joins late."}</div>
 
       <details class="card" style="margin-top:10px">
         <summary style="font-weight:950">Players who posted availability (${postedPlayers.length})</summary>
@@ -386,11 +394,11 @@ export async function renderCaptainPage(root, query) {
       </details>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1" ${adminMode ? "disabled" : ""}>
+        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>
           <option value="">Add player from full list…</option>
           ${(allPlayers||[]).map(p => `<option value="${p}">${p}</option>`).join("")}
         </select>
-        <button class="btn gray" id="addBtn" ${adminMode ? "disabled" : ""}>Add</button>
+        <button class="btn gray" id="addBtn" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>Add</button>
       </div>
 
       <div class="row" style="margin-top:10px">
@@ -662,7 +670,7 @@ export async function renderCaptainPage(root, query) {
           <div class="muted" style="margin-top:6px; font-size:12px">Team</div>
           <div class="teamPills" style="margin-top:6px; gap:6px">
             ${moveBtns}
-            <button class="btn gray tinyBtn" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>
+            ${type === "OPPONENT" ? "" : `<button class="btn gray tinyBtn" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>`}
           </div>
 
           ${canEdit ? `
@@ -757,7 +765,7 @@ export async function renderCaptainPage(root, query) {
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
-            <td style="padding:10px; text-align:center"><button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button></td>
+            <td style="padding:10px; text-align:center">${type === "OPPONENT" ? `<span class="small muted">Admin managed</span>` : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
           </tr>
         `;
       }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
@@ -845,7 +853,7 @@ export async function renderCaptainPage(root, query) {
   searchEl.addEventListener("input", renderRows);
 
   root.querySelector("#addBtn").onclick = () => {
-    if (adminMode) return toastWarn("Assign players in match management and save setup first.");
+    if (adminMode || type === "OPPONENT") return toastWarn("Assign players in match management and save setup first.");
     const sel = root.querySelector("#addFromAll");
     const p = String(sel.value || "").trim();
     if (!p) return toastWarn("Select a player to add.");
@@ -916,7 +924,7 @@ export async function renderCaptainPage(root, query) {
         }
 
         if (requireAll && missing.length) {
-          throw new Error(`Please rate all ${opponentTeam} players before submitting. Missing: ${missing.join(", ")}`);
+          throw new Error(`Please rate all ${type === "OPPONENT" ? "MLFC" : opponentTeam} players before submitting. Missing: ${missing.join(", ")}`);
         }
 
         if (rows.length === 0) {

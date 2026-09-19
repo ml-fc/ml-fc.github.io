@@ -43,6 +43,7 @@ export const API = {
   adminUpdateAvailabilityLimit: (matchId, availabilityLimit) =>
     apiPost({ action: "admin_update_availability_limit", matchId, availabilityLimit }),
   adminDeleteMatch: (matchId) => apiPost({ action: "admin_delete_match", matchId }),
+  adminAutoTeams: (matchId) => apiPost({ action: "admin_auto_teams", matchId }),
   adminSetupInternal: (payload) => apiPost({ action: "admin_setup_internal", ...payload }),
   adminSetupOpponent: (payload) => apiPost({ action: "admin_setup_opponent", ...payload }),
   adminShareTeams: (matchId) => apiPost({ action: "admin_share_teams", matchId }),

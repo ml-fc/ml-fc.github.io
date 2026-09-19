@@ -88,6 +88,34 @@ async function checkNotificationsBadge(reason = "nav", { force = false } = {}) {
   return out;
 }
 
+function acknowledgePhoneDismissals(ids) {
+  navigator.serviceWorker?.controller?.postMessage({ type: "ACK_DISMISSED_NOTIFICATIONS", ids });
+}
+
+async function syncPhoneDismissals(ids) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter(Number.isFinite))];
+  if (!list.length || !getCachedUser()) return;
+  const result = await API.notificationsMarkRead(list).catch(() => null);
+  if (!result?.ok) return;
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(LS_NOTI_CACHE) || "null");
+    const removed = new Set(list.map(String));
+    const notifications = (cached?.data?.notifications || []).filter((item) => !removed.has(String(item.id)));
+    localStorage.setItem(LS_NOTI_CACHE, JSON.stringify({ ts: Date.now(), data: { ok: true, notifications } }));
+    setAccountNotiBadge(notifications.length > 0);
+  } catch {}
+  acknowledgePhoneDismissals(list);
+  await checkNotificationsBadge("phone-dismiss", { force: true });
+  if ((location.hash || "").split("?")[0] === "#/login") {
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  }
+}
+
+function requestPendingPhoneDismissals() {
+  navigator.serviceWorker?.controller?.postMessage({ type: "GET_DISMISSED_NOTIFICATIONS" });
+}
+
 
 async function checkNotificationsOnce() {
   const cachedUser = getCachedUser();
@@ -175,6 +203,7 @@ function boot() {
       updateNavForUser(u);
       if (u) showPushEnableReminder().catch(() => {});
       checkNotificationsOnce().catch(() => {});
+      if (u) requestPendingPhoneDismissals();
     })
     .catch(() => {
       updateNavForUser(null);
@@ -209,6 +238,10 @@ function boot() {
   // Use that as a trigger to refresh the in-app badge and (if currently viewing Account) the list.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (ev) => {
+      if (ev?.data?.type === "MLFC_NOTIFICATION_DISMISSED") {
+        syncPhoneDismissals(ev.data.ids).catch(() => {});
+        return;
+      }
       if (ev?.data?.type !== "MLFC_PUSH") return;
 
       // Update badge immediately

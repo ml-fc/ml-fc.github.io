@@ -278,7 +278,7 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
   });
 }
 
-async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
+async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = 2160;
   canvas.height = 2700;
@@ -308,6 +308,12 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
 
   const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa", captain:captains[0], upper:false }];
   if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55", captain:captains[1], upper:true });
+  const portraits = new Map(await Promise.all(
+    [...new Set(teams.flatMap(team => team.players))].map(async name => [
+      name,
+      await loadCanvasImage(photos[name] || photos[String(name).trim().toLowerCase()]),
+    ])
+  ));
   const left=70, top=390, width=940, height=800;
   context.fillStyle="#26713b";
   context.fillRect(left,top,width,height);
@@ -328,8 +334,20 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
       const pos=positions[name] || defaults[name];
       const x=left+width*(team.upper?100-pos.positionX:pos.positionX)/100;
       const y=top+height*(team.upper?50-pos.positionY/2:50+pos.positionY/2)/100;
-      context.fillStyle=team.color;context.beginPath();context.arc(x,y,19,0,Math.PI*2);context.fill();
-      context.strokeStyle="#fff";context.lineWidth=3;context.stroke();
+      const portrait=portraits.get(name);
+      const markerRadius=30;
+      context.save();
+      context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.clip();
+      if (portrait) {
+        const size=markerRadius*2;
+        const scale=Math.max(size/portrait.width,size/portrait.height);
+        const drawWidth=portrait.width*scale,drawHeight=portrait.height*scale;
+        context.drawImage(portrait,x-drawWidth/2,y-drawHeight/2,drawWidth,drawHeight);
+      } else {
+        context.fillStyle=team.color;context.fillRect(x-markerRadius,y-markerRadius,markerRadius*2,markerRadius*2);
+      }
+      context.restore();
+      context.strokeStyle="#fff";context.lineWidth=3;context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.stroke();
       if(name===team.captain) {
         context.fillStyle="#ffe16a";context.beginPath();context.arc(x+20,y-17,12,0,Math.PI*2);context.fill();
         context.fillStyle="#132c3b";context.font="900 16px Arial";context.fillText("C",x+20,y-11);
@@ -353,8 +371,8 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
 
-async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
-  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions, captains);
+async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}) {
+  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions, captains, photos);
   if (!file) throw new Error("Could not create team sheet image");
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
     const caption = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${matchLink(match.publicCode)}`;
@@ -1759,6 +1777,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   const captains = data.captains || {};
   const teams = data.teams || [];
+  const playerPhotos = Object.fromEntries(teams
+    .filter(row => row.photoUrl)
+    .flatMap(row => [[row.playerName, row.photoUrl], [String(row.playerName || "").trim().toLowerCase(), row.photoUrl]]));
 
   const when = formatHumanDateTime(m.date, m.time);
   const safeTitle = escapeHtml(m.title || "Untitled match");
@@ -1953,7 +1974,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
-        groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,pool:yesPlayers,disabled:isEditLocked,
+        groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
         onSave:() => manageBody.querySelector("#saveOpponent").click(),
         onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
         onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); updateOpponentDraft(); renderSquadLists(); },
@@ -2024,7 +2045,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       const button = manageBody.querySelector("#shareSquad");
       setDisabled(button, true, "Preparing…");
       try {
-        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions, [opponentCaptain]);
+        const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions, [opponentCaptain], playerPhotos);
         const published = await API.adminShareTeams(m.matchId);
         if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
         toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
@@ -2037,6 +2058,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       const btn = manageBody.querySelector("#saveOpponent");
       const msg = manageBody.querySelector("#msg");
       const selCaptain = opponentCaptain;
+
+      if (!squad.length) return toastWarn("Select at least one MLFC player before saving.");
+      if (!selCaptain) return toastWarn("Select one MLFC captain before saving.");
 
       setDisabled(btn, true, "Saving…");
       msg.textContent = "Saving…";
@@ -2219,6 +2243,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   let orange = uniqueSorted(teams.filter(t => String(t.team).toUpperCase() === "ORANGE").map(t => String(t.playerName || "").trim()));
   let captainBlue = String(captains.captain1 || "");
   let captainOrange = String(captains.captain2 || "");
+  let autoBalanceReport = null;
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
 
@@ -2267,6 +2292,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     // if captain got removed, clear
     if (!blue.includes(captainBlue)) captainBlue = "";
     if (!orange.includes(captainOrange)) captainOrange = "";
+    autoBalanceReport = null;
     updateInternalDraft();
   }
 
@@ -2275,6 +2301,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     orange = orange.filter(x => x !== p);
     if (captainBlue === p) captainBlue = "";
     if (captainOrange === p) captainOrange = "";
+    autoBalanceReport = null;
     updateInternalDraft();
   }
 
@@ -2311,10 +2338,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <summary style="font-weight:950">Internal setup</summary>
 
       <div class="teamAssignTools" aria-label="Team selection tools">
-        <button class="btn gray" id="autoBalanceTeams" type="button" ${isEditLocked ? "disabled" : ""}>Auto teams</button>
+        <button class="btn smartTeamBtn" id="autoBalanceTeams" type="button" ${isEditLocked || yesPlayers.length < 2 ? "disabled" : ""}><span aria-hidden="true">✦</span> Auto team</button>
         <button class="btn gray" id="clearTeamSelections" type="button" ${isEditLocked ? "disabled" : ""}>Clear teams</button>
         <span id="unassignedCount" class="small"></span>
       </div>
+      <div class="autoTeamIntro">Uses recent ratings, goals, assists and past team combinations. Review the draft, then save it.</div>
+      <div id="autoTeamReport" class="autoTeamReport" role="status" aria-live="polite" hidden></div>
 
       <div id="digitalTeamPreview"></div>
 
@@ -2546,10 +2575,20 @@ function renderComboList(filterText = "") {
     const unassigned = yesPlayers.filter((player) => !assignedTeam(player));
     const count = manageBody.querySelector("#unassignedCount");
     if (count) count.textContent = `${unassigned.length} unassigned`;
+    const report = manageBody.querySelector("#autoTeamReport");
+    if (report) {
+      report.hidden = !autoBalanceReport;
+      if (autoBalanceReport) {
+        const rated = Number(autoBalanceReport.ratedPlayers || 0);
+        const total = Number(autoBalanceReport.playerCount || yesPlayers.length);
+        const history = Number(autoBalanceReport.historicalMatches || 0);
+        report.innerHTML = `<strong>${Number(autoBalanceReport.balancePercent || 0)}% balanced</strong><span>${escapeHtml(homeTeamName)} ${Number(autoBalanceReport.blueStrength || 0).toFixed(1)} · ${escapeHtml(awayTeamName)} ${Number(autoBalanceReport.orangeStrength || 0).toFixed(1)}</span><small>${rated}/${total} players have rating history · ${history} past internal ${history === 1 ? "match" : "matches"} considered</small>`;
+      }
+    }
     const preview = manageBody.querySelector("#digitalTeamPreview");
     if (preview) mountTeamField(preview, {
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
-      positions:fieldPositions, pool:yesPlayers, disabled:isEditLocked,
+      positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,
       onSave:() => manageBody.querySelector("#saveSetup").click(),
       onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
       onClear:() => manageBody.querySelector("#clearTeamSelections").click(),
@@ -2571,16 +2610,27 @@ function renderComboList(filterText = "") {
   updateInternalDraft();
 
   const autoBalanceTeams = manageBody.querySelector("#autoBalanceTeams");
-  if (autoBalanceTeams) autoBalanceTeams.onclick = () => {
-    const unassigned = yesPlayers.filter((player) => !assignedTeam(player));
-    if (!unassigned.length) return toastInfo("Every available player is already assigned.");
-    unassigned.forEach((player) => {
-      if (blue.length <= orange.length) blue.push(player);
-      else orange.push(player);
-    });
-    updateInternalDraft();
-    renderAll();
-    toastSuccess(`${unassigned.length} players balanced across both teams.`);
+  if (autoBalanceTeams) autoBalanceTeams.onclick = async () => {
+    if (yesPlayers.length < 2) return toastWarn("Mark at least two players as available first.");
+    setDisabled(autoBalanceTeams, true, "Balancing…");
+    try {
+      const out = await API.adminAutoTeams(m.matchId);
+      if (!out?.ok) throw new Error(out?.error || "Could not create balanced teams");
+      if (!stillOnAdmin(routeToken)) return;
+      blue = uniqueSorted(out.bluePlayers || []);
+      orange = uniqueSorted(out.orangePlayers || []);
+      if (!blue.includes(captainBlue)) captainBlue = "";
+      if (!orange.includes(captainOrange)) captainOrange = "";
+      fieldPositions = {};
+      autoBalanceReport = out.balance || null;
+      updateInternalDraft();
+      renderAll();
+      toastSuccess(`Balanced ${blue.length + orange.length} players. Review and save the draft.`);
+    } catch (error) {
+      toastError(String(error?.message || error));
+    } finally {
+      setDisabled(autoBalanceTeams, false, "Balancing…");
+    }
   };
 
   const clearTeamSelections = manageBody.querySelector("#clearTeamSelections");
@@ -2592,6 +2642,7 @@ function renderComboList(filterText = "") {
     captainBlue = "";
     captainOrange = "";
     fieldPositions = {};
+    autoBalanceReport = null;
     updateInternalDraft();
     renderAll();
   };
@@ -2660,7 +2711,7 @@ function renderComboList(filterText = "") {
     setDisabled(shareTeamsBtn, true, "Opening…");
 
   try {
-    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange]);
+    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange], playerPhotos);
     const published = await API.adminShareTeams(m.matchId);
     if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
     toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");

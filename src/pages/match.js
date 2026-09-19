@@ -4,7 +4,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
 import { defaultPositions } from "../ui/team_field.js";
-import { playerPhotoHtml } from "../ui/player_photo.js";
+import { loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -452,33 +452,88 @@ function availabilityGroups(av) {
 
 function whatsappAvailabilityMessage(match, availability) {
   const when = formatHumanDateTime(match.date, match.time);
-  const { yes, no, waiting } = availabilityGroups(availability);
+  return [`⚽ *${match.title}*`, `🗓️ ${when}`, "", "Availability is shown in the attached image.", "Update your response in the MLFC app:", `${baseUrl()}#/match?code=${match.publicCode}`].join("\n");
+}
 
-  const lines = [];
-  lines.push(`match details : ${match.title}`);
-  lines.push(`time : ${when}`);
-  lines.push(`type : ${match.type}`);
-  lines.push(`status : ${match.status}`);
-  lines.push("");
-  // WhatsApp formatting:
-  // - *text* => bold
-  // - keep a blank line between headings and lists for readability
-  lines.push("*AVAILABILITY*");
-  lines.push("");
-  (yes.length ? yes : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
-  lines.push("");
+async function availabilityImageFile(match, availability) {
+  const groups = availabilityGroups(availability);
+  const rowsByStatus = [
+    { title: "AVAILABLE", names: groups.yes, color: "#72d7fa" },
+    { title: "NOT AVAILABLE", names: groups.no, color: "#ff8b78" },
+    { title: "WAITING LIST", names: groups.waiting, color: "#ffe16a" },
+  ];
+  const photoByName = new Map((availability || []).map(row => [String(row.playerName || "").trim().toLowerCase(), row.photoUrl]));
+  const portraits = new Map(await Promise.all(
+    [...new Set(rowsByStatus.flatMap(group => group.names))].map(async name => [name, await loadCanvasImage(photoByName.get(name.toLowerCase()))])
+  ));
+  const rowHeight = 66;
+  const contentRows = Math.max(1, ...rowsByStatus.map(group => group.names.length));
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = Math.max(1350, 390 + contentRows * rowHeight);
+  const context = canvas.getContext("2d");
+  if (!context) return null;
 
-  lines.push("*NOT AVAILABLE*");
-  lines.push("");
-  (no.length ? no : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
-  lines.push("");
+  const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, "#061724"); gradient.addColorStop(1, "#0e3a52");
+  context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#72d7fa"; context.font = "900 25px Arial";
+  context.fillText("MANOR LAKES FC · AVAILABILITY", 54, 62);
+  context.fillStyle = "#ffffff"; context.font = "900 48px Arial";
+  context.fillText(String(match.title || "MATCH").toUpperCase().slice(0, 34), 54, 126);
+  context.fillStyle = "#bed2dc"; context.font = "700 24px Arial";
+  context.fillText(formatHumanDateTime(match.date, match.time), 54, 174);
+  context.fillText("Players must update availability in the MLFC app.", 54, 214);
 
-  lines.push("*WAITING LIST*");
-  lines.push("");
-  (waiting.length ? waiting : ["-"]).forEach((n, i) => lines.push(`${i + 1}. ${n}`));
-  lines.push("");
-  lines.push(`link : ${baseUrl()}#/match?code=${match.publicCode}`);
-  return lines.join("\n");
+  const gap = 18, margin = 42, columnWidth = (canvas.width - margin * 2 - gap * 2) / 3;
+  rowsByStatus.forEach((group, column) => {
+    const x = margin + column * (columnWidth + gap);
+    context.fillStyle = "rgba(3,20,32,.76)"; context.fillRect(x, 260, columnWidth, canvas.height - 330);
+    context.fillStyle = group.color; context.fillRect(x, 260, columnWidth, 7);
+    context.font = "900 19px Arial"; context.fillText(group.title, x + 18, 306);
+    context.fillStyle = "#bed2dc"; context.font = "800 17px Arial";
+    context.fillText(`${group.names.length} PLAYER${group.names.length === 1 ? "" : "S"}`, x + 18, 337);
+    (group.names.length ? group.names : ["No players"]).forEach((name, index) => {
+      const cy = 382 + index * rowHeight;
+      const portrait = portraits.get(name);
+      context.save(); context.beginPath(); context.arc(x + 37, cy, 23, 0, Math.PI * 2); context.clip();
+      if (portrait) {
+        const scale = Math.max(46 / portrait.width, 46 / portrait.height);
+        const width = portrait.width * scale, height = portrait.height * scale;
+        context.drawImage(portrait, x + 37 - width / 2, cy - height / 2, width, height);
+      } else {
+        context.fillStyle = group.color; context.fillRect(x + 14, cy - 23, 46, 46);
+      }
+      context.restore();
+      context.strokeStyle = "rgba(255,255,255,.82)"; context.lineWidth = 2; context.beginPath(); context.arc(x + 37, cy, 23, 0, Math.PI * 2); context.stroke();
+      context.fillStyle = name === "No players" ? "#78949c" : "#ffffff"; context.font = "800 20px Arial";
+      const maxWidth = columnWidth - 82;
+      let label = name;
+      while (label.length > 1 && context.measureText(`${label}…`).width > maxWidth) label = label.slice(0, -1);
+      if (label !== name) label += "…";
+      context.fillText(label, x + 72, cy + 7);
+    });
+  });
+  context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
+  context.fillText("Generated from the live MLFC availability list", 54, canvas.height - 35);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  return blob ? new File([blob], `mlfc-availability-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
+async function shareAvailability(match, availability) {
+  const file = await availabilityImageFile(match, availability);
+  if (!file) throw new Error("Could not create the availability image.");
+  const text = whatsappAvailabilityMessage(match, availability);
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: `${match.title} availability`, text, files: [file] });
+    return "image";
+  }
+  const downloadUrl = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = downloadUrl; link.download = file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+  window.location.assign(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  return "download";
 }
 
 function renderShell(root){
@@ -653,21 +708,15 @@ function renderNextMatchDashboard(host, data) {
   if (shareButton) shareButton.onclick = async () => {
     shareButton.disabled = true;
     shareButton.textContent = "Preparing share…";
-    // Open during the tap so mobile browsers allow the new tab after the fetch.
-    const shareWindow = window.open("about:blank", "_blank");
-    if (shareWindow) shareWindow.opener = null;
     try {
       const detail = await API.getPublicMatch(match.publicCode);
       if (!detail?.ok || !detail.match || !Array.isArray(detail.availability)) {
         throw new Error(detail?.error || "Could not load the availability list. Try again.");
       }
-      const message = whatsappAvailabilityMessage(detail.match, detail.availability);
-      const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-      if (shareWindow && !shareWindow.closed) shareWindow.location.replace(url);
-      else window.location.assign(url);
+      const mode = await shareAvailability(detail.match, detail.availability);
+      if (mode === "download") toastInfo("Availability image downloaded. Attach it in WhatsApp.");
     } catch (error) {
-      if (shareWindow && !shareWindow.closed) shareWindow.close();
-      toastError(error?.message || "Could not prepare the WhatsApp share. Try again.");
+      if (error?.name !== "AbortError") toastError(error?.message || "Could not prepare the WhatsApp share. Try again.");
     } finally {
       shareButton.disabled = false;
       shareButton.textContent = "Share to WhatsApp";
@@ -1326,10 +1375,14 @@ const cap = availabilityLimitForMatch(m);
 
   const shareBtn = detail.querySelector("#shareBtn");
   if (shareBtn) {
-    shareBtn.onclick = () => {
-      const msg = whatsappAvailabilityMessage(m, availability);
-      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-      toastInfo("WhatsApp opened.");
+    shareBtn.onclick = async () => {
+      setDisabled(shareBtn, true, "Preparing…");
+      try {
+        const mode = await shareAvailability(m, availability);
+        if (mode === "download") toastInfo("Availability image downloaded. Attach it in WhatsApp.");
+      } catch (error) {
+        if (error?.name !== "AbortError") toastError(error?.message || "Could not prepare the WhatsApp share.");
+      } finally { setDisabled(shareBtn, false); }
     };
   }
 
