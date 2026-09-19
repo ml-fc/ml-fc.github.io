@@ -1378,15 +1378,15 @@ async function renderUsers(root, opts = {}) {
   }
   users = users || [];
   area.innerHTML = `
-    <div class="card" style="margin-top:0">
-      <div class="row" style="gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between">
-        <div style="min-width:240px; flex:1">
-          <div class="small"><b>Search</b></div>
-          <input id="userSearch" class="input" type="search" aria-label="Search users by name or phone" placeholder="Search by name or phone" value="${escapeHtml(state.q || "")}" autocomplete="off" />
-        </div>
-        <div id="usersPager"></div>
+    <div class="usersToolbar">
+      <label class="usersSearch" for="userSearch">
+        <span class="usersSearch__icon" aria-hidden="true">⌕</span>
+        <input id="userSearch" type="search" aria-label="Search users by name or phone" placeholder="Find a player…" value="${escapeHtml(state.q || "")}" autocomplete="off" />
+      </label>
+      <div class="usersToolbar__meta">
+        <span id="usersSummary" aria-live="polite"></span>
+        <div id="usersPager" class="usersPager"></div>
       </div>
-      <div class="small" id="usersSummary" style="margin-top:8px" aria-live="polite"></div>
     </div>
     <div id="usersResults"></div>
   `;
@@ -1406,46 +1406,38 @@ async function renderUsers(root, opts = {}) {
     const pageItems = filtered.slice(start, start + pageSize);
 
     pager.innerHTML = pages > 1 ? `
-      <div class="row" style="gap:10px; align-items:flex-end">
-        <button class="btn gray" id="usersPrev" ${state.page <= 1 ? "disabled" : ""}>Prev</button>
-        <button class="btn gray" id="usersNext" ${state.page >= pages ? "disabled" : ""}>Next</button>
-      </div>
+      <button type="button" id="usersPrev" aria-label="Previous page" ${state.page <= 1 ? "disabled" : ""}>←</button>
+      <span aria-label="Page ${state.page} of ${pages}">${state.page} / ${pages}</span>
+      <button type="button" id="usersNext" aria-label="Next page" ${state.page >= pages ? "disabled" : ""}>→</button>
     ` : "";
-    summary.textContent = `Showing ${pageItems.length} of ${total} users • Page ${state.page}/${pages}`;
+    summary.textContent = q ? `${total} ${total === 1 ? "result" : "results"}` : `${total} ${total === 1 ? "member" : "members"}`;
     results.innerHTML = pageItems.length ? `
-      <div style="overflow:auto">
-        <table class="table" style="width:100%; border-collapse:collapse">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:8px">Name</th>
-              <th style="text-align:left; padding:8px">Phone</th>
-              <th style="text-align:center; padding:8px">Admin</th>
-              <th style="text-align:right; padding:8px">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${pageItems.map(u => {
+      <div class="usersList" role="list">
+        ${pageItems.map(u => {
             const isSelf = meNameLower && String(u.name || "").trim().toLowerCase() === meNameLower;
+            const isAdmin = Number(u.isAdmin) === 1;
             const toggleDisabled = !canToggleAdmin || isSelf;
             const toggleTitle = !canToggleAdmin
               ? "Only admins can change admin rights"
-              : (isSelf ? "You cannot change your own admin access" : "Toggle admin");
+              : (isSelf ? "You cannot change your own admin access" : (isAdmin ? "Remove admin access" : "Grant admin access"));
+            const initial = String(u.name || "?").trim().charAt(0).toUpperCase();
             return `
-              <tr style="border-top:1px solid rgba(11,18,32,0.08)">
-                <td style="padding:8px; font-weight:950" data-label="Name">${escapeHtml(u.name)}</td>
-                <td style="padding:8px" class="small" data-label="Phone">${escapeHtml(u.phone || "")}</td>
-                <td style="padding:8px; text-align:center" data-label="Admin">${Number(u.isAdmin) === 1 ? "✅" : "—"}</td>
-                <td style="padding:8px; text-align:right" data-label="Actions" class="usersActions">
-                  <button class="btn gray" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}" style="padding:8px 10px; border-radius:12px">Toggle admin</button>
-                  <button class="btn gray" data-reset-pass="${encodeURIComponent(u.name)}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Change password</button>
-                  <button class="btn bad" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}" style="padding:8px 10px; border-radius:12px; margin-left:6px">Delete</button>
-                </td>
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
+              <article class="userRow" role="listitem">
+                <span class="userRow__avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+                <div class="userRow__identity">
+                  <strong>${escapeHtml(u.name)}${isSelf ? ` <span class="userRow__you">You</span>` : ""}</strong>
+                  <span>${escapeHtml(u.phone || "No phone number")}</span>
+                </div>
+                <span class="userRole ${isAdmin ? "userRole--admin" : ""}">${isAdmin ? "Admin" : "Member"}</span>
+                <div class="usersActions">
+                  <button class="userAction" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}">${isAdmin ? "Revoke admin" : "Make admin"}</button>
+                  <button class="userAction" data-reset-pass="${encodeURIComponent(u.name)}" title="Change password">Password</button>
+                  <button class="userAction userAction--danger" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}">Delete</button>
+                </div>
+              </article>`;
+          }).join("")}
       </div>
-    ` : `<div class="small">No users found.</div>`;
+    ` : `<div class="usersEmpty"><strong>No players found</strong><span>Try a different name or phone number.</span></div>`;
   }
 
   const search = area.querySelector("#userSearch");
