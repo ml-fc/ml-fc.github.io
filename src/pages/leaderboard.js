@@ -13,9 +13,9 @@ const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
 // Preference: show/hide ratings on leaderboard
 const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
-// v2 resets the old 10-game default so every player is visible on first load.
-const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v2";
-const DEFAULT_MINIMUM_MATCHES = 0;
+// v3 restores a 10-game qualification line while keeping the full roster visible.
+const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v3";
+const DEFAULT_MINIMUM_MATCHES = 10;
 
 const LB_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 const LB_REFRESH_COOLDOWN_MS = 20 * 1000;
@@ -85,28 +85,30 @@ function sortRows(rows, mode, showRating) {
 function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQuery = "") {
   const body = root.querySelector("#lbBody");
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
-  const gameEligibleRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
-  const eligibleRows = gameEligibleRows.filter(row => !normalizedQuery || String(row?.playerName || "").toLocaleLowerCase().includes(normalizedQuery));
-  const sorted = sortRows(eligibleRows, sortMode, showRating);
+  const visibleRows = (rows || []).filter(row => !normalizedQuery || String(row?.playerName || "").toLocaleLowerCase().includes(normalizedQuery));
+  const eligibleRows = visibleRows.filter(row => playerMatches(row) >= minimumMatches);
+  const remainingRows = minimumMatches > 0 ? visibleRows.filter(row => playerMatches(row) < minimumMatches) : [];
+  const sortedEligible = sortRows(eligibleRows, sortMode, showRating);
+  const sortedRemaining = sortRows(remainingRows, sortMode, showRating);
 
   const cols = showRating ? 6 : 5;
-  const maxGoals = Math.max(0, ...gameEligibleRows.map(x => Number(x.goals || 0)));
-  const maxAssists = Math.max(0, ...gameEligibleRows.map(x => Number(x.assists || 0)));
-  const ratedRows = gameEligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
+  const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
+  const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
+  const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
   const maxRating = Math.max(0, ...ratedRows.map(x => Number(x.avgRating || 0)));
-  body.innerHTML = sorted.map((x, i) => {
+  const playerRow = (x, rank, isEligible) => {
     const awards = [
-      maxGoals > 0 && Number(x.goals || 0) === maxGoals ? `<span class="playerAward playerAward--boot" title="Golden Boot — top scorer" aria-label="Golden Boot — top scorer">●</span>` : "",
-      maxAssists > 0 && Number(x.assists || 0) === maxAssists ? `<span class="playerAward" title="Top assists" aria-label="Top assists">🎯</span>` : "",
-      Number(x.matchesRated || 0) > 0 && Number(x.avgRating || 0) === maxRating ? `<span class="playerAward" title="Top rated" aria-label="Top rated">⭐</span>` : "",
+      isEligible && maxGoals > 0 && Number(x.goals || 0) === maxGoals ? `<span class="playerAward playerAward--boot" title="Golden Boot — top scorer" aria-label="Golden Boot — top scorer">●</span>` : "",
+      isEligible && maxAssists > 0 && Number(x.assists || 0) === maxAssists ? `<span class="playerAward" title="Top assists" aria-label="Top assists">🎯</span>` : "",
+      isEligible && Number(x.matchesRated || 0) > 0 && Number(x.avgRating || 0) === maxRating ? `<span class="playerAward" title="Top rated" aria-label="Top rated">⭐</span>` : "",
       Number(x.potmAwards || 0) > 0 ? `<span class="playerAward" title="${Number(x.potmAwards)} Player of the Match award${Number(x.potmAwards) === 1 ? "" : "s"}" aria-label="Player of the Match awards">🏆</span>` : "",
     ].join("");
     const ratingCols = showRating ? `
       <td class="lb__cell lb__num lb__rating"><strong>${Number(x.matchesRated || 0) ? Number(x.avgRating || 0).toFixed(2) : "—"}</strong><small>${Number(x.matchesRated || 0)} rated</small></td>
     ` : "";
     return `
-      <tr class="lb__row">
-        <td class="lb__cell lb__rank"><span>${i+1}</span></td>
+      <tr class="lb__row${isEligible ? "" : " lb__row--remaining"}">
+        <td class="lb__cell lb__rank">${isEligible ? `<span>${rank}</span>` : `<span aria-label="Not yet ranked">—</span>`}</td>
         <td class="lb__cell lb__player"><div class="lb__playerIdentity"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></div><small>${playerMatches(x)} ${playerMatches(x) === 1 ? "game" : "games"}</small></td>
         <td class="lb__cell lb__num">${x.goals || 0}</td>
         <td class="lb__cell lb__num">${x.assists || 0}</td>
@@ -114,14 +116,17 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQue
         ${ratingCols}
       </tr>
     `;
-  }).join("") || `<tr><td colspan="${cols}" class="lb__empty">${normalizedQuery ? `No players match “${esc(searchQuery.trim())}”.` : minimumMatches ? `No players have played at least ${minimumMatches} ${minimumMatches === 1 ? "game" : "games"} this season.` : "No players have been recorded this season."}</td></tr>`;
+  };
+  const rankedHtml = sortedEligible.map((row, index) => playerRow(row, index + 1, true)).join("");
+  const remainingHtml = sortedRemaining.length ? `<tr class="lb__divider"><td colspan="${cols}"><div><span>Below ${minimumMatches} games</span><b>${sortedRemaining.length} remaining</b></div></td></tr>${sortedRemaining.map(row => playerRow(row, "", false)).join("")}` : "";
+  body.innerHTML = rankedHtml + remainingHtml || `<tr><td colspan="${cols}" class="lb__empty">${normalizedQuery ? `No players match “${esc(searchQuery.trim())}”.` : "No players have been recorded this season."}</td></tr>`;
 
   const summary = root.querySelector("#eligibilitySummary");
   if (summary) {
     summary.textContent = normalizedQuery
-      ? `${eligibleRows.length} of ${gameEligibleRows.length} players found`
+      ? `${visibleRows.length} ${(visibleRows.length === 1 ? "player" : "players")} found`
       : minimumMatches
-      ? `${eligibleRows.length} of ${(rows || []).length} players · minimum ${minimumMatches} ${minimumMatches === 1 ? "game" : "games"}`
+      ? `${eligibleRows.length} ranked · ${(rows || []).length} players total`
       : `${(rows || []).length} ${(rows || []).length === 1 ? "player" : "players"} · full season roster`;
   }
 }
@@ -204,7 +209,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       <div class="ladderControls__season" id="seasonBlock"></div>
       <div class="ladderFilterBar">
         <div class="ladderSearch"><label class="visuallyHidden" for="playerSearch">Search players</label><span aria-hidden="true">⌕</span><input class="input" id="playerSearch" type="search" placeholder="Search players" autocomplete="off" /></div>
-        <button class="btn gray ladderFilterButton" id="filterButton" type="button" aria-label="Filter players" aria-expanded="false" aria-controls="ladderFilterPanel"><span class="ladderFilterButton__icon" aria-hidden="true">≡</span><span class="ladderFilterButton__label">Filters</span><span id="filterCount" aria-hidden="true"></span></button>
+        <label class="ladderMinimum" for="minimumMatches"><span class="visuallyHidden">Minimum games to rank</span><select class="input" id="minimumMatches" name="minimumMatches" aria-describedby="minimumMatchesHelp"><option value="0" ${minimumMatches === 0 ? "selected" : ""}>All</option><option value="1" ${minimumMatches === 1 ? "selected" : ""}>1+ games</option><option value="3" ${minimumMatches === 3 ? "selected" : ""}>3+ games</option><option value="5" ${minimumMatches === 5 ? "selected" : ""}>5+ games</option><option value="10" ${minimumMatches === 10 ? "selected" : ""}>10+ games</option></select></label>
         <div class="ladderMetrics">
           <div class="ladderSort" role="group" aria-label="Sort ladder">
             <button class="btn gray" id="sortGoals">Goals</button>
@@ -214,12 +219,8 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
           </div>
           ${ratingToggleHtml}
         </div>
-        <div class="ladderFilterPanel" id="ladderFilterPanel" hidden>
-          <label class="ladderMinimum" for="minimumMatches"><span>Minimum games</span><select class="input" id="minimumMatches" name="minimumMatches" aria-describedby="minimumMatchesHelp"><option value="0" ${minimumMatches === 0 ? "selected" : ""}>All players</option><option value="1" ${minimumMatches === 1 ? "selected" : ""}>1+</option><option value="3" ${minimumMatches === 3 ? "selected" : ""}>3+</option><option value="5" ${minimumMatches === 5 ? "selected" : ""}>5+</option><option value="10" ${minimumMatches === 10 ? "selected" : ""}>10+</option></select></label>
-          <button class="btn gray" id="clearFilters" type="button">Clear filters</button>
-        </div>
       </div>
-      <span class="visuallyHidden" id="minimumMatchesHelp">Only eligible players are included in rankings.</span>
+      <span class="visuallyHidden" id="minimumMatchesHelp">Players who meet this minimum are ranked first. Everyone else remains visible below the qualification line.</span>
       <div class="small" id="msg" style="margin-top:8px"></div>
     </div>
 
@@ -285,6 +286,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   async function refreshLeaderboard(opts = {}) {
     const silent = !!opts.silent;
     const force = !!opts.force;
+    const notify = !!opts.notify;
 
     const t = now();
     if (LB_REFRESH_INFLIGHT) return;
@@ -317,7 +319,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       rows = res.rows || [];
       renderCurrentTable();
       msg.textContent = silent ? "Updated just now." : "";
-      if (!silent) toastSuccess("Leaderboard refreshed.");
+      if (notify) toastSuccess("Leaderboard refreshed.");
     } finally {
       LB_REFRESH_INFLIGHT = false;
       if (!silent && btn) {
@@ -350,18 +352,6 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   const sortRatingBtn = root.querySelector("#sortRating");
   if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderCurrentTable(); };
 
-  const filterButton = root.querySelector("#filterButton");
-  const filterPanel = root.querySelector("#ladderFilterPanel");
-  const filterCount = root.querySelector("#filterCount");
-  const updateFilterButton = () => {
-    filterCount.textContent = minimumMatches ? "1" : "";
-    filterButton.classList.toggle("isActive", minimumMatches > 0);
-  };
-  filterButton.onclick = () => {
-    const open = filterButton.getAttribute("aria-expanded") !== "true";
-    filterButton.setAttribute("aria-expanded", String(open));
-    filterPanel.hidden = !open;
-  };
   root.querySelector("#playerSearch").oninput = event => {
     searchQuery = event.target.value;
     renderCurrentTable();
@@ -372,17 +362,8 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const nextValue = Number(minimumMatchesInput.value);
     minimumMatches = nextValue;
     localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
-    updateFilterButton();
     renderCurrentTable();
   };
-  root.querySelector("#clearFilters").onclick = () => {
-    minimumMatches = DEFAULT_MINIMUM_MATCHES;
-    minimumMatchesInput.value = String(minimumMatches);
-    localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
-    updateFilterButton();
-    renderCurrentTable();
-  };
-  updateFilterButton();
 
   const toggle = root.querySelector("#toggleRating");
   if (toggle) {
@@ -394,7 +375,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     };
   }
 
-  root.querySelector("#refresh").onclick = () => refreshLeaderboard({ force: true });
+  root.querySelector("#refresh").onclick = () => refreshLeaderboard({ force: true, notify: true });
 
   // Auto-refresh on reload, empty cache, or stale cache.
   const shouldFetchNow = isReloadFor("#/leaderboard") || !cached?.data?.ok || shouldAutoRefreshLeaderboard(seasonId);

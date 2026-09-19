@@ -2201,7 +2201,7 @@ body.hasCompactMatchCommand .appbar {
 
 .ladderControls__head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
 .ladderRefresh { min-height:38px; padding:8px 10px; }
-.ladderControls__season { margin-top:12px; }
+.ladderControls__season { margin-top:8px; }
 .ladderFilterBar { display:grid; grid-template-columns:minmax(180px,1fr) auto auto; align-items:center; gap:7px; margin-top:12px; padding:7px; background:#eaf1f4; border:1px solid #d2dfe5; border-radius:6px; }
 .ladderSearch { position:relative; flex:1 1 210px; }
 .ladderSearch>span { position:absolute; z-index:1; left:10px; top:50%; color:#547084; font-size:18px; transform:translateY(-53%); pointer-events:none; }
@@ -2213,7 +2213,7 @@ body.hasCompactMatchCommand .appbar {
 .ladderFilterButton.isActive { color:#07547f; background:#d5edf8; border-color:#8bc8e4; }
 .ladderMetrics { display:flex; align-items:center; gap:5px; }
 .ladderSort { display:flex; gap:3px; }.ladderSort .btn{min-height:34px;padding:6px 9px;font-size:11px}
-.ladderMinimum { display:flex; align-items:center; gap:7px; margin-left:auto; color:#365267; font-size:11px; font-weight:900; }.ladderMinimum .input{width:auto;min-width:104px;padding:8px;min-height:38px;font-size:12px}
+.ladderMinimum { display:flex; align-items:center; color:#365267; font-size:11px; font-weight:900; }.ladderMinimum .input{width:auto;min-width:96px;padding:6px 24px 6px 8px;min-height:34px;font-size:11px;font-weight:900}
 .ladderToggle { display:flex; align-items:center; gap:5px; min-height:34px; padding:6px 8px; color:#365267; background:white; border:1px solid #cad7dd; border-radius:4px; font-size:10px; font-weight:900; }
 .ladderToggle input { width:13px; height:13px; margin:0; accent-color:#0870aa; }
 .ladderFilterPanel { grid-column:1/-1; display:flex; align-items:center; justify-content:flex-end; gap:8px; padding-top:7px; border-top:1px solid #cad8df; }
@@ -2231,8 +2231,13 @@ body.hasCompactMatchCommand .appbar {
 .lb__player > small,.lb__rating small { display:block; margin-top:1px; color:#708491; font:800 9px/1.1 ui-monospace,monospace; text-transform:uppercase; letter-spacing:.04em; }
 .lb__rating strong { display:block; color:#0a5f8d; font-size:14px; }
 .lb__rank span { display:grid; place-items:center; width:24px; height:24px; color:#31566d; background:#e4edf1; border-radius:50%; font-size:11px; }
-.lb__row:nth-child(-n+3) .lb__rank span { color:#fff; background:#0870aa; }
-.lb__row:first-child .lb__rank span { background:#ec5d32; }
+.lb__row:not(.lb__row--remaining):nth-child(-n+3) .lb__rank span { color:#fff; background:#0870aa; }
+.lb__row:not(.lb__row--remaining):first-child .lb__rank span { background:#ec5d32; }
+.lb__row--remaining { opacity:.72; }
+.lb__row--remaining .lb__rank span { color:#6f818b; background:#edf1f3; }
+.lb__divider td { padding:8px 10px; color:#31586e; background:#dceaf0; border-top:2px solid #79bdd8; border-bottom:1px solid #c5d9e2; font:900 9px/1.2 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+.lb__divider div { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.lb__divider b { color:#64808f; font-size:8px; }
 .lb__empty { padding:24px; color:#617786; text-align:center; font-size:12px; }
 
 .digitalTeamGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:18px; }
@@ -2263,7 +2268,7 @@ body.hasCompactMatchCommand .appbar {
 @media(max-width:700px){
   .digitalTeamGrid{grid-template-columns:1fr}.digitalTeam__pitch{min-height:265px}.digitalTeam__pitch--shared{min-height:600px}.digitalPlayer{width:68px}.digitalPlayer>span:last-child{max-width:68px;font-size:8px}.digitalTeam__team{padding:10px 38px 10px 10px}.digitalTeam__team strong{font-size:12px}.digitalTeam__team>b{right:8px;width:26px;height:26px}
   .seasonNumbers{grid-template-columns:repeat(2,1fr)}.seasonNumbers>div:nth-child(2){border-right:0}.seasonNumbers>div:nth-child(-n+2){border-bottom:1px solid rgba(255,255,255,.14)}.seasonInsights{grid-template-columns:1fr}.seasonMatchRow{grid-template-columns:45px minmax(0,1fr)}.seasonMatchRow__stats{grid-column:2;flex-wrap:wrap}.seasonHero__head{display:grid}.seasonHero__share{width:100%}
-  .ladderFilterBar{grid-template-columns:minmax(0,1fr) 36px;gap:5px;padding:5px}.ladderSearch{min-width:0}.ladderSearch .input{min-height:34px}.ladderFilterButton{width:36px;padding:0}.ladderFilterButton__label{position:absolute;width:1px!important;height:1px!important;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ladderFilterButton__icon{font-size:17px!important}.ladderFilterButton #filterCount:not(:empty){position:absolute;right:-4px;top:-5px;width:16px;height:16px;font-size:9px}.ladderMetrics{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}.ladderSort{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:3px}.ladderSort .btn{min-width:0;min-height:30px;padding:4px 3px;font-size:10px}.ladderToggle{min-height:30px;padding:4px 6px}.ladderFilterPanel{justify-content:space-between}.ladderMinimum{margin-left:0}.ladderRefresh span{display:none}
+  .ladderControls{padding:12px}.ladderControls__season{margin-top:4px}.ladderControls__season .row{margin-top:4px!important}.ladderControls__season .field__label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ladderControls__season .input{min-height:36px;padding-block:6px}.ladderFilterBar{grid-template-columns:minmax(0,1fr) 92px;gap:5px;padding:5px;margin-top:8px}.ladderSearch{min-width:0}.ladderSearch .input{min-height:34px}.ladderMinimum{min-width:0}.ladderMinimum .input{width:100%;min-width:0}.ladderMetrics{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}.ladderSort{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:3px}.ladderSort .btn{min-width:0;min-height:30px;padding:4px 3px;font-size:10px}.ladderToggle{min-height:30px;padding:4px 6px}.ladderRefresh span{display:none}
   .ladderBoard__head{align-items:flex-start;padding:15px 14px 12px}.ladderBoard__count{max-width:48%;font-size:10px}.ladderBoard .lb__table{min-width:100%}.ladderBoard .lb__player{min-width:120px}.ladderBoard .lb__cell,.ladderBoard .lb__th{padding-inline:5px}.ladderBoard .lb__rank{width:32px}.ladderBoard .lb__num{width:44px;font-size:11px}.ladderBoard .lb__th{font-size:9px;letter-spacing:.04em}.playerAwards{flex-shrink:0;margin-left:3px}.playerAward{font-size:11px}
 }
 .announcementViewer { padding: 18px; background: #fff; }

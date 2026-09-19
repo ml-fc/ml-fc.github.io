@@ -452,12 +452,24 @@ function availabilityGroups(av) {
 
 function whatsappAvailabilityMessage(match, availability) {
   const when = formatHumanDateTime(match.date, match.time);
-  return [`⚽ *${match.title}*`, `🗓️ ${when}`, "", "Availability is shown in the attached image.", "Update your response in the MLFC app:", `${baseUrl()}#/match?code=${match.publicCode}`].join("\n");
+  const confirmed = availabilityGroups(availability).yes.length;
+  const maximum = availabilityLimitForMatch(match);
+  const spotsLeft = Math.max(0, maximum - confirmed);
+  return [
+    `⚽ *${match.title}*`,
+    `🗓️ ${when}`,
+    `👥 ${confirmed}/${maximum} players confirmed · ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`,
+    "",
+    "Availability is shown in the attached image.",
+    "Update your response in the MLFC app:",
+    `${baseUrl()}#/match?code=${match.publicCode}`,
+  ].join("\n");
 }
 
 async function availabilityImageFile(match, availability) {
   const groups = availabilityGroups(availability);
-  const available = { title: "AVAILABLE", names: groups.yes, color: "#45dc8a" };
+  const maximum = availabilityLimitForMatch(match);
+  const available = { title: "AVAILABLE", names: groups.yes, color: "#45dc8a", maximum };
   const lowerGroups = [
     { title: "WAITING LIST", names: groups.waiting, color: "#ffe16a" },
     { title: "UNAVAILABLE", names: groups.no, color: "#ff8b78" },
@@ -471,7 +483,7 @@ async function availabilityImageFile(match, availability) {
   // Keep the common 22-player case within WhatsApp's 4:5 message preview.
   // Secondary lists switch to two columns as they grow instead of making the
   // image increasingly tall (and therefore cropped in the chat bubble).
-  const rowHeight = 56;
+  const rowHeight = 72;
   const lowerColumns = lowerGroups.map(group => group.names.length > 6 ? 2 : 1);
   const availableRows = Math.max(1, Math.ceil(available.names.length / 2));
   const lowerRows = Math.max(1, ...lowerGroups.map((group, index) => Math.ceil(group.names.length / lowerColumns[index])));
@@ -519,7 +531,10 @@ async function availabilityImageFile(match, availability) {
     context.fillStyle = group.color; context.fillRect(x, y, width, 7);
     context.font = "900 22px Arial"; context.fillText(group.title, x + 22, y + 42);
     context.fillStyle = "#bed2dc"; context.font = "800 18px Arial";
-    context.fillText(`${group.names.length} PLAYER${group.names.length === 1 ? "" : "S"}`, x + 22, y + 72);
+    const playerCount = group.maximum
+      ? `${group.names.length} / ${group.maximum} PLAYERS · ${Math.max(0, group.maximum - group.names.length)} SPOTS LEFT`
+      : `${group.names.length} PLAYER${group.names.length === 1 ? "" : "S"}`;
+    context.fillText(playerCount, x + 22, y + 72);
     const names = group.names.length ? group.names : ["No players"];
     const rows = Math.ceil(names.length / columns);
     const itemWidth = width / columns;
@@ -529,7 +544,7 @@ async function availabilityImageFile(match, availability) {
       const itemX = x + column * itemWidth;
       const cy = y + 106 + row * rowHeight;
       const portrait = portraits.get(name);
-      const portraitSize = columns > 1 && width < 600 ? 44 : 48;
+      const portraitSize = columns > 1 && width < 600 ? 56 : 64;
       const portraitRadius = portraitSize / 2;
       const portraitX = itemX + 18 + portraitRadius;
       context.save(); context.beginPath(); context.arc(portraitX, cy, portraitRadius, 0, Math.PI * 2); context.clip();
