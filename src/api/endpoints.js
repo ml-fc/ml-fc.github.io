@@ -63,7 +63,8 @@ export const API = {
   userSetPhoto: (blob) => {
     const form = new FormData();
     form.set("action", "user_set_photo");
-    form.set("photo", blob, "profile.webp");
+    const extension = blob?.type === "image/jpeg" ? "jpg" : blob?.type === "image/png" ? "png" : "webp";
+    form.set("photo", blob, `profile.${extension}`);
     return apiUpload(form);
   },
   userRemovePhoto: () => apiPost({ action: "user_remove_photo" }),

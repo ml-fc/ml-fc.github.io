@@ -13,8 +13,9 @@ const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
 // Preference: show/hide ratings on leaderboard
 const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
-const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v1";
-const DEFAULT_MINIMUM_MATCHES = 10;
+// v2 resets the old 10-game default so every player is visible on first load.
+const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v2";
+const DEFAULT_MINIMUM_MATCHES = 0;
 
 const LB_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 const LB_REFRESH_COOLDOWN_MS = 20 * 1000;
@@ -33,7 +34,7 @@ function lbKey(seasonId){ return `${LS_LB_PREFIX}${seasonId}`; }
 
 function savedMinimumMatches() {
   const value = Number.parseInt(localStorage.getItem(LS_MINIMUM_MATCHES) || "", 10);
-  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : DEFAULT_MINIMUM_MATCHES;
+  return Number.isInteger(value) && value >= 0 && value <= 100 ? value : DEFAULT_MINIMUM_MATCHES;
 }
 
 function playerMatches(row) {
@@ -81,15 +82,17 @@ function sortRows(rows, mode, showRating) {
   return r;
 }
 
-function renderTable(root, rows, sortMode, showRating, minimumMatches) {
+function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQuery = "") {
   const body = root.querySelector("#lbBody");
-  const eligibleRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const gameEligibleRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
+  const eligibleRows = gameEligibleRows.filter(row => !normalizedQuery || String(row?.playerName || "").toLocaleLowerCase().includes(normalizedQuery));
   const sorted = sortRows(eligibleRows, sortMode, showRating);
 
-  const cols = showRating ? 7 : 5;
-  const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
-  const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
-  const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
+  const cols = showRating ? 6 : 5;
+  const maxGoals = Math.max(0, ...gameEligibleRows.map(x => Number(x.goals || 0)));
+  const maxAssists = Math.max(0, ...gameEligibleRows.map(x => Number(x.assists || 0)));
+  const ratedRows = gameEligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
   const maxRating = Math.max(0, ...ratedRows.map(x => Number(x.avgRating || 0)));
   body.innerHTML = sorted.map((x, i) => {
     const awards = [
@@ -99,24 +102,27 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches) {
       Number(x.potmAwards || 0) > 0 ? `<span class="playerAward" title="${Number(x.potmAwards)} Player of the Match award${Number(x.potmAwards) === 1 ? "" : "s"}" aria-label="Player of the Match awards">🏆</span>` : "",
     ].join("");
     const ratingCols = showRating ? `
-      <td class="lb__cell lb__num">${(x.avgRating || 0).toFixed(2)}</td>
-      <td class="lb__cell lb__num small">${x.matchesRated || 0}</td>
+      <td class="lb__cell lb__num lb__rating"><strong>${Number(x.matchesRated || 0) ? Number(x.avgRating || 0).toFixed(2) : "—"}</strong><small>${Number(x.matchesRated || 0)} rated</small></td>
     ` : "";
     return `
       <tr class="lb__row">
-        <td class="lb__cell lb__rank">${i+1}</td>
-        <td class="lb__cell lb__player"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></td>
+        <td class="lb__cell lb__rank"><span>${i+1}</span></td>
+        <td class="lb__cell lb__player"><div class="lb__playerIdentity"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></div><small>${playerMatches(x)} ${playerMatches(x) === 1 ? "game" : "games"}</small></td>
         <td class="lb__cell lb__num">${x.goals || 0}</td>
         <td class="lb__cell lb__num">${x.assists || 0}</td>
         <td class="lb__cell lb__num">${x.potmAwards || 0}</td>
         ${ratingCols}
       </tr>
     `;
-  }).join("") || `<tr><td colspan="${cols}" class="small" style="padding:12px">No players have played at least ${minimumMatches} ${minimumMatches === 1 ? "match" : "matches"} this season.</td></tr>`;
+  }).join("") || `<tr><td colspan="${cols}" class="lb__empty">${normalizedQuery ? `No players match “${esc(searchQuery.trim())}”.` : minimumMatches ? `No players have played at least ${minimumMatches} ${minimumMatches === 1 ? "game" : "games"} this season.` : "No players have been recorded this season."}</td></tr>`;
 
   const summary = root.querySelector("#eligibilitySummary");
   if (summary) {
-    summary.textContent = `Showing ${eligibleRows.length} of ${(rows || []).length} players with at least ${minimumMatches} ${minimumMatches === 1 ? "match" : "matches"}.`;
+    summary.textContent = normalizedQuery
+      ? `${eligibleRows.length} of ${gameEligibleRows.length} players found`
+      : minimumMatches
+      ? `${eligibleRows.length} of ${(rows || []).length} players · minimum ${minimumMatches} ${minimumMatches === 1 ? "game" : "games"}`
+      : `${(rows || []).length} ${(rows || []).length === 1 ? "player" : "players"} · full season roster`;
   }
 }
 
@@ -184,6 +190,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   await refreshMe(false);
   let showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
   let minimumMatches = savedMinimumMatches();
+  let searchQuery = "";
 
   let sortMode = showRating ? "rating" : "goals";
 
@@ -196,35 +203,37 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       <div class="ladderControls__head"><div><div class="stepEyebrow">Season competition</div><div class="h1">Ladder</div></div><button class="btn gray ladderRefresh" id="refresh" aria-label="Refresh ladder">↻ <span>Refresh</span></button></div>
       <div class="ladderControls__season" id="seasonBlock"></div>
       <div class="ladderFilterBar">
+        <div class="ladderSearch"><label class="visuallyHidden" for="playerSearch">Search players</label><span aria-hidden="true">⌕</span><input class="input" id="playerSearch" type="search" placeholder="Search players" autocomplete="off" /></div>
+        <button class="btn gray ladderFilterButton" id="filterButton" type="button" aria-expanded="false" aria-controls="ladderFilterPanel">Filters<span id="filterCount" aria-hidden="true"></span></button>
         <div class="ladderSort" role="group" aria-label="Sort ladder">
           <button class="btn gray" id="sortGoals">Goals</button>
           <button class="btn gray" id="sortAssists">Assists</button>
           <button class="btn gray" id="sortPotm">POTM</button>
           ${sortRatingBtnHtml}
         </div>
-        <label class="ladderMinimum" for="minimumMatches"><span>Min. games</span><input class="input" id="minimumMatches" name="minimumMatches" type="number" min="1" max="100" step="1" inputmode="numeric" value="${minimumMatches}" aria-describedby="minimumMatchesHelp minimumMatchesError" /></label>
         ${ratingToggleHtml}
+        <div class="ladderFilterPanel" id="ladderFilterPanel" hidden>
+          <label class="ladderMinimum" for="minimumMatches"><span>Minimum games</span><select class="input" id="minimumMatches" name="minimumMatches" aria-describedby="minimumMatchesHelp"><option value="0" ${minimumMatches === 0 ? "selected" : ""}>All players</option><option value="1" ${minimumMatches === 1 ? "selected" : ""}>1+</option><option value="3" ${minimumMatches === 3 ? "selected" : ""}>3+</option><option value="5" ${minimumMatches === 5 ? "selected" : ""}>5+</option><option value="10" ${minimumMatches === 10 ? "selected" : ""}>10+</option></select></label>
+          <button class="btn gray" id="clearFilters" type="button">Clear filters</button>
+        </div>
       </div>
       <span class="visuallyHidden" id="minimumMatchesHelp">Only eligible players are included in rankings.</span>
-      <div class="small" id="minimumMatchesError" role="status" aria-live="polite"></div>
       <div class="small" id="msg" style="margin-top:8px"></div>
     </div>
 
-    <div class="card">
-      <div class="h1">Season leaders</div>
-      <div class="small" id="eligibilitySummary" aria-live="polite" style="margin:6px 0 10px"></div>
+    <div class="card ladderBoard">
+      <div class="ladderBoard__head"><div><div class="stepEyebrow">Player standings</div><div class="h1">Season leaders</div></div><div class="ladderBoard__count" id="eligibilitySummary" aria-live="polite"></div></div>
       <div class="lb__tableWrap">
         <table class="lb__table">
           <thead>
-            <tr style="background: rgba(11,18,32,0.04)">
+            <tr>
               <th class="lb__th lb__rank">#</th>
               <th class="lb__th lb__player">Player</th>
               <th class="lb__th lb__num">G</th>
               <th class="lb__th lb__num">A</th>
               <th class="lb__th lb__num">POTM</th>
               ${ showRating ? `
-                <th class="lb__th lb__num">R</th>
-                <th class="lb__th lb__num">Rated</th>
+                <th class="lb__th lb__num">Rating</th>
               ` : "" }
             </tr>
           </thead>
@@ -256,7 +265,8 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   } else {
     msg.textContent = "No cached data. Refreshing latest…";
   }
-  renderTable(root, rows, sortMode, showRating, minimumMatches);
+  const renderCurrentTable = () => renderTable(root, rows, sortMode, showRating, minimumMatches, searchQuery);
+  renderCurrentTable();
 
   root.querySelector("#lbBody").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-player]");
@@ -303,7 +313,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
       lsSet(lbKey(seasonId), { ts: now(), data: res });
       rows = res.rows || [];
-      renderTable(root, rows, sortMode, showRating, minimumMatches);
+      renderCurrentTable();
       msg.textContent = silent ? "Updated just now." : "";
       if (!silent) toastSuccess("Leaderboard refreshed.");
     } finally {
@@ -324,7 +334,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const c = lsGet(lbKey(seasonId));
     rows = c?.data?.ok ? (c.data.rows || []) : [];
     msg.textContent = rows.length ? "Loaded from device cache." : "No cached data. Refreshing latest…";
-    renderTable(root, rows, sortMode, showRating, minimumMatches);
+    renderCurrentTable();
 
     ACTIVE_LB.seasonId = seasonId;
     if (!rows.length || shouldAutoRefreshLeaderboard(seasonId)) {
@@ -332,35 +342,45 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     }
   };
 
-  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
-  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
-  root.querySelector("#sortPotm").onclick = () => { sortMode = "potm"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
+  root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderCurrentTable(); };
+  root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderCurrentTable(); };
+  root.querySelector("#sortPotm").onclick = () => { sortMode = "potm"; renderCurrentTable(); };
   const sortRatingBtn = root.querySelector("#sortRating");
-  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderTable(root, rows, sortMode, showRating, minimumMatches); };
+  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderCurrentTable(); };
+
+  const filterButton = root.querySelector("#filterButton");
+  const filterPanel = root.querySelector("#ladderFilterPanel");
+  const filterCount = root.querySelector("#filterCount");
+  const updateFilterButton = () => {
+    filterCount.textContent = minimumMatches ? "1" : "";
+    filterButton.classList.toggle("isActive", minimumMatches > 0);
+  };
+  filterButton.onclick = () => {
+    const open = filterButton.getAttribute("aria-expanded") !== "true";
+    filterButton.setAttribute("aria-expanded", String(open));
+    filterPanel.hidden = !open;
+  };
+  root.querySelector("#playerSearch").oninput = event => {
+    searchQuery = event.target.value;
+    renderCurrentTable();
+  };
 
   const minimumMatchesInput = root.querySelector("#minimumMatches");
-  const minimumMatchesError = root.querySelector("#minimumMatchesError");
-  minimumMatchesInput.oninput = () => {
-    const rawValue = minimumMatchesInput.value.trim();
-    const nextValue = Number(rawValue);
-    if (!rawValue || !Number.isInteger(nextValue) || nextValue < 1 || nextValue > 100) {
-      minimumMatchesInput.setAttribute("aria-invalid", "true");
-      minimumMatchesError.textContent = "Enter a whole number from 1 to 100.";
-      return;
-    }
-    minimumMatchesInput.removeAttribute("aria-invalid");
-    minimumMatchesError.textContent = "";
+  minimumMatchesInput.onchange = () => {
+    const nextValue = Number(minimumMatchesInput.value);
     minimumMatches = nextValue;
     localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
-    renderTable(root, rows, sortMode, showRating, minimumMatches);
+    updateFilterButton();
+    renderCurrentTable();
   };
-  minimumMatchesInput.onblur = () => {
-    if (minimumMatchesInput.getAttribute("aria-invalid") === "true") {
-      minimumMatchesInput.value = String(minimumMatches);
-      minimumMatchesInput.removeAttribute("aria-invalid");
-      minimumMatchesError.textContent = "";
-    }
+  root.querySelector("#clearFilters").onclick = () => {
+    minimumMatches = DEFAULT_MINIMUM_MATCHES;
+    minimumMatchesInput.value = String(minimumMatches);
+    localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
+    updateFilterButton();
+    renderCurrentTable();
   };
+  updateFilterButton();
 
   const toggle = root.querySelector("#toggleRating");
   if (toggle) {

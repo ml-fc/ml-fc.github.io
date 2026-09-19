@@ -17,6 +17,12 @@ export function playerPhotoHtml(name, url, className = "playerPhoto") {
   return `<span class="${esc(className)}${safe ? " hasPhoto" : ""}"${photoStyle} aria-hidden="true"><span class="playerPhoto__initials">${esc(initials(name))}</span></span>`;
 }
 
+async function encodePhotoCanvas(canvas) {
+  const webp = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", .82));
+  if (webp?.type === "image/webp") return webp;
+  return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", .82));
+}
+
 export async function cropPhotoFile(file, size = 384) {
   if (!file || !/^image\/(jpeg|png|webp)$/i.test(file.type)) throw new Error("Choose a JPEG, PNG or WebP photo.");
   if (file.size > 8 * 1024 * 1024) throw new Error("Choose a photo smaller than 8 MB.");
@@ -30,7 +36,7 @@ export async function cropPhotoFile(file, size = 384) {
   context.fillStyle = "#dbe5ea"; context.fillRect(0, 0, size, size);
   context.drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height);
   bitmap.close();
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", .82));
+  const blob = await encodePhotoCanvas(canvas);
   if (!blob) throw new Error("This browser could not prepare the photo.");
   if (blob.size > 256 * 1024) return cropPhotoFile(file, 300);
   return blob;
@@ -144,7 +150,7 @@ export async function choosePhotoCrop(file, container = document.body) {
     const ratio = size / previewSize;
     const { width, height } = dimensions();
     outputContext.drawImage(bitmap, ((previewSize - width) / 2 + offsetX) * ratio, ((previewSize - height) / 2 + offsetY) * ratio, width * ratio, height * ratio);
-    const blob = await new Promise(resolve => output.toBlob(resolve, "image/webp", .82));
+    const blob = await encodePhotoCanvas(output);
     if (!blob) throw new Error("This browser could not prepare the photo.");
     return blob.size > 256 * 1024 && size > 300 ? encodeCrop(300) : blob;
   };
