@@ -1642,9 +1642,13 @@ details.card[open] > summary { margin-bottom: 14px; }
 .nextMatch__lastScore { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
 .nextMatch__lastScore b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nextMatch__lastScore strong { flex: 0 0 auto; font-size: 19px; }
-.nextMatch__lastEvents { display: flex; flex-wrap: wrap; gap: 4px 14px; color: #c2d6e1; font-size: 11px; line-height: 1.35; }
-.nextMatch__lastEvents span { overflow-wrap: anywhere; }
-.nextMatch__lastEvents b { color: #72d7fa; font: 900 9px/1.2 ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.nextMatch__lastEvents { display: grid; gap: 6px; color: #d9e8ef; font-size: 11px; line-height: 1.35; }
+.nextMatch__contribution { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.nextMatch__contribution > span:last-child { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; overflow-wrap: anywhere; }
+.nextMatch__contribution b,
+.nextMatch__potm > b { color: #72d7fa; font: 900 9px/1.2 ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.nextMatch__contributionIcon { display: inline-grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; border: 1px solid rgba(114,215,250,.35); border-radius: 50%; color: #fff; background: rgba(114,215,250,.12); font-size: 11px; }
+.nextMatch__contributionIcon--assist { color: #fde68a; border-color: rgba(253,230,138,.35); background: rgba(253,230,138,.1); font-size: 13px; font-weight: 900; }
 .nextMatch__potm { display:flex; flex-basis:100%; gap:8px; align-items:center; }
 .nextMatch__potm > div { display:flex; flex-wrap:wrap; gap:8px; }
 .nextMatch__potmWinner { display:inline-flex; align-items:center; gap:6px; color:#fff; font-weight:850; }

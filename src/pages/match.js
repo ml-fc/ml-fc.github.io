@@ -42,7 +42,9 @@ function matchTeamLabel(m, side) {
   if (t === "INTERNAL") return side === "HOME"
     ? String(m?.teamHomeName || "Blue")
     : String(m?.teamAwayName || "Orange");
-  return side === "HOME" ? "MLFC" : "OPPONENT";
+  return side === "HOME"
+    ? String(m?.teamHomeName || "MLFC")
+    : String(m?.teamAwayName || "Opponent");
 }
 
 function formatResultLabel(m) {
@@ -455,8 +457,12 @@ function whatsappAvailabilityMessage(match, availability) {
   const confirmed = availabilityGroups(availability).yes.length;
   const maximum = availabilityLimitForMatch(match);
   const spotsLeft = Math.max(0, maximum - confirmed);
+  const internalMatch = String(match?.type || "").toUpperCase() === "INTERNAL";
+  const homeMarker = internalMatch ? "🔵" : "🔴";
+  const awayMarker = internalMatch ? "🟠" : "⚪";
   return [
     `⚽ *${match.title}*`,
+    `${homeMarker} *${matchTeamLabel(match, "HOME")}* vs ${awayMarker} *${matchTeamLabel(match, "AWAY")}*`,
     `🗓️ ${when}`,
     `👥 ${confirmed}/${maximum} players confirmed · ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`,
     "",
@@ -608,6 +614,170 @@ async function shareAvailability(match, availability) {
   return "download";
 }
 
+function fitRecapCanvasText(context, value, maxWidth) {
+  const original = String(value || "");
+  if (context.measureText(original).width <= maxWidth) return original;
+  let label = original;
+  while (label.length > 1 && context.measureText(`${label}…`).width > maxWidth) label = label.slice(0, -1);
+  return `${label}…`;
+}
+
+function drawRecapPortrait(context, portrait, name, x, y, radius) {
+  context.save();
+  context.beginPath(); context.arc(x, y, radius, 0, Math.PI * 2); context.clip();
+  if (portrait) {
+    const diameter = radius * 2;
+    const scale = Math.max(diameter / portrait.width, diameter / portrait.height);
+    context.drawImage(portrait, x - portrait.width * scale / 2, y - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
+  } else {
+    context.fillStyle = "#12384a"; context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    context.fillStyle = "#ffffff"; context.font = `900 ${Math.round(radius * .72)}px Arial`; context.textAlign = "center";
+    context.fillText(initials(name), x, y + Math.round(radius * .25));
+  }
+  context.restore();
+  context.strokeStyle = "#ffe16a"; context.lineWidth = 5; context.beginPath(); context.arc(x, y, radius, 0, Math.PI * 2); context.stroke();
+  context.textAlign = "left";
+}
+
+async function matchRecapImageFile(match, when, { scorers = [], assisters = [], potmWinners = [], topRatings = [] } = {}) {
+  const winnerRows = Math.ceil(potmWinners.length / 2);
+  const potmHeight = potmWinners.length ? 105 + winnerRows * 155 : 0;
+  const highlightRows = Math.max(1, scorers.length, assisters.length, topRatings.length);
+  const highlightsHeight = 118 + highlightRows * 52;
+  const logicalWidth = 1080;
+  const logicalHeight = Math.max(1350, 570 + potmHeight + highlightsHeight + 110);
+  const renderScale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = logicalWidth * renderScale; canvas.height = logicalHeight * renderScale;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.scale(renderScale, renderScale);
+
+  const gradient = context.createLinearGradient(0, 0, logicalWidth, logicalHeight);
+  gradient.addColorStop(0, "#061724"); gradient.addColorStop(1, "#0e3a52");
+  context.fillStyle = gradient; context.fillRect(0, 0, logicalWidth, logicalHeight);
+  context.strokeStyle = "rgba(114,215,250,.20)"; context.lineWidth = 4;
+  context.beginPath(); context.arc(950, 80, 235, 0, Math.PI * 2); context.stroke();
+
+  const logo = await loadCanvasImage("./assets/icons/icon-192.png");
+  if (logo) context.drawImage(logo, 54, 42, 92, 92);
+  context.fillStyle = "#72d7fa"; context.font = "900 23px Arial";
+  context.fillText("MANOR LAKES FC · MATCH RECAP", 170, 66);
+  context.fillStyle = "#ffffff"; context.font = "900 40px Arial";
+  context.fillText(fitRecapCanvasText(context, String(match.title || "MATCH").toUpperCase(), 850), 170, 112);
+  context.fillStyle = "#bed2dc"; context.font = "700 21px Arial";
+  context.fillText(`${when} · ${String(match.type || "MATCH").toUpperCase()}`, 170, 145, 850);
+
+  const scoreTop = 185;
+  context.fillStyle = "rgba(3,20,32,.78)"; context.fillRect(50, scoreTop, 980, 330);
+  context.fillStyle = "#45dc8a"; context.fillRect(50, scoreTop, 980, 8);
+  context.fillStyle = "#45dc8a"; context.font = "900 20px Arial"; context.textAlign = "center";
+  context.fillText("FINAL SCORE", 540, scoreTop + 48);
+  const homeName = matchTeamLabel(match, "HOME");
+  const awayName = matchTeamLabel(match, "AWAY");
+  context.fillStyle = "#ffffff"; context.font = "900 39px Arial";
+  context.fillText(fitRecapCanvasText(context, homeName, 325), 245, scoreTop + 116);
+  context.fillText(fitRecapCanvasText(context, awayName, 325), 835, scoreTop + 116);
+  context.fillStyle = "#72d7fa"; context.font = "900 122px Arial";
+  context.fillText(String(match.scoreHome ?? "–"), 420, scoreTop + 252);
+  context.fillStyle = "#78949c"; context.font = "900 54px Arial";
+  context.fillText("–", 540, scoreTop + 235);
+  context.fillStyle = "#ff9b72"; context.font = "900 122px Arial";
+  context.fillText(String(match.scoreAway ?? "–"), 660, scoreTop + 252);
+  context.fillStyle = "#bed2dc"; context.font = "800 17px Arial";
+  context.fillText("HOME", 245, scoreTop + 160); context.fillText("AWAY", 835, scoreTop + 160);
+  context.textAlign = "left";
+
+  let sectionTop = scoreTop + 365;
+  if (potmWinners.length) {
+    context.fillStyle = "#ffe16a"; context.font = "900 24px Arial";
+    context.fillText(potmWinners.length === 1 ? "PLAYER OF THE MATCH" : "PLAYERS OF THE MATCH", 60, sectionTop + 30);
+    const portraits = await Promise.all(potmWinners.map((winner) => loadCanvasImage(winner.photoUrl)));
+    potmWinners.forEach((winner, index) => {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const x = 60 + column * 490;
+      const y = sectionTop + 58 + row * 155;
+      context.fillStyle = "rgba(3,20,32,.70)"; context.fillRect(x, y, 460, 130);
+      drawRecapPortrait(context, portraits[index], winner.playerName, x + 65, y + 65, 43);
+      context.fillStyle = "#ffffff"; context.font = "900 28px Arial";
+      context.fillText(fitRecapCanvasText(context, winner.playerName, 300), x + 125, y + 45);
+      context.fillStyle = "#ffe16a"; context.font = "800 17px Arial";
+      const voteCount = Number(winner.voteCount || 0);
+      context.fillText(`${voteCount} ${voteCount === 1 ? "VOTE" : "VOTES"}`, x + 125, y + 76);
+      context.fillStyle = "#bed2dc"; context.font = "800 17px Arial";
+      const rating = Number(winner.ratingCount || 0) ? Number(winner.rating).toFixed(1) : "–";
+      context.fillText(`${Number(winner.goals || 0)} G  ·  ${Number(winner.assists || 0)} A  ·  ${rating} RATING`, x + 125, y + 105);
+    });
+    sectionTop += potmHeight;
+  }
+
+  context.fillStyle = "#72d7fa"; context.font = "900 24px Arial";
+  context.fillText("MATCH HIGHLIGHTS", 60, sectionTop + 30);
+  const columns = [
+    { title: "GOALS", color: "#45dc8a", rows: scorers.map((item) => `${item.name}  ×${item.goals}`), empty: "No goals recorded" },
+    { title: "ASSISTS", color: "#72d7fa", rows: assisters.map((item) => `${item.name}  ×${item.assists}`), empty: "No assists recorded" },
+    { title: "TOP RATINGS", color: "#ffe16a", rows: topRatings.map((item) => `${item.name}  ${item.rating.toFixed(1)}`), empty: "No ratings recorded" },
+  ];
+  const panelTop = sectionTop + 58;
+  const panelWidth = 306;
+  const panelGap = 22;
+  const panelHeight = highlightsHeight - 58;
+  columns.forEach((column, columnIndex) => {
+    const x = 60 + columnIndex * (panelWidth + panelGap);
+    context.fillStyle = "rgba(3,20,32,.70)"; context.fillRect(x, panelTop, panelWidth, panelHeight);
+    context.fillStyle = column.color; context.fillRect(x, panelTop, panelWidth, 6);
+    context.fillStyle = column.color; context.font = "900 20px Arial";
+    context.fillText(column.title, x + 20, panelTop + 42);
+    const rows = column.rows.length ? column.rows : [column.empty];
+    rows.forEach((row, index) => {
+      context.fillStyle = column.rows.length ? "#ffffff" : "#78949c";
+      context.font = `${column.rows.length ? "800" : "700"} 19px Arial`;
+      context.fillText(fitRecapCanvasText(context, row, panelWidth - 40), x + 20, panelTop + 88 + index * 52);
+      if (index < rows.length - 1) {
+        context.strokeStyle = "rgba(190,210,220,.12)"; context.lineWidth = 1;
+        context.beginPath(); context.moveTo(x + 20, panelTop + 105 + index * 52); context.lineTo(x + panelWidth - 20, panelTop + 105 + index * 52); context.stroke();
+      }
+    });
+  });
+
+  context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
+  context.fillText("Generated from the official MLFC match record", 60, logicalHeight - 43);
+  context.textAlign = "right";
+  context.fillText(`${homeName.toUpperCase()} vs ${awayName.toUpperCase()}`, 1020, logicalHeight - 43, 470);
+  context.textAlign = "left";
+
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  return blob ? new File([blob], `mlfc-match-recap-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
+async function shareMatchRecap(match, when, highlights) {
+  const file = await matchRecapImageFile(match, when, highlights);
+  if (!file) throw new Error("Could not create the match recap image.");
+  const homeName = matchTeamLabel(match, "HOME");
+  const awayName = matchTeamLabel(match, "AWAY");
+  const lines = [
+    `⚽ *${match.title}*`,
+    `*${homeName} ${match.scoreHome} – ${match.scoreAway} ${awayName}*`,
+    `🗓️ ${when}`,
+  ];
+  if (highlights.scorers.length) lines.push("", `Scorers: ${highlights.scorers.map((item) => `${item.name} (${item.goals})`).join(" · ")}`);
+  if (highlights.assisters.length) lines.push(`Assists: ${highlights.assisters.map((item) => `${item.name} (${item.assists})`).join(" · ")}`);
+  if (highlights.potmWinners.length) lines.push(`🏆 POTM: ${highlights.potmWinners.map((item) => item.playerName).join(" & ")}`);
+  lines.push("", `${baseUrl()}#/match?code=${match.publicCode}`);
+  const text = lines.join("\n");
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: `${match.title} match recap`, text, files: [file] });
+    return "image";
+  }
+  const downloadUrl = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = downloadUrl; link.download = file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+  window.location.assign(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  return "download";
+}
+
 function renderShell(root){
   root.innerHTML = `
     <div id="matchListView"></div>
@@ -654,12 +824,32 @@ function availabilityPresentation(availability) {
 function latestResultEventLine(result) {
   const events = Array.isArray(result?.events) ? result.events : [];
   const potm = Array.isArray(result?.potm) ? result.potm : [];
-  const goals = events
-    .filter((event) => Number(event?.goals || 0) > 0)
-    .map((event) => `${escapeHtml(event.playerName)} (${Number(event.goals)})`);
-  const assists = events
-    .filter((event) => Number(event?.assists || 0) > 0)
-    .map((event) => `${escapeHtml(event.playerName)} (${Number(event.assists)})`);
+  // Captains can each submit the same player's totals. Collapse those reports
+  // so the home banner shows one clear contribution per player.
+  const contributions = new Map();
+  events.forEach((event) => {
+    const name = String(event?.playerName || "").trim();
+    if (!name) return;
+    const key = name.toLocaleLowerCase();
+    const current = contributions.get(key) || { name, goals: 0, assists: 0 };
+    const goals = Number(event?.goals || 0);
+    const assists = Number(event?.assists || 0);
+    current.goals = Math.max(current.goals, Number.isFinite(goals) ? Math.max(0, goals) : 0);
+    current.assists = Math.max(current.assists, Number.isFinite(assists) ? Math.max(0, assists) : 0);
+    contributions.set(key, current);
+  });
+  const formatContribution = (item, stat) => {
+    const count = item[stat];
+    return `${escapeHtml(item.name)}${count > 1 ? ` ×${count}` : ""}`;
+  };
+  const goals = [...contributions.values()]
+    .filter((item) => item.goals > 0)
+    .sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name))
+    .map((item) => formatContribution(item, "goals"));
+  const assists = [...contributions.values()]
+    .filter((item) => item.assists > 0)
+    .sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name))
+    .map((item) => formatContribution(item, "assists"));
   const potmWinners = potm.map((winner) => {
     const name = String(winner?.playerName || "").trim();
     if (!name) return "";
@@ -669,9 +859,9 @@ function latestResultEventLine(result) {
     </span>`;
   }).filter(Boolean);
   if (!goals.length && !assists.length && !potmWinners.length) return "";
-  return `<div class="nextMatch__lastEvents">
-    ${goals.length ? `<span><b>Goals</b> ${goals.join(" · ")}</span>` : ""}
-    ${assists.length ? `<span><b>Assists</b> ${assists.join(" · ")}</span>` : ""}
+  return `<div class="nextMatch__lastEvents" aria-label="Last match contributions">
+    ${goals.length ? `<div class="nextMatch__contribution"><span class="nextMatch__contributionIcon" aria-hidden="true">⚽</span><span><b>Scorers</b><span>${goals.join(" · ")}</span></span></div>` : ""}
+    ${assists.length ? `<div class="nextMatch__contribution"><span class="nextMatch__contributionIcon nextMatch__contributionIcon--assist" aria-hidden="true">↗</span><span><b>Assists</b><span>${assists.join(" · ")}</span></span></div>` : ""}
     ${potmWinners.length ? `<div class="nextMatch__potm"><b>POTM</b><div>${potmWinners.join("")}</div></div>` : ""}
   </div>`;
 }
@@ -1370,13 +1560,17 @@ const cap = availabilityLimitForMatch(m);
   const hasScore = scoreHome !== "" && scoreAway !== "";
   let potm = data.potm || null;
   const potmCandidates = Array.isArray(potm?.candidates) ? potm.candidates : [];
-  const potmWinnerRows = (potm?.winners || []).map((name) => potmCandidates.find((row) => String(row.playerName).toLowerCase() === String(name).toLowerCase()) || {playerName:name});
+  const potmWinnerRows = (potm?.winners || []).map((name) => {
+    const candidate = potmCandidates.find((row) => String(row.playerName).toLowerCase() === String(name).toLowerCase()) || {playerName:name};
+    const result = (potm?.results || []).find((row) => String(row.candidateName).toLowerCase() === String(name).toLowerCase());
+    return { ...candidate, voteCount: Number(result?.voteCount || 0) };
+  });
 
   function teamLabel(side) {
     // side: "HOME" | "AWAY"
     const t = String(m.type || "").toUpperCase();
     if (t === "INTERNAL") return side === "HOME" ? String(m.teamHomeName || "Blue") : String(m.teamAwayName || "Orange");
-    return side === "HOME" ? "MLFC" : "OPPONENT";
+    return side === "HOME" ? String(m.teamHomeName || "MLFC") : String(m.teamAwayName || "Opponent");
   }
 
   function resultInline() {
@@ -1407,6 +1601,21 @@ const cap = availabilityLimitForMatch(m);
     .filter(([_, v]) => (v.assists || 0) > 0)
     .sort((a, b) => (b[1].assists - a[1].assists) || a[0].localeCompare(b[0]))
     .map(([name, v]) => ({ name, assists: v.assists }));
+
+  const ratingMap = new Map();
+  for (const row of (Array.isArray(data.ratings) ? data.ratings : [])) {
+    const name = String(row?.playerName || "").trim();
+    const rating = Number(row?.rating);
+    if (!name || !Number.isFinite(rating) || rating <= 0) continue;
+    const key = name.toLowerCase();
+    const current = ratingMap.get(key) || { name, total: 0, count: 0 };
+    current.total += rating; current.count += 1;
+    ratingMap.set(key, current);
+  }
+  const topRatings = [...ratingMap.values()]
+    .map((row) => ({ name: row.name, rating: row.total / row.count, ratingCount: row.count }))
+    .sort((a, b) => (b.rating - a.rating) || (b.ratingCount - a.ratingCount) || a.name.localeCompare(b.name))
+    .slice(0, 3);
 
   // Group scorers by team when possible
   const scorersByTeam = {};
@@ -1467,8 +1676,7 @@ const cap = availabilityLimitForMatch(m);
       <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "OPEN"}</span></div>
       ${potm.closed ? `
         ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
-          const result = (potm.results || []).find((row) => String(row.candidateName).toLowerCase() === String(winner.playerName).toLowerCase());
-          return `<div class="potmWinner">${playerPhotoHtml(winner.playerName, winner.photoUrl, "playerPhoto playerPhoto--potm")}<span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(result?.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
+          return `<div class="potmWinner">${playerPhotoHtml(winner.playerName, winner.photoUrl, "playerPhoto playerPhoto--potm")}<span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(winner.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
         }).join("")}</div>` : `<div class="small">No votes were cast.</div>`}
       ` : potm.canVote ? `
         <div class="small">Choose any player from either team except yourself. You can change your vote until Clubdesk closes voting.</div>
@@ -1549,13 +1757,14 @@ const cap = availabilityLimitForMatch(m);
   }
 
   const shareResult = detail.querySelector("#shareResult");
-  if (shareResult) shareResult.onclick = () => {
-    const lines = [`⚽ *${m.title}*`, `*${resultInline()}*`, when];
-    if (scorers.length) lines.push("", `Scorers: ${scorers.map((item) => `${item.name} (${item.goals})`).join(" · ")}`);
-    if (assisters.length) lines.push(`Assists: ${assisters.map((item) => `${item.name} (${item.assists})`).join(" · ")}`);
-    lines.push("", `${baseUrl()}#/match?code=${m.publicCode}`);
-    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
-    toastInfo("WhatsApp opened.");
+  if (shareResult) shareResult.onclick = async () => {
+    setDisabled(shareResult, true, "Preparing…");
+    try {
+      const mode = await shareMatchRecap(m, when, { scorers, assisters, potmWinners: potmWinnerRows, topRatings });
+      toastInfo(mode === "image" ? "Choose WhatsApp to share the match recap." : "Match recap image downloaded. Attach it in WhatsApp.");
+    } catch (error) {
+      if (error?.name !== "AbortError") toastError(error?.message || "Could not prepare the match recap.");
+    } finally { setDisabled(shareResult, false); }
   };
 
   const capBtn = detail.querySelector("#openCaptain");

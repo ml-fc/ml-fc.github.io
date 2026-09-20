@@ -386,9 +386,25 @@ async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "",
   return "download";
 }
 
+function drawPotmCelebration(context, width, height) {
+  const colors = ["#ffe16a", "#72d7fa", "#45dc8a", "#ff8b78", "#ffffff"];
+  for (let index = 0; index < 42; index += 1) {
+    const onRight = index % 2 === 0;
+    const x = onRight ? width - 28 - ((index * 37) % 150) : 22 + ((index * 53) % 150);
+    const y = 28 + ((index * 97) % Math.max(120, height - 100));
+    context.save();
+    context.translate(x, y); context.rotate((index % 7) * .34);
+    context.fillStyle = colors[index % colors.length];
+    if (index % 3 === 0) {
+      context.beginPath(); context.arc(0, 0, 6 + index % 5, 0, Math.PI * 2); context.fill();
+    } else context.fillRect(-8, -4, 16, 8);
+    context.restore();
+  }
+}
+
 async function multiplePotmImageFile(match, when, players, voteCount) {
   const rows = Math.ceil(players.length / 2);
-  const canvasHeight = Math.max(1350, 510 + rows * 270);
+  const canvasHeight = Math.max(1350, 330 + rows * 400 + 170);
   const canvas = document.createElement("canvas");
   canvas.width = 1080; canvas.height = canvasHeight;
   const context = canvas.getContext("2d");
@@ -398,29 +414,35 @@ async function multiplePotmImageFile(match, when, players, voteCount) {
   context.fillStyle = gradient; context.fillRect(0, 0, 1080, canvasHeight);
   context.strokeStyle = "rgba(114,215,250,.28)"; context.lineWidth = 4;
   context.beginPath(); context.arc(920, 150, 230, 0, Math.PI * 2); context.stroke();
+  drawPotmCelebration(context, 1080, canvasHeight);
 
   context.fillStyle = "#72d7fa"; context.font = "900 28px Arial";
   context.fillText("MANOR LAKES FC", 60, 72);
   context.fillStyle = "#ffffff"; context.font = "900 54px Arial";
-  context.fillText("PLAYERS OF THE MATCH", 60, 145);
+  context.fillText("🏆 PLAYERS OF THE MATCH 🏆", 60, 145);
   context.fillStyle = "#bed2dc"; context.font = "700 25px Arial";
   context.fillText(`${match.title} · ${when}`, 60, 205, 950);
+  context.fillStyle = "#ffe16a"; context.font = "900 22px Arial";
+  context.fillText("🎉  SHARED GLORY  ·  CHOSEN BY THE PLAYERS  🎉", 60, 246, 950);
 
   const portraits = await Promise.all(players.map((player) => loadCanvasImage(player.photoUrl)));
+  const gridTop = 285;
+  const footerTop = canvasHeight - 150;
+  const rowGap = 24;
+  const cardHeight = (footerTop - gridTop - rowGap * (rows - 1)) / rows;
+  const cardWidth = 474;
   players.forEach((player, index) => {
     const column = index % 2;
     const row = Math.floor(index / 2);
-    const x = 60 + column * 510;
-    const y = 265 + row * 270;
-    const width = 450;
-    const height = 240;
-    const portraitX = x + 82;
-    const portraitY = y + 92;
-    const portraitRadius = 58;
+    const x = 52 + column * 502;
+    const y = gridTop + row * (cardHeight + rowGap);
+    const portraitRadius = Math.max(78, Math.min(players.length <= 2 ? 205 : 120, (cardHeight - 185) / 2));
+    const portraitX = x + cardWidth / 2;
+    const portraitY = y + 32 + portraitRadius;
     const portrait = portraits[index];
 
-    context.fillStyle = "rgba(3,20,32,.74)"; context.fillRect(x, y, width, height);
-    context.fillStyle = "#ffe16a"; context.fillRect(x, y, width, 7);
+    context.fillStyle = "rgba(3,20,32,.82)"; context.fillRect(x, y, cardWidth, cardHeight);
+    context.fillStyle = "#ffe16a"; context.fillRect(x, y, cardWidth, 9);
     context.save(); context.beginPath(); context.arc(portraitX, portraitY, portraitRadius, 0, Math.PI * 2); context.clip();
     if (portrait) {
       const diameter = portraitRadius * 2;
@@ -428,21 +450,28 @@ async function multiplePotmImageFile(match, when, players, voteCount) {
       context.drawImage(portrait, portraitX - portrait.width * scale / 2, portraitY - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
     } else {
       context.fillStyle = "#12384a"; context.fillRect(portraitX - portraitRadius, portraitY - portraitRadius, portraitRadius * 2, portraitRadius * 2);
-      context.fillStyle = "#ffffff"; context.font = "900 30px Arial"; context.textAlign = "center";
-      context.fillText(initials(player.playerName), portraitX, portraitY + 10); context.textAlign = "left";
+      context.fillStyle = "#ffffff"; context.font = `900 ${Math.round(portraitRadius * .65)}px Arial`; context.textAlign = "center";
+      context.fillText(initials(player.playerName), portraitX, portraitY + Math.round(portraitRadius * .22)); context.textAlign = "left";
     }
     context.restore();
-    context.strokeStyle = "#72d7fa"; context.lineWidth = 6; context.beginPath(); context.arc(portraitX, portraitY, portraitRadius, 0, Math.PI * 2); context.stroke();
+    context.strokeStyle = "#ffe16a"; context.lineWidth = 9; context.beginPath(); context.arc(portraitX, portraitY, portraitRadius, 0, Math.PI * 2); context.stroke();
 
-    context.fillStyle = "#ffffff"; context.font = "900 34px Arial";
-    const nameLines = wrapCanvasText(context, player.playerName, 265).slice(0, 2);
-    nameLines.forEach((line, lineIndex) => context.fillText(fitCanvasLabel(context, line, 265), x + 165, y + 66 + lineIndex * 38));
-    const detailY = y + (nameLines.length > 1 ? 154 : 125);
-    context.fillStyle = "#ffe16a"; context.font = "900 21px Arial";
-    context.fillText(`${voteCount} ${voteCount === 1 ? "VOTE" : "VOTES"}`, x + 165, detailY);
-    context.fillStyle = "#bed2dc"; context.font = "800 18px Arial";
-    context.fillText(`${Number(player.goals || 0)} G · ${Number(player.assists || 0)} A`, x + 165, detailY + 32);
-    context.fillText(`${Number(player.ratingCount || 0) ? Number(player.rating).toFixed(1) : "—"} RATING`, x + 165, detailY + 61);
+    context.textAlign = "center";
+    const nameY = portraitY + portraitRadius + Math.min(54, Math.max(38, cardHeight * .08));
+    context.fillStyle = "#ffffff"; context.font = `900 ${players.length <= 2 ? 45 : 36}px Arial`;
+    context.fillText(fitCanvasLabel(context, player.playerName, cardWidth - 44), portraitX, nameY);
+    context.fillStyle = "#bed2dc"; context.font = `800 ${players.length <= 2 ? 23 : 19}px Arial`;
+    const rating = Number(player.ratingCount || 0) ? Number(player.rating).toFixed(1) : "—";
+    if (players.length <= 2) {
+      context.fillStyle = "#ffe16a"; context.font = "900 21px Arial";
+      context.fillText("🎉  POTM WINNER  🎉", portraitX, nameY + 39);
+      context.fillStyle = "#bed2dc"; context.font = "800 23px Arial";
+      context.fillText(`🗳️ ${voteCount}  ·  🥾 ${Number(player.goals || 0)} GOALS  ·  🎯 ${Number(player.assists || 0)} ASSISTS`, portraitX, y + cardHeight - 62, cardWidth - 30);
+      context.fillText(`⭐ ${rating} RATING`, portraitX, y + cardHeight - 27);
+    } else {
+      context.fillText(`🗳️ ${voteCount}  ·  🥾 ${Number(player.goals || 0)}  ·  🎯 ${Number(player.assists || 0)}  ·  ⭐ ${rating}`, portraitX, y + cardHeight - 29, cardWidth - 30);
+    }
+    context.textAlign = "left";
   });
 
   context.fillStyle = "#ffffff"; context.font = "900 34px Arial"; context.textAlign = "center";
@@ -466,30 +495,34 @@ async function potmImageFile(match, when, players, voteCount) {
   const gradient = context.createLinearGradient(0,0,1080,1350);
   gradient.addColorStop(0,"#061724"); gradient.addColorStop(1,"#0e536b");
   context.fillStyle=gradient; context.fillRect(0,0,1080,1350);
+  drawPotmCelebration(context,1080,1350);
   context.strokeStyle="rgba(114,215,250,.28)"; context.lineWidth=4;
   context.beginPath(); context.arc(890,220,260,0,Math.PI*2); context.stroke();
   const portrait=await loadCanvasImage(player.photoUrl);
+  context.save(); context.beginPath(); context.arc(835,315,205,0,Math.PI*2); context.clip();
   if (portrait) {
-    context.save(); context.beginPath(); context.arc(850,300,175,0,Math.PI*2); context.clip();
-    const scale=Math.max(350/portrait.width,350/portrait.height);
-    context.drawImage(portrait,850-portrait.width*scale/2,300-portrait.height*scale/2,portrait.width*scale,portrait.height*scale);
-    context.restore(); context.strokeStyle="#72d7fa"; context.lineWidth=10; context.beginPath(); context.arc(850,300,175,0,Math.PI*2); context.stroke();
+    const scale=Math.max(410/portrait.width,410/portrait.height);
+    context.drawImage(portrait,835-portrait.width*scale/2,315-portrait.height*scale/2,portrait.width*scale,portrait.height*scale);
+  } else {
+    context.fillStyle="#12384a";context.fillRect(630,110,410,410);
+    context.fillStyle="#ffffff";context.font="900 110px Arial";context.textAlign="center";context.fillText(initials(player.playerName),835,352);context.textAlign="left";
   }
+  context.restore(); context.strokeStyle="#ffe16a"; context.lineWidth=12; context.beginPath(); context.arc(835,315,205,0,Math.PI*2); context.stroke();
   context.fillStyle="#72d7fa"; context.font="900 28px Arial";
   context.fillText("MANOR LAKES FC",70,90);
   context.fillStyle="#ffffff"; context.font="900 48px Arial";
   context.fillText("PLAYER OF THE MATCH",70,175);
   context.fillStyle="#ffe16a"; context.font="900 150px Arial";
-  context.fillText("🏆",70,390);
+  context.fillText("🎉 🏆 🎊",70,390,500);
   context.fillStyle="#ffffff"; context.font="900 76px Arial";
   wrapCanvasText(context,player.playerName,900).slice(0,2).forEach((line,index)=>context.fillText(line,70,510+index*82));
   context.fillStyle="#bed2dc"; context.font="700 28px Arial";
   context.fillText(`${match.title} · ${when}`,70,705);
   const stats=[
-    [String(voteCount),voteCount===1?"VOTE":"VOTES"],
-    [String(Number(player.goals||0)),"GOALS"],
-    [String(Number(player.assists||0)),"ASSISTS"],
-    [Number(player.ratingCount||0)?Number(player.rating).toFixed(1):"—","RATING"],
+    [String(voteCount),`🗳️ ${voteCount===1?"VOTE":"VOTES"}`],
+    [String(Number(player.goals||0)),"🥾 GOALS"],
+    [String(Number(player.assists||0)),"🎯 ASSISTS"],
+    [Number(player.ratingCount||0)?Number(player.rating).toFixed(1):"—","⭐ RATING"],
   ];
   stats.forEach(([value,label],index)=>{
     const x=70+index*235;
