@@ -938,7 +938,7 @@ function matchRowHtml(m, view) {
 
       <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
-        ${!isCompleted && !potmVotingClosed ? `<button class="btn ${hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${hasStarted && !isEditLocked ? "" : "disabled"} title="${hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
+        ${!isCompleted && !locked ? `<button class="btn ${hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${hasStarted && !isEditLocked ? "" : "disabled"} title="${hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
         <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
         ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
@@ -1722,6 +1722,12 @@ async function openVotingManager(root, view, match) {
   const started = Boolean(String(potm.openedAt || ""));
   const closed = started && Boolean(potm.closed);
   const hasScores = String(detail.match?.scoreHome ?? "").trim() !== "" && String(detail.match?.scoreAway ?? "").trim() !== "";
+  const results = Array.isArray(potm.results) ? potm.results : [];
+  const topVotes = Math.max(0, ...results.map((row) => Number(row.voteCount || 0)));
+  const leaders = results.filter((row) => topVotes > 0 && Number(row.voteCount || 0) === topVotes);
+  const winner = leaders.length === 1
+    ? (potm.candidates || []).find((row) => String(row.playerName || "").toLowerCase() === String(leaders[0].candidateName || "").toLowerCase())
+    : null;
   dialog.innerHTML = `<div class="adminVotingDialog__panel">
     <header><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${escapeHtml(match.title || "Voting")}</div><div class="small">${started ? `${voted.length} of ${voted.length + pending.length} players voted` : hasScores ? "Ready to open voting" : "Add the final score when starting voting"}</div></div><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button></header>
     ${started ? `<div class="potmParticipation">
@@ -1733,8 +1739,10 @@ async function openVotingManager(root, view, match) {
       ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Remind ${pending.length} ${pending.length === 1 ? "player" : "players"}</button>` : ""}
       ${started && !closed ? `<button class="btn whatsappBtn" type="button" data-vote-share>Share voting link</button>` : ""}
       ${started && !closed ? `<button class="btn gray" type="button" data-vote-close>Close voting</button><button class="btn dangerGhost" type="button" data-vote-cancel>Cancel voting</button>` : ""}
+      ${closed && winner ? `<button class="btn whatsappBtn" type="button" data-potm-share>Share POTM</button>` : ""}
+      ${closed ? `<button class="btn primary" type="button" data-vote-reopen>Reopen voting</button>` : ""}
     </div>
-    <div class="small" data-vote-status role="status" aria-live="polite">${closed ? "Voting completed." : started ? "Individual choices remain private until voting closes." : ""}</div>
+    <div class="small" data-vote-status role="status" aria-live="polite">${closed ? winner ? `${escapeHtml(winner.playerName)} won with ${topVotes} ${topVotes === 1 ? "vote" : "votes"}.` : topVotes ? "Voting ended in a tie. Reopen voting to resolve it." : "Voting closed without any votes." : started ? "Individual choices remain private until voting closes." : ""}</div>
   </div>`;
   dialog.querySelector(".adminVotingDialog__close").onclick = () => dialog.close();
 
@@ -1794,6 +1802,28 @@ async function openVotingManager(root, view, match) {
     if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be closed."); }
     MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, potmClosedAt: out.closedAt, potmVotingClosed: 1, potmVoteCount: Number(out.potm?.voteCount || 0) } : item);
     toastSuccess("Voting completed and closed.");
+    refreshList();
+  });
+  dialog.querySelector("[data-potm-share]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    setDisabled(button, true, "Creating image…");
+    try {
+      const mode = await sharePotm(detail.match, formatHumanDateTime(detail.match.date, detail.match.time), winner, topVotes);
+      toastInfo(mode === "image" ? "Choose WhatsApp to share the POTM result." : "POTM image downloaded. Attach it in WhatsApp.");
+    } catch (error) {
+      if (error?.name !== "AbortError") toastError(error?.message || "POTM result could not be shared.");
+    } finally {
+      setDisabled(button, false);
+    }
+  });
+  dialog.querySelector("[data-vote-reopen]")?.addEventListener("click", async (event) => {
+    if (!confirm(`Reopen POTM voting for “${match.title}”? Existing votes will be kept and players can vote again.`)) return;
+    const button = event.currentTarget;
+    setDisabled(button, true, "Reopening…");
+    const out = await API.adminReopenPotmVoting(match.matchId);
+    if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be reopened."); }
+    MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, potmClosedAt: "", potmVotingClosed: 0 } : item);
+    toastSuccess("Voting reopened. Existing votes were kept.");
     refreshList();
   });
   dialog.querySelector("[data-vote-cancel]")?.addEventListener("click", async (event) => {
