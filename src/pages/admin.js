@@ -447,16 +447,25 @@ async function sharePotm(match, when, player, voteCount) {
 }
 
 async function votingParticipationImageFile(match, voted, pending) {
+  const columnsFor = (list) => list.length > 12 ? 2 : 1;
+  const votedColumns = columnsFor(voted);
+  const pendingColumns = columnsFor(pending);
+  const visibleRows = Math.max(
+    Math.ceil(voted.length / votedColumns),
+    Math.ceil(pending.length / pendingColumns),
+    1,
+  );
+  const canvasHeight = Math.max(1350, 515 + visibleRows * 62);
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
-  canvas.height = 1350;
+  canvas.height = canvasHeight;
   const context = canvas.getContext("2d");
   if (!context) return null;
-  const gradient = context.createLinearGradient(0, 0, 1080, 1350);
+  const gradient = context.createLinearGradient(0, 0, 1080, canvasHeight);
   gradient.addColorStop(0, "#061724");
   gradient.addColorStop(1, "#0d4058");
   context.fillStyle = gradient;
-  context.fillRect(0, 0, 1080, 1350);
+  context.fillRect(0, 0, 1080, canvasHeight);
   context.strokeStyle = "rgba(114,215,250,.22)";
   context.lineWidth = 4;
   context.beginPath(); context.arc(930, 170, 240, 0, Math.PI * 2); context.stroke();
@@ -477,41 +486,48 @@ async function votingParticipationImageFile(match, voted, pending) {
   ])));
   const drawColumn = (title, list, x, color, mark) => {
     const width = 460;
+    const innerColumns = columnsFor(list);
+    const rowsPerColumn = Math.ceil(list.length / innerColumns) || 1;
+    const innerWidth = (width - 40) / innerColumns;
     context.fillStyle = "rgba(3,20,32,.68)";
-    context.fillRect(x, 340, width, 900);
+    context.fillRect(x, 340, width, canvasHeight - 450);
     context.fillStyle = color;
     context.font = "900 28px Arial";
     context.fillText(`${title.toUpperCase()} · ${list.length}`, x + 28, 395);
-    list.slice(0, 12).forEach((player, index) => {
-      const centerY = 455 + index * 62;
+    list.forEach((player, index) => {
+      const columnIndex = Math.floor(index / rowsPerColumn);
+      const rowIndex = index % rowsPerColumn;
+      const itemX = x + 22 + columnIndex * innerWidth;
+      const centerY = 455 + rowIndex * 62;
+      const portraitRadius = innerColumns === 1 ? 24 : 20;
+      const portraitX = itemX + portraitRadius;
       const portrait = portraits.get(String(player.playerName || "").toLowerCase());
       context.save();
-      context.beginPath(); context.arc(x + 58, centerY, 24, 0, Math.PI * 2); context.clip();
+      context.beginPath(); context.arc(portraitX, centerY, portraitRadius, 0, Math.PI * 2); context.clip();
       if (portrait) {
-        const scale = Math.max(48 / portrait.width, 48 / portrait.height);
-        context.drawImage(portrait, x + 58 - portrait.width * scale / 2, centerY - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
+        const diameter = portraitRadius * 2;
+        const scale = Math.max(diameter / portrait.width, diameter / portrait.height);
+        context.drawImage(portrait, portraitX - portrait.width * scale / 2, centerY - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
       } else {
-        context.fillStyle = color; context.fillRect(x + 34, centerY - 24, 48, 48);
-        context.fillStyle = "#08283b"; context.font = "900 15px Arial"; context.textAlign = "center";
-        context.fillText(initials(player.playerName), x + 58, centerY + 5); context.textAlign = "left";
+        context.fillStyle = color; context.fillRect(portraitX - portraitRadius, centerY - portraitRadius, portraitRadius * 2, portraitRadius * 2);
+        context.fillStyle = "#08283b"; context.font = `900 ${innerColumns === 1 ? 15 : 12}px Arial`; context.textAlign = "center";
+        context.fillText(initials(player.playerName), portraitX, centerY + 5); context.textAlign = "left";
       }
       context.restore();
-      context.strokeStyle = color; context.lineWidth = 3; context.beginPath(); context.arc(x + 58, centerY, 24, 0, Math.PI * 2); context.stroke();
-      context.fillStyle = "#ffffff"; context.font = "850 20px Arial";
-      context.fillText(fitCanvasLabel(context, player.playerName, 295), x + 98, centerY - 2);
-      context.fillStyle = "#9fb8c5"; context.font = "800 14px Arial";
-      context.fillText(`${mark}  ${String(player.team || "PLAYER").toUpperCase()}`, x + 98, centerY + 20);
+      context.strokeStyle = color; context.lineWidth = 3; context.beginPath(); context.arc(portraitX, centerY, portraitRadius, 0, Math.PI * 2); context.stroke();
+      const textX = portraitX + portraitRadius + 10;
+      const textWidth = innerWidth - portraitRadius * 2 - 18;
+      context.fillStyle = "#ffffff"; context.font = `850 ${innerColumns === 1 ? 20 : 15}px Arial`;
+      context.fillText(fitCanvasLabel(context, player.playerName, textWidth), textX, centerY - 2);
+      context.fillStyle = "#9fb8c5"; context.font = `800 ${innerColumns === 1 ? 14 : 11}px Arial`;
+      context.fillText(`${mark}  ${String(player.team || "PLAYER").toUpperCase()}`, textX, centerY + 18);
     });
-    if (list.length > 12) {
-      context.fillStyle = "#bed2dc"; context.font = "700 16px Arial";
-      context.fillText(`+ ${list.length - 12} more`, x + 28, 1210);
-    }
   };
   drawColumn("Voted", voted, 60, "#55d99a", "✓");
   drawColumn("Not voted", pending, 560, "#f0c94b", "!");
   context.fillStyle = "#bed2dc";
   context.font = "700 20px Arial";
-  context.fillText("Participation status · Individual votes remain private", 60, 1305);
+  context.fillText("Participation status · Individual votes remain private", 60, canvasHeight - 45);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   return blob ? new File([blob], `mlfc-potm-voting-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
