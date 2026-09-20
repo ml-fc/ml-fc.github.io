@@ -794,8 +794,24 @@ function matchRowHtml(m, view) {
   const potmVotingStarted = String(m.potmOpenedAt || "").trim() !== "";
   const potmVotingClosed = Number(m.potmVotingClosed || 0) === 1 || isCompleted;
   const potmVoteCount = Number(m.potmVoteCount || 0);
+  const ratingStarted = Number(m.ratingCount || 0) > 0;
   const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
   const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
+  const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
+  const progress = isCompleted
+    ? "Match completed"
+    : !hasStarted
+      ? "Upcoming match"
+      : !scoreStarted
+        ? "Match started · scores pending"
+        : !hasBothScores
+          ? "Score update in progress"
+          : potmVotingClosed
+            ? `Voting completed · ${ratingStarted ? "ratings in progress" : "ratings pending"}`
+            : potmVotingStarted
+              ? ratingStarted ? "Voting and ratings in progress" : "Voting open · ratings pending"
+              : ratingStarted ? "Ratings in progress · voting pending" : "Scores updated · voting and ratings pending";
+  const progressTone = isCompleted ? "complete" : hasStarted ? "progress" : "future";
 
   // If locked/completed: disable Manage + scoring.
   const disableManage = isEditLocked;
@@ -803,11 +819,13 @@ function matchRowHtml(m, view) {
   const when = formatHumanDateTime(m.date, m.time);
 
   return `
-    <article class="adminMatchRow">
+    <article class="adminMatchRow adminMatchRow--${progressTone}">
       <div class="adminMatchRow__head">
         <div class="adminMatchRow__main">
-          <div class="adminMatchRow__title">${m.title}</div>
+          <div class="adminMatchRow__title">${escapeHtml(m.title)}</div>
           <div class="adminMatchRow__meta">${when}<span aria-hidden="true">·</span>${m.type}</div>
+          <div class="adminMatchRow__progress"><span aria-hidden="true"></span>${escapeHtml(progress)}</div>
+          ${potmVotingClosed && !isCompleted ? `<div class="adminMatchRow__votingComplete">✓ Voting completed</div>` : ""}
         </div>
         <div class="adminMatchRow__badges">
           <span class="badge${status === "OPEN" ? " badge--good" : ""}">${m.status}</span>
@@ -817,13 +835,8 @@ function matchRowHtml(m, view) {
 
       <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
-        ${!potmVotingStarted
-          ? `<button class="btn good" data-start-potm="${escapeHtml(m.matchId)}" ${!isEditLocked && hasStarted ? "" : "disabled"} title="${hasStarted ? "" : "Available after kick-off"}">Start voting</button>`
-          : !potmVotingClosed
-            ? `<button class="btn dangerGhost" data-cancel-potm="${escapeHtml(m.matchId)}">Cancel voting</button><button class="btn gray" data-close-potm="${escapeHtml(m.matchId)}">Close voting</button>`
-            : `<button class="btn gray" disabled>Voting closed</button>`}
+        ${!isCompleted && !potmVotingClosed ? `<button class="btn ${hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${hasStarted && !isEditLocked ? "" : "disabled"} title="${hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
         <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
-        ${hasBothScores ? `<button class="btn ${potmVotingClosed && potmVoteCount > 0 ? "whatsappBtn" : "gray"}" data-share-potm-card="${m.publicCode}" ${potmVotingClosed && potmVoteCount > 0 ? "" : "disabled"}>${potmVotingClosed ? (potmVoteCount > 0 ? "Share POTM" : "No POTM votes") : "Share POTM after voting"}</button>` : ""}
         ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
         <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
@@ -997,7 +1010,7 @@ async function openManageView(root, code, routeToken, prevView) {
   manageArea.innerHTML = `<div class="card"><div class="h1">Loading match…</div><div class="small">Refreshing availability and teams…</div></div>`;
   let fresh;
   try {
-    fresh = await loadAdminMatch(code);
+    fresh = await API.getPublicMatch(code);
   } catch {
     fresh = { ok: false, error: "Could not refresh the match. Reopen it to try again." };
   }
@@ -1583,6 +1596,102 @@ function bindUserMgmt(root, routeToken) {
   renderUsers(root).catch(() => {});
 }
 
+async function openVotingManager(root, view, match) {
+  document.querySelector("#adminVotingDialog")?.remove();
+  const dialog = document.createElement("dialog");
+  dialog.id = "adminVotingDialog";
+  dialog.className = "adminVotingDialog";
+  dialog.innerHTML = `<div class="adminVotingDialog__loading">Loading voting status…</div>`;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+
+  const detail = await loadAdminMatch(match.publicCode);
+  if (!detail?.ok) {
+    dialog.innerHTML = `<div class="adminVotingDialog__panel"><button class="adminVotingDialog__close" type="button">×</button><div class="h1">Voting unavailable</div><div class="small">${escapeHtml(detail?.error || "Could not load voting status.")}</div></div>`;
+    dialog.querySelector(".adminVotingDialog__close").onclick = () => dialog.close();
+    return;
+  }
+  const potm = detail.potm || {};
+  const participation = detail.potmAdminStatus || {};
+  const voted = Array.isArray(participation.voted) ? participation.voted : [];
+  const pending = Array.isArray(participation.pending) ? participation.pending : [];
+  const started = Boolean(String(potm.openedAt || ""));
+  const closed = started && Boolean(potm.closed);
+  const hasScores = String(detail.match?.scoreHome ?? "").trim() !== "" && String(detail.match?.scoreAway ?? "").trim() !== "";
+  dialog.innerHTML = `<div class="adminVotingDialog__panel">
+    <header><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${escapeHtml(match.title || "Voting")}</div><div class="small">${started ? `${voted.length} of ${voted.length + pending.length} players voted` : hasScores ? "Ready to open voting" : "Add the final score when starting voting"}</div></div><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button></header>
+    ${started ? `<div class="potmParticipation">
+      <section><header><b>Voted</b><span>${voted.length}</span></header><div class="potmParticipation__players">${voted.length ? voted.map((row) => `<span class="potmParticipation__player potmParticipation__player--done"><i aria-hidden="true">✓</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">No votes yet.</span>`}</div></section>
+      <section><header><b>Not voted</b><span>${pending.length}</span></header><div class="potmParticipation__players">${pending.length ? pending.map((row) => `<span class="potmParticipation__player"><i aria-hidden="true">!</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">Everyone has voted.</span>`}</div></section>
+    </div>` : `<div class="adminVotingDialog__empty"><b>Voting has not started</b><span>Opening voting notifies every player listed in this match.</span></div>`}
+    <div class="adminVotingDialog__actions">
+      ${!started ? `<button class="btn good" type="button" data-vote-start>Start voting</button>` : ""}
+      ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Remind ${pending.length} ${pending.length === 1 ? "player" : "players"}</button>` : ""}
+      ${started && !closed ? `<button class="btn gray" type="button" data-vote-close>Close voting</button><button class="btn dangerGhost" type="button" data-vote-cancel>Cancel voting</button>` : ""}
+    </div>
+    <div class="small" data-vote-status role="status" aria-live="polite">${closed ? "Voting completed." : started ? "Individual choices remain private until voting closes." : ""}</div>
+  </div>`;
+  dialog.querySelector(".adminVotingDialog__close").onclick = () => dialog.close();
+
+  const refreshList = () => {
+    clearPublicMatchDetailCache(match.publicCode);
+    clearManageCache(match.publicCode);
+    lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+    dialog.close();
+    renderListView(root, view);
+  };
+  dialog.querySelector("[data-vote-start]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!hasScores) {
+      const scores = await requestScoresForPotm(match);
+      if (!scores) return;
+      setDisabled(button, true, "Saving score…");
+      const scoreResult = await API.adminSubmitScore(match.publicCode, String(match.type || "").toUpperCase() === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(scores.home), String(scores.away));
+      if (!scoreResult?.ok) { setDisabled(button, false); return toastError(scoreResult?.error || "The score could not be saved."); }
+      match.scoreHome = String(scoreResult.scoreHome ?? scores.home);
+      match.scoreAway = String(scoreResult.scoreAway ?? scores.away);
+    }
+    setDisabled(button, true, "Notifying players…");
+    const out = await API.adminStartPotmVoting(match.matchId);
+    if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be started."); }
+    MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, scoreHome: match.scoreHome, scoreAway: match.scoreAway, potmOpenedAt: out.openedAt, potmClosedAt: "", potmVotingClosed: 0 } : item);
+    toastSuccess(`Voting started. ${Number(out.notified || 0)} players notified.`);
+    refreshList();
+  });
+  dialog.querySelector("[data-vote-remind]")?.addEventListener("click", async (event) => {
+    if (!confirm(`Remind ${pending.length} ${pending.length === 1 ? "player" : "players"} who have not voted?`)) return;
+    const button = event.currentTarget;
+    setDisabled(button, true, "Sending…");
+    const out = await API.adminRemindPotmPending(match.matchId);
+    setDisabled(button, false);
+    if (!out?.ok) return toastError(out?.error || "Reminders could not be sent.");
+    const message = `Reminder sent to ${Number(out.notified || 0)} ${Number(out.notified || 0) === 1 ? "player" : "players"}.`;
+    dialog.querySelector("[data-vote-status]").textContent = message;
+    toastSuccess(message);
+  });
+  dialog.querySelector("[data-vote-close]")?.addEventListener("click", async (event) => {
+    if (!confirm(`Close POTM voting for “${match.title}”? Votes will be final.`)) return;
+    const button = event.currentTarget;
+    setDisabled(button, true, "Closing…");
+    const out = await API.adminClosePotmVoting(match.matchId);
+    if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be closed."); }
+    MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, potmClosedAt: out.closedAt, potmVotingClosed: 1, potmVoteCount: Number(out.potm?.voteCount || 0) } : item);
+    toastSuccess("Voting completed and closed.");
+    refreshList();
+  });
+  dialog.querySelector("[data-vote-cancel]")?.addEventListener("click", async (event) => {
+    if (!confirm(`Cancel POTM voting for “${match.title}”? Votes already cast will be removed.`)) return;
+    const button = event.currentTarget;
+    setDisabled(button, true, "Cancelling…");
+    const out = await API.adminCancelPotmVoting(match.matchId);
+    if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be cancelled."); }
+    MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, potmOpenedAt: "", potmClosedAt: "", potmVotingClosed: 0, potmVoteCount: 0 } : item);
+    toastSuccess("Voting cancelled.");
+    refreshList();
+  });
+}
+
 function bindListButtons(root, view) {
   root.querySelectorAll('[data-score]:not([disabled])').forEach(btn => {
     btn.onclick = () => {
@@ -1591,93 +1700,11 @@ function bindListButtons(root, view) {
     };
   });
 
-  root.querySelectorAll('[data-start-potm]:not([disabled])').forEach(btn => {
-    btn.onclick = async () => {
-      const matchId = btn.getAttribute("data-start-potm");
+  root.querySelectorAll('[data-manage-voting]:not([disabled])').forEach(btn => {
+    btn.onclick = () => {
+      const matchId = btn.getAttribute("data-manage-voting");
       const match = (MEM.matches || []).find((item) => String(item.matchId) === String(matchId));
-      if (!match) return toastError("Match could not be found. Refresh Clubdesk and try again.");
-
-      const hasBothScores = String(match.scoreHome ?? "").trim() !== "" && String(match.scoreAway ?? "").trim() !== "";
-      if (!hasBothScores) {
-        const scores = await requestScoresForPotm(match);
-        if (!scores) return;
-        setDisabled(btn, true, "Saving score…");
-        const scoreResult = await API.adminSubmitScore(
-          match.publicCode,
-          String(match.type || "").toUpperCase() === "INTERNAL" ? "INTERNAL" : "OPPONENT",
-          String(scores.home),
-          String(scores.away)
-        );
-        if (!scoreResult?.ok) {
-          setDisabled(btn, false, "Start voting");
-          return toastError(scoreResult?.error || "The score could not be saved.");
-        }
-        match.scoreHome = String(scoreResult.scoreHome ?? scores.home);
-        match.scoreAway = String(scoreResult.scoreAway ?? scores.away);
-      }
-
-      setDisabled(btn, true, "Notifying players…");
-      const out = await API.adminStartPotmVoting(matchId);
-      setDisabled(btn, false, "Start voting");
-      if (!out?.ok) return toastError(out?.error || "POTM voting could not be started.");
-
-      clearPublicMatchDetailCache(match.publicCode);
-      clearManageCache(match.publicCode);
-      MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(matchId)
-        ? { ...item, scoreHome: match.scoreHome, scoreAway: match.scoreAway, potmOpenedAt: out.openedAt, potmClosedAt: "", potmVotingClosed: 0 }
-        : item
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-      toastSuccess(`Voting started. ${Number(out.notified || 0)} players notified.`);
-      renderListView(root, view);
-    };
-  });
-
-  root.querySelectorAll('[data-close-potm]:not([disabled])').forEach(btn => {
-    btn.onclick = async () => {
-      const matchId = btn.getAttribute("data-close-potm");
-      const match = (MEM.matches || []).find((item) => String(item.matchId) === String(matchId));
-      if (!confirm(`Close POTM voting for “${match?.title || "this match"}”?\n\nVotes will be final and the Player of the Match will be published.`)) return;
-      setDisabled(btn, true, "Closing…");
-      const out = await API.adminClosePotmVoting(matchId);
-      setDisabled(btn, false, "Close voting");
-      if (!out?.ok) return toastError(out?.error || "POTM voting could not be closed.");
-
-      if (match?.publicCode) {
-        clearPublicMatchDetailCache(match.publicCode);
-        clearManageCache(match.publicCode);
-      }
-      MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(matchId)
-        ? { ...item, potmClosedAt: out.closedAt, potmVotingClosed: 1, potmVoteCount: Number(out.potm?.voteCount || item.potmVoteCount || 0) }
-        : item
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-      toastSuccess("Voting closed. POTM is now published.");
-      renderListView(root, view);
-    };
-  });
-
-  root.querySelectorAll('[data-cancel-potm]:not([disabled])').forEach(btn => {
-    btn.onclick = async () => {
-      const matchId = btn.getAttribute("data-cancel-potm");
-      const match = (MEM.matches || []).find((item) => String(item.matchId) === String(matchId));
-      if (!confirm(`Cancel POTM voting for “${match?.title || "this match"}”?\n\nThis returns the match to normal and removes any votes already cast.`)) return;
-      setDisabled(btn, true, "Cancelling…");
-      const out = await API.adminCancelPotmVoting(matchId);
-      setDisabled(btn, false, "Cancel voting");
-      if (!out?.ok) return toastError(out?.error || "POTM voting could not be cancelled.");
-      if (match?.publicCode) {
-        clearPublicMatchDetailCache(match.publicCode);
-        clearManageCache(match.publicCode);
-      }
-      MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(matchId)
-        ? { ...item, potmOpenedAt: "", potmClosedAt: "", potmVotingClosed: 0, potmVoteCount: 0,
-            ...(out.resetFutureScore ? { scoreHome: "", scoreAway: "", availabilityLocked: 0 } : {}) }
-        : item
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-      toastSuccess("Voting cancelled. The match is back to normal.");
-      renderListView(root, view);
+      if (match) openVotingManager(root, view, match).catch(() => toastError("Could not open voting management."));
     };
   });
 
@@ -1694,26 +1721,6 @@ function bindListButtons(root, view) {
       // Navigate using the hash so the browser back button returns to the admin list view
       // (instead of whatever tab was open before entering admin).
       location.hash = `#/admin?view=manage&code=${encodeURIComponent(code)}&prev=${encodeURIComponent(view)}`;
-    };
-  });
-
-  root.querySelectorAll('[data-share-potm-card]:not([disabled])').forEach(btn => {
-    btn.onclick = async () => {
-      const code = btn.getAttribute("data-share-potm-card");
-      setDisabled(btn,true,"Creating…");
-      try {
-        const detail = await API.getPublicMatch(code);
-        if (!detail?.ok) throw new Error(detail?.error || "Could not load POTM result");
-        const results = Array.isArray(detail.potm?.results) ? detail.potm.results : [];
-        const topVotes = Math.max(0,...results.map((row)=>Number(row.voteCount||0)));
-        const leader = results.find((row)=>Number(row.voteCount||0)===topVotes && topVotes>0);
-        const player = (detail.potm?.candidates || []).find((row)=>String(row.playerName).toLowerCase()===String(leader?.candidateName||"").toLowerCase());
-        if (!leader || !player || !detail.potm?.closed) throw new Error("POTM voting has not produced a final result yet");
-        const mode = await sharePotm(detail.match,formatHumanDateTime(detail.match.date,detail.match.time),player,Number(leader.voteCount||0));
-        toastInfo(mode==="image"?"Choose WhatsApp to share the POTM image.":"POTM image downloaded and WhatsApp opened.");
-      } catch(error) {
-        if(error?.name!=="AbortError") toastError(error?.message || "POTM image could not be shared.");
-      } finally { setDisabled(btn,false); }
     };
   });
 
@@ -1918,7 +1925,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
       // Fetch fresh match once to refresh the manage view (availability list might have changed)
-      const fresh = await loadAdminMatch(m.publicCode);
+      const fresh = await API.getPublicMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -1963,18 +1970,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : "Ready to complete once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
-    ${hasBothScores ? `<section class="card potmAdminCard">
-      <div class="stepEyebrow">Player of the Match</div><div class="h1">${!potmStarted ? "Voting not started" : potmFinal ? "Voting closed" : "Voting open"}</div>
-      <div class="small">${!potmStarted ? "Start voting from Clubdesk when the score is ready." : `${Number(potm.voteCount||0)} votes cast${potmFinal && potmLeaders.length>1 ? ` · ${potmLeaders.length}-way tie` : ""}${potmFinal ? "" : " · results stay private until voting closes"}`}</div>
-      ${potmFinal && potmLead ? `<div class="potmAdminLeader"><span>🏆</span><div><b>${escapeHtml(potmLead.candidateName)}</b><small>${Number(potmLead.voteCount)} votes · ${Number(potmPlayer?.goals||0)} G · ${Number(potmPlayer?.assists||0)} A · ${Number(potmPlayer?.ratingCount||0)?`${Number(potmPlayer.rating).toFixed(1)} rating`:"No rating"}</small></div></div>` : potmFinal ? `<div class="small" style="margin-top:10px">Voting closed with no votes.</div>` : ""}
-      ${potmStarted ? `<div class="potmParticipation">
-        <section><header><b>Voted</b><span>${potmVoted.length}</span></header><div class="potmParticipation__players">${potmVoted.length ? potmVoted.map((row) => `<span class="potmParticipation__player potmParticipation__player--done"><i aria-hidden="true">✓</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">No votes yet.</span>`}</div></section>
-        <section><header><b>Not voted</b><span>${potmPending.length}</span></header><div class="potmParticipation__players">${potmPending.length ? potmPending.map((row) => `<span class="potmParticipation__player"><i aria-hidden="true">!</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">Everyone has voted.</span>`}</div></section>
-      </div>
-      <div class="potmReminderBar"><button class="btn primary" id="remindPotmPending" type="button" ${potmFinal || !potmPending.length ? "disabled" : ""}>Remind ${potmPending.length || ""} ${potmPending.length === 1 ? "player" : "players"}</button><span class="small" id="potmReminderStatus" role="status" aria-live="polite">${potmFinal ? "Voting is closed." : potmPending.length ? "Only players who have not voted will be notified." : "No reminders needed."}</span></div>` : ""}
-      <button class="btn whatsappBtn" id="sharePotm" type="button" ${potmLead && potmFinal ? "" : "disabled"}>${potmFinal ? "Share POTM image" : "Share after voting closes"}</button>
-    </section>` : ""}
-
     <details class="card">
       <summary style="font-weight:950">Team names</summary>
       <div class="formGrid formGrid--two" style="margin-top:12px">
@@ -1986,31 +1981,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
-
-  const sharePotmButton=manageArea.querySelector("#sharePotm");
-  if (sharePotmButton) sharePotmButton.onclick=async()=>{
-    if (!potmPlayer || !potmLead || !potmFinal) return;
-    setDisabled(sharePotmButton,true,"Creating…");
-    try {
-      const mode=await sharePotm(m,when,potmPlayer,Number(potmLead.voteCount||0));
-      toastInfo(mode==="image"?"Choose WhatsApp to share the POTM image.":"POTM image downloaded and WhatsApp opened.");
-    } catch(error) { if(error?.name!=="AbortError") toastError("POTM image could not be shared."); }
-    finally { setDisabled(sharePotmButton,false); }
-  };
-
-  const remindPotmButton = manageArea.querySelector("#remindPotmPending");
-  if (remindPotmButton) remindPotmButton.onclick = async () => {
-    if (!potmPending.length || !confirm(`Send a POTM reminder to ${potmPending.length} ${potmPending.length === 1 ? "player" : "players"} who have not voted?`)) return;
-    const statusEl = manageArea.querySelector("#potmReminderStatus");
-    setDisabled(remindPotmButton, true, "Sending…");
-    const out = await API.adminRemindPotmPending(m.matchId);
-    setDisabled(remindPotmButton, false);
-    if (!out?.ok) return toastError(out?.error || "POTM reminders could not be sent.");
-    const count = Number(out.notified || 0);
-    const message = count ? `Reminder sent to ${count} ${count === 1 ? "player" : "players"}.` : "Everyone has already voted.";
-    if (statusEl) statusEl.textContent = message;
-    toastSuccess(message);
-  };
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
     const button = manageArea.querySelector("#saveTeamNames");
@@ -2065,7 +2035,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
       // Fetch fresh match once to update manage view (explicit action just happened)
-      const fresh = await loadAdminMatch(m.publicCode);
+      const fresh = await API.getPublicMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2104,7 +2074,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
     // Fetch fresh match once to update manage view
-    const fresh = await loadAdminMatch(m.publicCode);
+    const fresh = await API.getPublicMatch(m.publicCode);
     if (stillOnAdmin(routeToken) && fresh.ok) {
       lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
       renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2272,7 +2242,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
 
-        const fresh = await loadAdminMatch(m.publicCode);
+        const fresh = await API.getPublicMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2292,7 +2262,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
 
-        const fresh = await loadAdminMatch(m.publicCode);
+        const fresh = await API.getPublicMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2396,7 +2366,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
           clearPublicMatchDetailCache(m.publicCode);
           clearManageCache(m.publicCode);
-          const fresh = await loadAdminMatch(m.publicCode);
+          const fresh = await API.getPublicMatch(m.publicCode);
           if (stillOnAdmin(routeToken) && fresh?.ok) {
             lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
             renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2653,7 +2623,7 @@ function renderComboList(filterText = "") {
       );
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
-      const fresh = await loadAdminMatch(m.publicCode);
+      const fresh = await API.getPublicMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2680,7 +2650,7 @@ function renderComboList(filterText = "") {
       );
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
-      const fresh = await loadAdminMatch(m.publicCode);
+      const fresh = await API.getPublicMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2728,7 +2698,7 @@ function renderComboList(filterText = "") {
         // Reload match so lists/teams reflect latest availability
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
-        const fresh = await loadAdminMatch(m.publicCode);
+        const fresh = await API.getPublicMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh?.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });

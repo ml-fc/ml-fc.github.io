@@ -1503,6 +1503,7 @@ body::before {
   box-shadow: 0 7px 18px rgba(14, 42, 60, .07);
 }
 .adminMatchRow:first-child { margin-top: 0; }
+.adminMatchRow--future{border:2px solid #4da875;box-shadow:0 7px 18px rgba(31,126,77,.11)}.adminMatchRow--progress{border:2px solid #dfad32;box-shadow:0 7px 18px rgba(161,112,7,.12)}.adminMatchRow--complete{border-color:#bac8cf}
 .adminMatchRow__head {
   display: flex;
   align-items: flex-start;
@@ -1525,6 +1526,7 @@ body::before {
   font-size: 12px;
   line-height: 1.4;
 }
+.adminMatchRow__progress{display:flex;align-items:center;gap:7px;margin-top:7px;color:#4f6775;font-size:11px;font-weight:850}.adminMatchRow__progress>span{width:8px;height:8px;border-radius:50%;background:#8095a0}.adminMatchRow--future .adminMatchRow__progress{color:#246d49}.adminMatchRow--future .adminMatchRow__progress>span{background:#3c9b68}.adminMatchRow--progress .adminMatchRow__progress{color:#88600d}.adminMatchRow--progress .adminMatchRow__progress>span{background:#d49a1d}.adminMatchRow__votingComplete{margin-top:6px;color:#21704b;font-size:11px;font-weight:900}
 .adminMatchRow__badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .adminMatchRow__actions {
   display: grid;
@@ -1539,6 +1541,7 @@ body::before {
   border-color: #efc6ca;
 }
 .btn.dangerGhost:hover:not(:disabled) { color: white; background: #b92f3a; border-color: #b92f3a; }
+.adminVotingDialog{width:min(680px,calc(100% - 18px));max-height:calc(100dvh - 18px);padding:0;border:0;border-radius:12px;color:#102c40;background:#f7fafb;box-shadow:0 28px 90px rgba(2,17,28,.55)}.adminVotingDialog::backdrop{background:rgba(2,17,28,.82);backdrop-filter:blur(5px)}.adminVotingDialog__loading{padding:34px;text-align:center;font-weight:900}.adminVotingDialog__panel{display:grid;gap:15px;padding:20px}.adminVotingDialog__panel>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.adminVotingDialog__close{display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;padding:0;border:1px solid #c9d8df;border-radius:50%;color:#173649;background:#fff;font-size:25px;cursor:pointer}.adminVotingDialog__close:focus-visible{outline:3px solid #e5b533;outline-offset:2px}.adminVotingDialog__empty{display:grid;gap:4px;padding:18px;border:1px dashed #c5d3da;border-radius:8px;color:#48616f;background:#eef4f6}.adminVotingDialog__empty b{color:#173649}.adminVotingDialog__empty span{font-size:12px}.adminVotingDialog__actions{display:flex;flex-wrap:wrap;gap:8px}.adminVotingDialog__actions .btn{min-width:130px}@media(max-width:600px){.adminVotingDialog__panel{padding:14px}.adminVotingDialog__actions{display:grid;grid-template-columns:1fr 1fr}.adminVotingDialog__actions .btn{width:100%;min-width:0}}
 
 #adminHeaderCard {
   background: linear-gradient(135deg, #f7fbfc, #eaf2f5);
