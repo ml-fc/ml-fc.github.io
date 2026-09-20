@@ -2,3 +2,4 @@
 src/.DS_Store
 .playwright-cli/
 output/playwright/
+brag-output/

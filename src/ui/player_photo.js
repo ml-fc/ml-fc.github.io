@@ -1,6 +1,7 @@
 const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
 export function safePhotoUrl(value) {
+  if (!String(value || "").trim()) return "";
   try {
     const url = new URL(String(value || ""), location.origin);
     return url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)) ? url.href : "";
@@ -207,16 +208,40 @@ export async function choosePhotoCrop(file, container = document.body) {
   });
 }
 
-export function loadCanvasImage(url) {
-  const safe = safePhotoUrl(url);
-  if (!safe) return Promise.resolve(null);
+function loadImageElement(src, { crossOrigin = false } = {}) {
   return new Promise(resolve => {
     const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = safe;
+    const timeout = setTimeout(() => resolve(null), 10000);
+    if (crossOrigin) image.crossOrigin = "anonymous";
+    image.onload = () => { clearTimeout(timeout); resolve(image); };
+    image.onerror = () => { clearTimeout(timeout); resolve(null); };
+    image.src = src;
   });
+}
+
+export async function loadCanvasImage(url) {
+  const safe = safePhotoUrl(url);
+  if (!safe) return null;
+
+  // Loading the remote file as a Blob first gives canvas a same-origin object
+  // URL. This avoids mobile/WebView CORS cache quirks that can leave share-card
+  // portraits blank even though the same photo displays normally in the UI.
+  try {
+    const response = await fetch(safe, { mode: "cors", credentials: "omit", cache: "force-cache" });
+    if (response.ok) {
+      const blob = await response.blob();
+      if (blob.size) {
+        if (typeof createImageBitmap === "function") {
+          try { return await createImageBitmap(blob); } catch {}
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        try { return await loadImageElement(objectUrl); }
+        finally { URL.revokeObjectURL(objectUrl); }
+      }
+    }
+  } catch {}
+
+  return loadImageElement(safe, { crossOrigin: true });
 }
 
 export function invalidatePlayerPhotoCaches() {

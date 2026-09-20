@@ -4,7 +4,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
 import { defaultPositions } from "../ui/team_field.js";
-import { loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
+import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -554,6 +554,11 @@ async function availabilityImageFile(match, availability) {
         context.drawImage(portrait, portraitX - photoWidth / 2, cy - photoHeight / 2, photoWidth, photoHeight);
       } else {
         context.fillStyle = "#102c38"; context.fillRect(portraitX - portraitRadius, cy - portraitRadius, portraitSize, portraitSize);
+        context.fillStyle = "#d8e8ef";
+        context.font = `900 ${Math.round(portraitSize * .36)}px Arial`;
+        context.textAlign = "center";
+        context.fillText(name === "No players" ? "–" : initials(name), portraitX, cy + Math.round(portraitSize * .13));
+        context.textAlign = "left";
       }
       context.restore();
       context.strokeStyle = group.color; context.lineWidth = 4; context.beginPath(); context.arc(portraitX, cy, portraitRadius, 0, Math.PI * 2); context.stroke();
@@ -639,26 +644,34 @@ function availabilityPresentation(availability) {
 
 function latestResultEventLine(result) {
   const events = Array.isArray(result?.events) ? result.events : [];
+  const potm = Array.isArray(result?.potm) ? result.potm : [];
   const goals = events
     .filter((event) => Number(event?.goals || 0) > 0)
     .map((event) => `${escapeHtml(event.playerName)} (${Number(event.goals)})`);
   const assists = events
     .filter((event) => Number(event?.assists || 0) > 0)
     .map((event) => `${escapeHtml(event.playerName)} (${Number(event.assists)})`);
-  if (!goals.length && !assists.length) return "";
+  const potmWinners = potm.map((winner) => {
+    const name = String(winner?.playerName || "").trim();
+    if (!name) return "";
+    return `<span class="nextMatch__potmWinner">
+      ${playerPhotoHtml(name, winner.photoUrl, "playerPhoto playerPhoto--homePotm")}
+      <span><i aria-hidden="true">🏆</i>${escapeHtml(name)}</span>
+    </span>`;
+  }).filter(Boolean);
+  if (!goals.length && !assists.length && !potmWinners.length) return "";
   return `<div class="nextMatch__lastEvents">
     ${goals.length ? `<span><b>Goals</b> ${goals.join(" · ")}</span>` : ""}
     ${assists.length ? `<span><b>Assists</b> ${assists.join(" · ")}</span>` : ""}
+    ${potmWinners.length ? `<div class="nextMatch__potm"><b>POTM</b><div>${potmWinners.join("")}</div></div>` : ""}
   </div>`;
 }
 
 function potmVoteBannerHtml(vote) {
   if (!vote?.publicCode) return "";
-  const deadline = new Date(vote.deadlineAt || "");
-  const closes = Number.isNaN(deadline.getTime()) ? "soon" : deadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
   return `<section class="potmPrompt" aria-labelledby="potmPromptTitle">
     <span class="potmPrompt__trophy" aria-hidden="true">🏆</span>
-    <div><div class="nextMatch__eyebrow">Voting is open</div><h2 id="potmPromptTitle">Choose your Player of the Match</h2><p>${escapeHtml(vote.title)} · closes ${escapeHtml(closes)}${vote.currentVote ? ` · current vote: ${escapeHtml(vote.currentVote)}` : ""}</p></div>
+    <div><div class="nextMatch__eyebrow">Voting is open</div><h2 id="potmPromptTitle">Choose your Player of the Match</h2><p>${escapeHtml(vote.title)} · open until Clubdesk closes voting${vote.currentVote ? ` · current vote: ${escapeHtml(vote.currentVote)}` : ""}</p></div>
     <button class="btn potmPrompt__button" type="button" data-potm-open="${escapeHtml(vote.publicCode)}">${vote.currentVote ? "Change vote" : "Vote now"}</button>
   </section>`;
 }
@@ -667,6 +680,27 @@ function wirePotmVoteBanner(host) {
   host.querySelector("[data-potm-open]")?.addEventListener("click", (event) => {
     const code=event.currentTarget.getAttribute("data-potm-open");
     if (code) location.hash=`#/match?code=${encodeURIComponent(code)}&focus=potm`;
+  });
+}
+
+function previousOpenMatchHtml(match) {
+  if (!match?.publicCode) return "";
+  return `<aside class="previousOpenMatch" aria-label="Previous match still open">
+    <div class="previousOpenMatch__body">
+      <div class="nextMatch__eyebrow">Previous match still open</div>
+      <b>${escapeHtml(match.title || "Previous match")}</b>
+      <span>${escapeHtml(formatHumanDateTime(match.date, match.time))} · Match updates may still be in progress.</span>
+    </div>
+    <button class="btn gray previousOpenMatch__button" type="button" data-next-open="${escapeHtml(match.publicCode)}">View previous match</button>
+  </aside>`;
+}
+
+function wireNextMatchLinks(host) {
+  host.querySelectorAll("[data-next-open]").forEach((button) => {
+    button.onclick = () => {
+      const code = button.getAttribute("data-next-open");
+      if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
+    };
   });
 }
 
@@ -679,8 +713,10 @@ function renderNextMatchDashboard(host, data) {
       <section class="nextMatch nextMatch--empty" aria-labelledby="nextMatchTitle">
         <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
         <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
-      </section>`;
+      </section>
+      ${previousOpenMatchHtml(data?.previousOpenMatch)}`;
     wirePotmVoteBanner(host);
+    wireNextMatchLinks(host);
     return;
   }
 
@@ -751,16 +787,11 @@ function renderNextMatchDashboard(host, data) {
         </div>
         <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
       </div>` : ""}
-    </section>`;
+    </section>
+    ${previousOpenMatchHtml(data?.previousOpenMatch)}`;
 
   wirePotmVoteBanner(host);
-
-  host.querySelectorAll("[data-next-open]").forEach((button) => {
-    button.onclick = () => {
-      const code = button.getAttribute("data-next-open");
-      if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
-    };
-  });
+  wireNextMatchLinks(host);
 
   const shareButton = host.querySelector("[data-next-share]");
   if (shareButton) shareButton.onclick = async () => {
@@ -817,9 +848,7 @@ async function loadNextMatchDashboard(host, { force = false } = {}) {
   if (!host) return;
   const key = nextMatchCacheKey();
   const cached = lsGet(key);
-  const fresh = cached?.data?.ok && now() - Number(cached.ts || 0) < 2 * 60 * 1000;
   if (cached?.data?.ok) renderNextMatchDashboard(host, cached.data);
-  if (!force && fresh) return;
 
   const response = await API.myNextMatch();
   if (!document.body.contains(host)) return;
@@ -1204,7 +1233,8 @@ const cap = availabilityLimitForMatch(m);
 
   let availability = (data.availability || []).map(a=>({
     playerName: String(a.playerName||"").trim(),
-    availability: String(a.availability||"").toUpperCase()
+    availability: String(a.availability||"").toUpperCase(),
+    photoUrl: String(a.photoUrl||"").trim()
   })).filter(x=>x.playerName);
 
   function renderAvailLists() {
@@ -1260,7 +1290,6 @@ const cap = availabilityLimitForMatch(m);
   const hasScore = scoreHome !== "" && scoreAway !== "";
   let potm = data.potm || null;
   const potmCandidates = Array.isArray(potm?.candidates) ? potm.candidates : [];
-  const potmDeadline = potm?.deadlineAt ? new Date(potm.deadlineAt) : null;
   const potmWinnerRows = (potm?.winners || []).map((name) => potmCandidates.find((row) => String(row.playerName).toLowerCase() === String(name).toLowerCase()) || {playerName:name});
 
   function teamLabel(side) {
@@ -1355,14 +1384,14 @@ const cap = availabilityLimitForMatch(m);
     ` : ``}
 
     ${hasScore && potm?.openedAt ? `<div class="card potmCard" id="potmVoting">
-      <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "3 HOURS"}</span></div>
+      <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "OPEN"}</span></div>
       ${potm.closed ? `
         ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
           const result = (potm.results || []).find((row) => String(row.candidateName).toLowerCase() === String(winner.playerName).toLowerCase());
           return `<div class="potmWinner">${playerPhotoHtml(winner.playerName, winner.photoUrl, "playerPhoto playerPhoto--potm")}<span>🏆</span><div><b>${escapeHtml(winner.playerName)}</b><small>${Number(result?.voteCount || 0)} votes · ${Number(winner.goals || 0)} G · ${Number(winner.assists || 0)} A · ${Number(winner.ratingCount || 0) ? `${Number(winner.rating).toFixed(1)} rating` : "No rating"}</small></div></div>`;
         }).join("")}</div>` : `<div class="small">No votes were cast.</div>`}
       ` : potm.canVote ? `
-        <div class="small">Choose any player from either team except yourself. You can change your vote until ${potmDeadline && !Number.isNaN(potmDeadline.getTime()) ? potmDeadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "the window closes"}.</div>
+        <div class="small">Choose any player from either team except yourself. You can change your vote until Clubdesk closes voting.</div>
         <div class="row potmVoteRow">
           <select class="input" id="potmCandidate" aria-label="Player of the Match candidate">
             <option value="">Select a player</option>
@@ -1370,7 +1399,7 @@ const cap = availabilityLimitForMatch(m);
           </select>
           <button class="btn primary" id="submitPotm" type="button">${potm.myVote ? "Change vote" : "Vote"}</button>
         </div><div class="small" id="potmMessage">${potm.myVote ? `Your current vote: ${escapeHtml(potm.myVote)}` : "Votes stay private until voting closes."}</div>
-      ` : `<div class="small">${meName ? "Only players listed in this match can vote." : "Sign in to vote if you played in this match."} Voting closes ${potmDeadline && !Number.isNaN(potmDeadline.getTime()) ? potmDeadline.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "three hours after it opens"}.</div>`}
+      ` : `<div class="small">${meName ? "Only players listed in this match can vote." : "Sign in to vote if you played in this match."} Voting stays open until Clubdesk closes it.</div>`}
     </div>` : ``}
 
     ${teamsSelected ? `<div class="card teamSheetCard">
@@ -1515,15 +1544,17 @@ const cap = availabilityLimitForMatch(m);
     // Only update UI lists after backend save succeeds.
 // Reload list from server so we always reflect latest (others may submit at the same time).
 if (Array.isArray(res.availability)) {
+  const existingPhotos = new Map(availability.map(a => [a.playerName.toLowerCase(), a.photoUrl]));
   availability = res.availability.map(a=>({
     playerName: String(a.playerName||"").trim(),
-    availability: String(a.availability||"").toUpperCase()
+    availability: String(a.availability||"").toUpperCase(),
+    photoUrl: String(a.photoUrl || existingPhotos.get(String(a.playerName||"").trim().toLowerCase()) || "").trim()
   })).filter(x=>x.playerName);
 } else {
   // Fallback: keep local behavior if backend didn't return list
   const idx = availability.findIndex(a => a.playerName.toLowerCase() === meName.toLowerCase());
   if (idx >= 0) availability[idx].availability = choice;
-  else availability.push({ playerName: meName, availability: choice });
+  else availability.push({ playerName: meName, availability: choice, photoUrl: String(me?.photoUrl || "") });
 }
 renderAvailLists();
 
