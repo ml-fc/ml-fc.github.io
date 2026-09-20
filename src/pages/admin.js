@@ -794,6 +794,8 @@ function matchRowHtml(m, view) {
   const potmVotingStarted = String(m.potmOpenedAt || "").trim() !== "";
   const potmVotingClosed = Number(m.potmVotingClosed || 0) === 1 || isCompleted;
   const potmVoteCount = Number(m.potmVoteCount || 0);
+  const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
+  const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
 
   // If locked/completed: disable Manage + scoring.
   const disableManage = isEditLocked;
@@ -816,11 +818,11 @@ function matchRowHtml(m, view) {
       <div class="adminMatchRow__actions">
         <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
         ${!potmVotingStarted
-          ? `<button class="btn good" data-start-potm="${escapeHtml(m.matchId)}" ${!isEditLocked ? "" : "disabled"}>Start voting</button>`
+          ? `<button class="btn good" data-start-potm="${escapeHtml(m.matchId)}" ${!isEditLocked && hasStarted ? "" : "disabled"} title="${hasStarted ? "" : "Available after kick-off"}">Start voting</button>`
           : !potmVotingClosed
-            ? `<button class="btn dangerGhost" data-close-potm="${escapeHtml(m.matchId)}">Close voting</button>`
+            ? `<button class="btn dangerGhost" data-cancel-potm="${escapeHtml(m.matchId)}">Cancel voting</button><button class="btn gray" data-close-potm="${escapeHtml(m.matchId)}">Close voting</button>`
             : `<button class="btn gray" disabled>Voting closed</button>`}
-        <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked ? "disabled" : ""}>Score & ratings</button>
+        <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
         ${hasBothScores ? `<button class="btn ${potmVotingClosed && potmVoteCount > 0 ? "whatsappBtn" : "gray"}" data-share-potm-card="${m.publicCode}" ${potmVotingClosed && potmVoteCount > 0 ? "" : "disabled"}>${potmVotingClosed ? (potmVoteCount > 0 ? "Share POTM" : "No POTM votes") : "Share POTM after voting"}</button>` : ""}
         ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
@@ -972,6 +974,13 @@ function renderListView(root, view) {
   bindListButtons(root, view);
 }
 
+async function loadAdminMatch(code) {
+  const detail = await API.getPublicMatch(code);
+  if (!detail?.ok || !detail.match?.matchId) return detail;
+  const participation = await API.adminPotmStatus(detail.match.matchId);
+  return participation?.ok ? { ...detail, potmAdminStatus: participation } : detail;
+}
+
 async function openManageView(root, code, routeToken, prevView) {
   const listArea = root.querySelector("#listArea");
   const manageArea = root.querySelector("#manageArea");
@@ -988,7 +997,7 @@ async function openManageView(root, code, routeToken, prevView) {
   manageArea.innerHTML = `<div class="card"><div class="h1">Loading match…</div><div class="small">Refreshing availability and teams…</div></div>`;
   let fresh;
   try {
-    fresh = await API.getPublicMatch(code);
+    fresh = await loadAdminMatch(code);
   } catch {
     fresh = { ok: false, error: "Could not refresh the match. Reopen it to try again." };
   }
@@ -1648,6 +1657,30 @@ function bindListButtons(root, view) {
     };
   });
 
+  root.querySelectorAll('[data-cancel-potm]:not([disabled])').forEach(btn => {
+    btn.onclick = async () => {
+      const matchId = btn.getAttribute("data-cancel-potm");
+      const match = (MEM.matches || []).find((item) => String(item.matchId) === String(matchId));
+      if (!confirm(`Cancel POTM voting for “${match?.title || "this match"}”?\n\nThis returns the match to normal and removes any votes already cast.`)) return;
+      setDisabled(btn, true, "Cancelling…");
+      const out = await API.adminCancelPotmVoting(matchId);
+      setDisabled(btn, false, "Cancel voting");
+      if (!out?.ok) return toastError(out?.error || "POTM voting could not be cancelled.");
+      if (match?.publicCode) {
+        clearPublicMatchDetailCache(match.publicCode);
+        clearManageCache(match.publicCode);
+      }
+      MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(matchId)
+        ? { ...item, potmOpenedAt: "", potmClosedAt: "", potmVotingClosed: 0, potmVoteCount: 0,
+            ...(out.resetFutureScore ? { scoreHome: "", scoreAway: "", availabilityLocked: 0 } : {}) }
+        : item
+      );
+      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+      toastSuccess("Voting cancelled. The match is back to normal.");
+      renderListView(root, view);
+    };
+  });
+
   // Manage
   // IMPORTANT: Don't rely solely on hashchange to open manage.
   // If the user previously opened the same match, setting the same hash may not trigger router work
@@ -1811,6 +1844,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const potmLeaders = potmResults.filter((row)=>Number(row.voteCount||0)===potmTopVotes && potmTopVotes>0);
   const potmLead = potmLeaders[0];
   const potmPlayer = (potm.candidates || []).find((row)=>String(row.playerName).toLowerCase()===String(potmLead?.candidateName||"").toLowerCase());
+  const potmAdminStatus = data.potmAdminStatus || {};
+  const potmVoted = Array.isArray(potmAdminStatus.voted) ? potmAdminStatus.voted : [];
+  const potmPending = Array.isArray(potmAdminStatus.pending) ? potmAdminStatus.pending : [];
 
   const type = String(m.type || "").toUpperCase();
   const homeTeamName = String(m.teamHomeName || (type === "OPPONENT" ? "MLFC" : "Blue"));
@@ -1882,7 +1918,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
       // Fetch fresh match once to refresh the manage view (availability list might have changed)
-      const fresh = await API.getPublicMatch(m.publicCode);
+      const fresh = await loadAdminMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -1931,6 +1967,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="stepEyebrow">Player of the Match</div><div class="h1">${!potmStarted ? "Voting not started" : potmFinal ? "Voting closed" : "Voting open"}</div>
       <div class="small">${!potmStarted ? "Start voting from Clubdesk when the score is ready." : `${Number(potm.voteCount||0)} votes cast${potmFinal && potmLeaders.length>1 ? ` · ${potmLeaders.length}-way tie` : ""}${potmFinal ? "" : " · results stay private until voting closes"}`}</div>
       ${potmFinal && potmLead ? `<div class="potmAdminLeader"><span>🏆</span><div><b>${escapeHtml(potmLead.candidateName)}</b><small>${Number(potmLead.voteCount)} votes · ${Number(potmPlayer?.goals||0)} G · ${Number(potmPlayer?.assists||0)} A · ${Number(potmPlayer?.ratingCount||0)?`${Number(potmPlayer.rating).toFixed(1)} rating`:"No rating"}</small></div></div>` : potmFinal ? `<div class="small" style="margin-top:10px">Voting closed with no votes.</div>` : ""}
+      ${potmStarted ? `<div class="potmParticipation">
+        <section><header><b>Voted</b><span>${potmVoted.length}</span></header><div class="potmParticipation__players">${potmVoted.length ? potmVoted.map((row) => `<span class="potmParticipation__player potmParticipation__player--done"><i aria-hidden="true">✓</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">No votes yet.</span>`}</div></section>
+        <section><header><b>Not voted</b><span>${potmPending.length}</span></header><div class="potmParticipation__players">${potmPending.length ? potmPending.map((row) => `<span class="potmParticipation__player"><i aria-hidden="true">!</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">Everyone has voted.</span>`}</div></section>
+      </div>
+      <div class="potmReminderBar"><button class="btn primary" id="remindPotmPending" type="button" ${potmFinal || !potmPending.length ? "disabled" : ""}>Remind ${potmPending.length || ""} ${potmPending.length === 1 ? "player" : "players"}</button><span class="small" id="potmReminderStatus" role="status" aria-live="polite">${potmFinal ? "Voting is closed." : potmPending.length ? "Only players who have not voted will be notified." : "No reminders needed."}</span></div>` : ""}
       <button class="btn whatsappBtn" id="sharePotm" type="button" ${potmLead && potmFinal ? "" : "disabled"}>${potmFinal ? "Share POTM image" : "Share after voting closes"}</button>
     </section>` : ""}
 
@@ -1955,6 +1996,20 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       toastInfo(mode==="image"?"Choose WhatsApp to share the POTM image.":"POTM image downloaded and WhatsApp opened.");
     } catch(error) { if(error?.name!=="AbortError") toastError("POTM image could not be shared."); }
     finally { setDisabled(sharePotmButton,false); }
+  };
+
+  const remindPotmButton = manageArea.querySelector("#remindPotmPending");
+  if (remindPotmButton) remindPotmButton.onclick = async () => {
+    if (!potmPending.length || !confirm(`Send a POTM reminder to ${potmPending.length} ${potmPending.length === 1 ? "player" : "players"} who have not voted?`)) return;
+    const statusEl = manageArea.querySelector("#potmReminderStatus");
+    setDisabled(remindPotmButton, true, "Sending…");
+    const out = await API.adminRemindPotmPending(m.matchId);
+    setDisabled(remindPotmButton, false);
+    if (!out?.ok) return toastError(out?.error || "POTM reminders could not be sent.");
+    const count = Number(out.notified || 0);
+    const message = count ? `Reminder sent to ${count} ${count === 1 ? "player" : "players"}.` : "Everyone has already voted.";
+    if (statusEl) statusEl.textContent = message;
+    toastSuccess(message);
   };
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
@@ -2010,7 +2065,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
       // Fetch fresh match once to update manage view (explicit action just happened)
-      const fresh = await API.getPublicMatch(m.publicCode);
+      const fresh = await loadAdminMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2049,7 +2104,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
     // Fetch fresh match once to update manage view
-    const fresh = await API.getPublicMatch(m.publicCode);
+    const fresh = await loadAdminMatch(m.publicCode);
     if (stillOnAdmin(routeToken) && fresh.ok) {
       lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
       renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2217,7 +2272,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
 
-        const fresh = await API.getPublicMatch(m.publicCode);
+        const fresh = await loadAdminMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2237,7 +2292,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
 
-        const fresh = await API.getPublicMatch(m.publicCode);
+        const fresh = await loadAdminMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2341,7 +2396,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
           clearPublicMatchDetailCache(m.publicCode);
           clearManageCache(m.publicCode);
-          const fresh = await API.getPublicMatch(m.publicCode);
+          const fresh = await loadAdminMatch(m.publicCode);
           if (stillOnAdmin(routeToken) && fresh?.ok) {
             lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
             renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2598,7 +2653,7 @@ function renderComboList(filterText = "") {
       );
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
-      const fresh = await API.getPublicMatch(m.publicCode);
+      const fresh = await loadAdminMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2625,7 +2680,7 @@ function renderComboList(filterText = "") {
       );
       lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
 
-      const fresh = await API.getPublicMatch(m.publicCode);
+      const fresh = await loadAdminMatch(m.publicCode);
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
@@ -2673,7 +2728,7 @@ function renderComboList(filterText = "") {
         // Reload match so lists/teams reflect latest availability
         clearPublicMatchDetailCache(m.publicCode);
         clearManageCache(m.publicCode);
-        const fresh = await API.getPublicMatch(m.publicCode);
+        const fresh = await loadAdminMatch(m.publicCode);
         if (stillOnAdmin(routeToken) && fresh?.ok) {
           lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
           renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });

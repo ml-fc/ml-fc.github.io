@@ -130,6 +130,8 @@ export async function renderCaptainPage(root, query) {
   const status = safeUpper(m.status);
   const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE" || Number(m.ratingsLocked) === 1;
   const when = formatHumanDateTime(m.date, m.time);
+  const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
+  const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
 
   if (locked || status === "COMPLETED") {
     root.innerHTML = `
@@ -346,6 +348,7 @@ export async function renderCaptainPage(root, query) {
       <div class="small">
         ${type === "INTERNAL" ? `Enter ${homeTeamName} vs ${awayTeamName} score.` : "Enter MLFC vs Opponent score."} ${hint}
       </div>
+      ${hasStarted ? "" : `<div class="small inlineNote">Score entry unlocks at kick-off: ${when}.</div>`}
 
       ${
         (type === "INTERNAL" && captainTeam && !adminMode) ? `
@@ -370,7 +373,7 @@ export async function renderCaptainPage(root, query) {
       }
 
       <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="submitScore">${adminMode ? "Save both scores" : "Submit score"}</button>
+        <button class="btn primary" id="submitScore" ${hasStarted ? "" : "disabled"}>${adminMode ? "Save both scores" : "Submit score"}</button>
       </div>
       <div class="small" id="scoreMsg" style="margin-top:10px"></div>
     </div>

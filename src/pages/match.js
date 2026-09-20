@@ -676,23 +676,90 @@ function potmVoteBannerHtml(vote) {
   </section>`;
 }
 
+async function openPotmFieldDialog(code, onSaved = null) {
+  let modal = document.querySelector("#potmFieldDialog");
+  if (modal) modal.remove();
+  modal = document.createElement("dialog");
+  modal.id = "potmFieldDialog";
+  modal.className = "potmFieldDialog";
+  modal.innerHTML = `<div class="potmFieldDialog__loading">Loading the team sheet…</div>`;
+  document.body.appendChild(modal);
+  modal.showModal();
+
+  const response = await API.getPublicMatch(code);
+  const potm = response?.potm;
+  if (!response?.ok || !potm?.canVote) {
+    modal.innerHTML = `<div class="potmFieldDialog__panel"><button class="potmFieldDialog__close" type="button" aria-label="Close">×</button><h2>Voting unavailable</h2><p>${escapeHtml(response?.error || "Voting is not open for this match.")}</p></div>`;
+    modal.querySelector(".potmFieldDialog__close").onclick = () => modal.close();
+    modal.addEventListener("close", () => modal.remove(), { once: true });
+    return;
+  }
+
+  const meName = String(getCachedUser()?.name || "").trim().toLowerCase();
+  const candidates = (potm.candidates || []).filter((candidate) => String(candidate.playerName || "").trim().toLowerCase() !== meName);
+  const grouped = new Map();
+  candidates.forEach((candidate) => {
+    const team = String(candidate.team || "TEAM").toUpperCase();
+    if (!grouped.has(team)) grouped.set(team, []);
+    grouped.get(team).push(candidate);
+  });
+  const teams = [...grouped.keys()];
+  const positions = {};
+  for (const team of teams) Object.assign(positions, defaultPositions(grouped.get(team).map((item) => item.playerName)));
+  let selected = String(potm.myVote || "");
+  modal.innerHTML = `<form method="dialog" class="potmFieldDialog__panel">
+    <header><div><div class="stepEyebrow">Player of the Match</div><h2>Pick a player from the field</h2><p>Tap a player, then confirm your vote.</p></div><button class="potmFieldDialog__close" value="cancel" aria-label="Close">×</button></header>
+    <div class="potmFieldDialog__pitch" role="listbox" aria-label="Players in this match">
+      <span class="potmFieldDialog__halfway" aria-hidden="true"></span>
+      ${candidates.map((candidate) => {
+        const fallback = positions[candidate.playerName] || { positionX: 50, positionY: 50 };
+        const rawX = typeof candidate.positionX === "number" ? candidate.positionX : Number.NaN;
+        const rawY = typeof candidate.positionY === "number" ? candidate.positionY : Number.NaN;
+        const teamIndex = Math.max(0, teams.indexOf(String(candidate.team || "TEAM").toUpperCase()));
+        const x = Math.max(9, Math.min(91, Number.isFinite(rawX) ? rawX : fallback.positionX));
+        const localY = Math.max(10, Math.min(90, Number.isFinite(rawY) ? rawY : fallback.positionY));
+        const y = teamIndex % 2 ? 50 - localY * .42 : 50 + localY * .42;
+        const chosen = String(candidate.playerName).toLowerCase() === selected.toLowerCase();
+        return `<button class="potmFieldPlayer${chosen ? " is-selected" : ""}" type="button" role="option" aria-selected="${chosen}" data-potm-player="${escapeHtml(candidate.playerName)}" style="left:${x}%;top:${y}%">${playerPhotoHtml(candidate.playerName, candidate.photoUrl, "playerPhoto playerPhoto--field")}<span>${escapeHtml(candidate.playerName)}</span></button>`;
+      }).join("")}
+    </div>
+    <footer><span data-potm-choice>${selected ? `Selected: ${escapeHtml(selected)}` : "Select a player on the field"}</span><button class="btn primary" type="button" data-potm-confirm ${selected ? "" : "disabled"}>${potm.myVote ? "Change vote" : "Confirm vote"}</button></footer>
+  </form>`;
+  modal.querySelectorAll("[data-potm-player]").forEach((button) => {
+    button.onclick = () => {
+      selected = button.getAttribute("data-potm-player") || "";
+      modal.querySelectorAll("[data-potm-player]").forEach((item) => {
+        const active = item === button;
+        item.classList.toggle("is-selected", active);
+        item.setAttribute("aria-selected", String(active));
+      });
+      modal.querySelector("[data-potm-choice]").textContent = `Selected: ${selected}`;
+      modal.querySelector("[data-potm-confirm]").disabled = false;
+    };
+  });
+  modal.querySelector("[data-potm-confirm]").onclick = async (event) => {
+    const button = event.currentTarget;
+    if (!selected) return;
+    setDisabled(button, true, "Saving…");
+    const saved = await API.votePotm(code, selected);
+    if (!saved?.ok) {
+      setDisabled(button, false);
+      return toastError(saved?.error || "Could not save your vote");
+    }
+    lsDel(detailKey(code));
+    lsDel(nextMatchCacheKey());
+    modal.close();
+    toastSuccess("POTM vote saved. You can change it until voting closes.");
+    if (typeof onSaved === "function") await onSaved(saved.potm);
+  };
+  modal.addEventListener("close", () => modal.remove(), { once: true });
+}
+
 function wirePotmVoteBanner(host) {
   host.querySelector("[data-potm-open]")?.addEventListener("click", (event) => {
     const code=event.currentTarget.getAttribute("data-potm-open");
-    if (code) location.hash=`#/match?code=${encodeURIComponent(code)}&focus=potm`;
+    if (code) openPotmFieldDialog(code, () => loadNextMatchDashboard(host, { force: true })).catch(() => toastError("Could not open voting."));
   });
-}
-
-function previousOpenMatchHtml(match) {
-  if (!match?.publicCode) return "";
-  return `<aside class="previousOpenMatch" aria-label="Previous match still open">
-    <div class="previousOpenMatch__body">
-      <div class="nextMatch__eyebrow">Previous match still open</div>
-      <b>${escapeHtml(match.title || "Previous match")}</b>
-      <span>${escapeHtml(formatHumanDateTime(match.date, match.time))} · Match updates may still be in progress.</span>
-    </div>
-    <button class="btn gray previousOpenMatch__button" type="button" data-next-open="${escapeHtml(match.publicCode)}">View previous match</button>
-  </aside>`;
 }
 
 function wireNextMatchLinks(host) {
@@ -708,13 +775,18 @@ function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
   if (!match) {
+    const result = data?.latestResult;
     host.innerHTML = `
       ${potmVoteBannerHtml(data?.potmVote)}
-      <section class="nextMatch nextMatch--empty" aria-labelledby="nextMatchTitle">
+      <section class="nextMatch nextMatch--empty${result ? " nextMatch--withResult" : ""}" aria-labelledby="nextMatchTitle">
         <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
         <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
-      </section>
-      ${previousOpenMatchHtml(data?.previousOpenMatch)}`;
+        ${result ? `<div class="nextMatch__lastResult">
+          <span class="nextMatch__lastLabel">Last result</span>
+          <div class="nextMatch__lastSummary"><div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${result.score?.pending ? "Score update pending" : escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>${latestResultEventLine(result)}</div>
+          <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}">Open match</button>
+        </div>` : ""}
+      </section>`;
     wirePotmVoteBanner(host);
     wireNextMatchLinks(host);
     return;
@@ -782,13 +854,12 @@ function renderNextMatchDashboard(host, data) {
       ${result ? `<div class="nextMatch__lastResult">
         <span class="nextMatch__lastLabel">Last result</span>
         <div class="nextMatch__lastSummary">
-          <div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>
+          <div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${result.score?.pending ? "Score update pending" : escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>
           ${latestResultEventLine(result)}
         </div>
         <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
       </div>` : ""}
-    </section>
-    ${previousOpenMatchHtml(data?.previousOpenMatch)}`;
+    </section>`;
 
   wirePotmVoteBanner(host);
   wireNextMatchLinks(host);
@@ -1392,13 +1463,8 @@ const cap = availabilityLimitForMatch(m);
         }).join("")}</div>` : `<div class="small">No votes were cast.</div>`}
       ` : potm.canVote ? `
         <div class="small">Choose any player from either team except yourself. You can change your vote until Clubdesk closes voting.</div>
-        <div class="row potmVoteRow">
-          <select class="input" id="potmCandidate" aria-label="Player of the Match candidate">
-            <option value="">Select a player</option>
-            ${potmCandidates.filter((candidate) => String(candidate.playerName).toLowerCase() !== meName.toLowerCase()).map((candidate) => `<option value="${escapeHtml(candidate.playerName)}" ${String(candidate.playerName).toLowerCase() === String(potm.myVote || "").toLowerCase() ? "selected" : ""}>${escapeHtml(candidate.playerName)} · ${escapeHtml(candidate.team)}</option>`).join("")}
-          </select>
-          <button class="btn primary" id="submitPotm" type="button">${potm.myVote ? "Change vote" : "Vote"}</button>
-        </div><div class="small" id="potmMessage">${potm.myVote ? `Your current vote: ${escapeHtml(potm.myVote)}` : "Votes stay private until voting closes."}</div>
+        <button class="btn primary potmFieldTrigger" id="openPotmField" type="button">${potm.myVote ? "Change vote on field" : "Choose player on field"}</button>
+        <div class="small" id="potmMessage">${potm.myVote ? `Your current vote: ${escapeHtml(potm.myVote)}` : "Votes stay private until voting closes."}</div>
       ` : `<div class="small">${meName ? "Only players listed in this match can vote." : "Sign in to vote if you played in this match."} Voting stays open until Clubdesk closes it.</div>`}
     </div>` : ``}
 
@@ -1489,19 +1555,12 @@ const cap = availabilityLimitForMatch(m);
     location.hash = `#/captain?code=${encodeURIComponent(code)}&src=match`;
   };
 
-  const potmButton = detail.querySelector("#submitPotm");
+  const potmButton = detail.querySelector("#openPotmField");
   if (potmButton) potmButton.onclick = async () => {
-    const select = detail.querySelector("#potmCandidate");
-    const candidateName = String(select?.value || "").trim();
-    if (!candidateName) return toastWarn("Choose a player first.");
-    setDisabled(potmButton, true, "Saving…");
-    const response = await API.votePotm(code, candidateName);
-    setDisabled(potmButton, false);
-    if (!response?.ok) return toastError(response?.error || "Could not save your vote");
-    potm = response.potm;
-    lsDel(detailKey(code));
-    toastSuccess("POTM vote saved. You can change it until voting closes.");
-    await renderMatchDetail(root, code);
+    await openPotmFieldDialog(code, async (updatedPotm) => {
+      potm = updatedPotm;
+      await renderMatchDetail(root, code);
+    });
   };
 
   if (!hideAvailability) {
