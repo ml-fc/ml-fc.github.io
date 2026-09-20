@@ -5,7 +5,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { cleanupCaches } from "../cache_cleanup.js";
 import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
-import { loadCanvasImage } from "../ui/player_photo.js";
+import { initials, loadCanvasImage } from "../ui/player_photo.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -444,6 +444,93 @@ async function sharePotm(match, when, player, voteCount) {
   const url=URL.createObjectURL(file); const link=document.createElement("a");
   link.href=url; link.download=file.name; document.body.append(link); link.click(); link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000); waOpenPrefill(caption); return "download";
+}
+
+async function votingParticipationImageFile(match, voted, pending) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const gradient = context.createLinearGradient(0, 0, 1080, 1350);
+  gradient.addColorStop(0, "#061724");
+  gradient.addColorStop(1, "#0d4058");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 1080, 1350);
+  context.strokeStyle = "rgba(114,215,250,.22)";
+  context.lineWidth = 4;
+  context.beginPath(); context.arc(930, 170, 240, 0, Math.PI * 2); context.stroke();
+  context.fillStyle = "#72d7fa";
+  context.font = "900 25px Arial";
+  context.fillText("MANOR LAKES FC · POTM VOTING", 60, 70);
+  context.fillStyle = "#ffffff";
+  context.font = "900 52px Arial";
+  wrapCanvasText(context, match.title || "Match voting", 900).slice(0, 2).forEach((line, index) => context.fillText(line.toUpperCase(), 60, 145 + index * 58));
+  context.fillStyle = "#bed2dc";
+  context.font = "700 24px Arial";
+  context.fillText(`${voted.length} of ${voted.length + pending.length} players voted`, 60, 285);
+
+  const players = [...voted, ...pending];
+  const portraits = new Map(await Promise.all(players.map(async (player) => [
+    String(player.playerName || "").toLowerCase(),
+    await loadCanvasImage(player.photoUrl),
+  ])));
+  const drawColumn = (title, list, x, color, mark) => {
+    const width = 460;
+    context.fillStyle = "rgba(3,20,32,.68)";
+    context.fillRect(x, 340, width, 900);
+    context.fillStyle = color;
+    context.font = "900 28px Arial";
+    context.fillText(`${title.toUpperCase()} · ${list.length}`, x + 28, 395);
+    list.slice(0, 12).forEach((player, index) => {
+      const centerY = 455 + index * 62;
+      const portrait = portraits.get(String(player.playerName || "").toLowerCase());
+      context.save();
+      context.beginPath(); context.arc(x + 58, centerY, 24, 0, Math.PI * 2); context.clip();
+      if (portrait) {
+        const scale = Math.max(48 / portrait.width, 48 / portrait.height);
+        context.drawImage(portrait, x + 58 - portrait.width * scale / 2, centerY - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
+      } else {
+        context.fillStyle = color; context.fillRect(x + 34, centerY - 24, 48, 48);
+        context.fillStyle = "#08283b"; context.font = "900 15px Arial"; context.textAlign = "center";
+        context.fillText(initials(player.playerName), x + 58, centerY + 5); context.textAlign = "left";
+      }
+      context.restore();
+      context.strokeStyle = color; context.lineWidth = 3; context.beginPath(); context.arc(x + 58, centerY, 24, 0, Math.PI * 2); context.stroke();
+      context.fillStyle = "#ffffff"; context.font = "850 20px Arial";
+      context.fillText(fitCanvasLabel(context, player.playerName, 295), x + 98, centerY - 2);
+      context.fillStyle = "#9fb8c5"; context.font = "800 14px Arial";
+      context.fillText(`${mark}  ${String(player.team || "PLAYER").toUpperCase()}`, x + 98, centerY + 20);
+    });
+    if (list.length > 12) {
+      context.fillStyle = "#bed2dc"; context.font = "700 16px Arial";
+      context.fillText(`+ ${list.length - 12} more`, x + 28, 1210);
+    }
+  };
+  drawColumn("Voted", voted, 60, "#55d99a", "✓");
+  drawColumn("Not voted", pending, 560, "#f0c94b", "!");
+  context.fillStyle = "#bed2dc";
+  context.font = "700 20px Arial";
+  context.fillText("Participation status · Individual votes remain private", 60, 1305);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  return blob ? new File([blob], `mlfc-potm-voting-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
+async function shareVotingParticipation(match, voted, pending) {
+  const file = await votingParticipationImageFile(match, voted, pending);
+  if (!file) throw new Error("Could not create voting participation image");
+  const votingUrl = `${matchLink(match.publicCode)}&focus=potm`;
+  const caption = `🏆 POTM voting is open for ${match.title || "our match"}.\n${voted.length} of ${voted.length + pending.length} players have voted.\n\nTap to vote:\n${votingUrl}`;
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: `${match.title} · POTM voting`, text: caption, files: [file] });
+    return "image";
+  }
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  waOpenPrefill(caption);
+  return "download";
 }
 
 function sameNames(a, b) {
@@ -1628,6 +1715,7 @@ async function openVotingManager(root, view, match) {
     <div class="adminVotingDialog__actions">
       ${!started ? `<button class="btn good" type="button" data-vote-start>Start voting</button>` : ""}
       ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Remind ${pending.length} ${pending.length === 1 ? "player" : "players"}</button>` : ""}
+      ${started && !closed ? `<button class="btn whatsappBtn" type="button" data-vote-share>Share voting link</button>` : ""}
       ${started && !closed ? `<button class="btn gray" type="button" data-vote-close>Close voting</button><button class="btn dangerGhost" type="button" data-vote-cancel>Cancel voting</button>` : ""}
     </div>
     <div class="small" data-vote-status role="status" aria-live="polite">${closed ? "Voting completed." : started ? "Individual choices remain private until voting closes." : ""}</div>
@@ -1669,6 +1757,18 @@ async function openVotingManager(root, view, match) {
     const message = `Reminder sent to ${Number(out.notified || 0)} ${Number(out.notified || 0) === 1 ? "player" : "players"}.`;
     dialog.querySelector("[data-vote-status]").textContent = message;
     toastSuccess(message);
+  });
+  dialog.querySelector("[data-vote-share]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    setDisabled(button, true, "Creating image…");
+    try {
+      const mode = await shareVotingParticipation(match, voted, pending);
+      toastInfo(mode === "image" ? "Choose WhatsApp to share the voting card." : "Voting card downloaded. Attach it in WhatsApp.");
+    } catch (error) {
+      if (error?.name !== "AbortError") toastError(error?.message || "Voting card could not be shared.");
+    } finally {
+      setDisabled(button, false);
+    }
   });
   dialog.querySelector("[data-vote-close]")?.addEventListener("click", async (event) => {
     if (!confirm(`Close POTM voting for “${match.title}”? Votes will be final.`)) return;
