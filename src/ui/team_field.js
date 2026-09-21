@@ -11,7 +11,8 @@ export function defaultPositions(players) {
   let offset = 0;
   for (let line = 0; line < lines; line++) {
     const count = Math.ceil((outfield.length - offset) / (lines - line));
-    for (let i = 0; i < count; i++) result[outfield[offset++]] = { positionX: 100 * (i + 1) / (count + 1), positionY: 16 + (lines - 1 - line) * 56 / lines };
+    const positionY = lines === 1 ? 48 : 12 + (lines - 1 - line) * 44 / (lines - 1);
+    for (let i = 0; i < count; i++) result[outfield[offset++]] = { positionX: 100 * (i + 1) / (count + 1), positionY };
   }
   return result;
 }
