@@ -2313,7 +2313,7 @@ body.hasCompactMatchCommand .appbar {
 .digitalTeam__pitch { position:relative; display:flex; flex-direction:column-reverse; justify-content:space-around; gap:13px; min-height:290px; padding:22px 12px; background:repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 16.66%,transparent 16.66%,transparent 33.33%); border:1px solid rgba(255,255,255,.13); margin:10px; }
 .digitalTeam__pitch::before { content:""; position:absolute; inset:50% 0 auto; border-top:1px solid rgba(255,255,255,.15); }.digitalTeam__pitch::after{content:"";position:absolute;left:50%;top:50%;width:64px;height:64px;border:1px solid rgba(255,255,255,.15);border-radius:50%;transform:translate(-50%,-50%)}
 .digitalTeam__line { position:relative; z-index:1; display:flex; justify-content:space-around; align-items:flex-start; gap:5px; }
-.digitalPlayer { display:grid; justify-items:center; gap:4px; min-width:0; width:84px; text-align:center; }.digitalPlayer i{display:grid;place-items:center;width:25px;height:25px;color:#08283b;background:#72d7fa;border:2px solid white;border-radius:50%;font-style:normal;font-size:14px;font-weight:950}.digitalTeam--orange .digitalPlayer i{background:#ff9c55;color:#3b1b08}.digitalPlayer>span:last-child{max-width:84px;padding:3px 5px;color:#fff;background:rgba(2,14,22,.75);border-radius:3px;font-size:11px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}.digitalTeam .digitalPlayer--captain i{background:#ffe16a;color:#382a00;box-shadow:0 0 0 3px rgba(255,225,106,.25)}.digitalTeam__empty{position:relative;z-index:1;align-self:center;color:#a9c3d0;font-size:12px}
+.digitalPlayer { display:grid; justify-items:center; gap:4px; min-width:0; width:84px; text-align:center; }.digitalPlayer i{display:grid;place-items:center;width:25px;height:25px;color:#08283b;background:#72d7fa;border:2px solid white;border-radius:50%;font-style:normal;font-size:14px;font-weight:950}.digitalTeam--orange .digitalPlayer i{background:#ff9c55;color:#3b1b08}.digitalPlayer>span:not(.playerPhoto){max-width:84px;padding:3px 5px;color:#fff;background:rgba(2,14,22,.75);border-radius:3px;font-size:11px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}.digitalTeam .digitalPlayer--captain i{background:#ffe16a;color:#382a00;box-shadow:0 0 0 3px rgba(255,225,106,.25)}.digitalTeam__empty{position:relative;z-index:1;align-self:center;color:#a9c3d0;font-size:12px}
 .digitalTeam__pitch--positioned { display:block; }
 .digitalTeam--shared{background:#123824;border-color:#4f815d}
 .digitalTeam__head--shared{display:grid;grid-template-columns:1fr 1fr;padding:0;background:#0b2b1a}
@@ -2332,7 +2332,7 @@ body.hasCompactMatchCommand .appbar {
 .matchTimeline { display:grid; gap:1px; margin-top:16px; background:#dbe4e8; }.matchTimeline__item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f4f7f8}.matchTimeline__item>span{display:grid;place-items:center;width:30px;height:30px;background:white;border-radius:50%}.matchTimeline__item>div{display:grid}.matchTimeline__item small{color:#627887}
 
 @media(max-width:700px){
-  .digitalTeamGrid{grid-template-columns:1fr}.digitalTeam__pitch{min-height:265px}.digitalTeam__pitch--shared{min-height:600px}.digitalPlayer{width:68px}.digitalPlayer>span:last-child{max-width:68px;font-size:8px}.digitalTeam__team{padding:10px 38px 10px 10px}.digitalTeam__team strong{font-size:12px}.digitalTeam__team>b{right:8px;width:26px;height:26px}
+  .digitalTeamGrid{grid-template-columns:1fr}.digitalTeam__pitch{min-height:265px}.digitalTeam__pitch--shared{min-height:600px}.digitalPlayer{width:68px}.digitalPlayer>span:not(.playerPhoto){max-width:68px;font-size:8px}.digitalTeam__team{padding:10px 38px 10px 10px}.digitalTeam__team strong{font-size:12px}.digitalTeam__team>b{right:8px;width:26px;height:26px}
   .seasonNumbers{grid-template-columns:repeat(2,1fr)}.seasonNumbers>div:nth-child(2){border-right:0}.seasonNumbers>div:nth-child(-n+2){border-bottom:1px solid rgba(255,255,255,.14)}.seasonInsights{grid-template-columns:1fr}.seasonMatchRow{grid-template-columns:45px minmax(0,1fr)}.seasonMatchRow__stats{grid-column:2;flex-wrap:wrap}.seasonHero__head{display:grid}.seasonHero__share{width:100%}
   .ladderControls{padding:12px}.ladderControls__season{margin-top:4px}.ladderControls__season .row{margin-top:4px!important}.ladderControls__season .field__label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ladderControls__season .input{min-height:36px;padding-block:6px}.ladderFilterBar{grid-template-columns:minmax(0,1fr) 92px;gap:5px;padding:5px;margin-top:8px}.ladderSearch{min-width:0}.ladderSearch .input{min-height:34px}.ladderMinimum{min-width:0}.ladderMinimum .input{width:100%;min-width:0}.ladderMetrics{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}.ladderSort{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:3px}.ladderSort .btn{min-width:0;min-height:30px;padding:4px 3px;font-size:10px}.ladderToggle{min-height:30px;padding:4px 6px}.ladderRefresh span{display:none}
   .ladderBoard__head{align-items:flex-start;padding:15px 14px 12px}.ladderBoard__count{max-width:48%;font-size:10px}.ladderBoard .lb__table{min-width:100%}.ladderBoard .lb__player{min-width:120px}.ladderBoard .lb__cell,.ladderBoard .lb__th{padding-inline:5px}.ladderBoard .lb__rank{width:32px}.ladderBoard .lb__num{width:44px;font-size:11px}.ladderBoard .lb__th{font-size:9px;letter-spacing:.04em}.playerAwards{flex-shrink:0;margin-left:3px}.playerAward{font-size:11px}
@@ -2417,7 +2417,7 @@ body.hasCompactMatchCommand .appbar {
 .sharedPitch .fieldPlayer{width:84px}.sharedPitch .fieldPlayer>span:not(.playerPhoto){font-size:11px}.sharedPitch .fieldPlayer--orange i{background:#ff9d4d;color:#3b1b08}
 .attackDirection{position:absolute;right:8px;top:51%;color:#9fe3ff;font:800 10px/1.2 ui-monospace,monospace;pointer-events:none}.attackDirection--upper{top:auto;bottom:51%;color:#ffbc88}
 .fieldWorkspace__foot{border-top:1px solid #cad7dd;margin-top:10px}.fieldWorkspace__foot .fieldActions{margin:0;min-height:40px;flex:1}.fieldWorkspace__foot [data-field-status]{max-width:220px}
-@media(max-width:600px){.fieldDialog{width:calc(100vw - 8px);height:calc(100dvh - 16px)}.fieldWorkspace__body{grid-template-columns:minmax(0,1fr);grid-template-rows:clamp(68px,12dvh,100px) minmax(0,1fr);padding:0 5px;gap:5px}.fieldWorkspace__head,.fieldWorkspace__tools,.fieldWorkspace__foot{padding:7px;gap:6px}.fieldWorkspace__head .small{order:3;width:100%;font-size:11px}.fieldRoster__head{grid-template-columns:auto 1fr;align-items:center;padding:6px 10px}.fieldRoster table{display:block;overflow-x:auto;white-space:nowrap}.fieldRoster tbody{display:flex}.fieldRoster tr{display:block;min-width:112px;border-right:1px solid #e1e8ec}.fieldRoster td{display:block!important;border-bottom:0}.fieldRoster button{font-size:11px;min-height:36px}.sharedPitch .fieldPlayer{width:78px;min-height:42px}.sharedPitch .playerPhoto--field{width:38px;height:38px;font-size:11px}.sharedPitch .fieldPlayer>span:not(.playerPhoto){display:block;font-size:10px;line-height:1.15;max-width:78px;padding:2px 3px;white-space:normal}.sharedPitch .fieldPlayer i{width:23px;height:23px;line-height:19px}.fieldWorkspace__foot .fieldActions{gap:5px;min-width:100%;font-size:12px}.fieldWorkspace__foot [data-save]{margin-left:auto}.attackDirection{font-size:9px;right:3px}.fieldWorkspace__tools .small{font-size:10px}}
+@media(max-width:600px){.fieldDialog{width:calc(100vw - 8px);height:calc(100dvh - 16px)}.fieldWorkspace__body{display:block;overflow-y:auto;padding:0 5px}.fieldRoster{height:clamp(68px,12dvh,100px);margin-bottom:5px}.pitchStage{height:960px;min-height:960px}.fieldWorkspace__head,.fieldWorkspace__tools,.fieldWorkspace__foot{padding:7px;gap:6px}.fieldWorkspace__head .small{order:3;width:100%;font-size:11px}.fieldRoster__head{grid-template-columns:auto 1fr;align-items:center;padding:6px 10px}.fieldRoster table{display:block;overflow-x:auto;white-space:nowrap}.fieldRoster tbody{display:flex}.fieldRoster tr{display:block;min-width:112px;border-right:1px solid #e1e8ec}.fieldRoster td{display:block!important;border-bottom:0}.fieldRoster button{font-size:11px;min-height:36px}.sharedPitch .fieldPlayer{width:58px;min-height:36px}.sharedPitch .playerPhoto--field{width:32px;height:32px;font-size:9px}.sharedPitch .fieldPlayer>span:not(.playerPhoto){display:block;font-size:8.5px;line-height:1.1;max-width:56px;padding:2px 3px;white-space:nowrap}.sharedPitch .fieldPlayer>small{font-size:8px;padding:2px 4px}.sharedPitch .fieldPlayer i{width:21px;height:21px;line-height:17px}.fieldWorkspace__foot .fieldActions{gap:5px;min-width:100%;font-size:12px}.fieldWorkspace__foot [data-save]{margin-left:auto}.attackDirection{font-size:9px;right:3px}.fieldWorkspace__tools .small{font-size:10px}}
 .fieldDragGhost{position:absolute;transform:translate(-50%,-50%);z-index:4;padding:8px;background:#fff0b5;border:2px solid #fff;border-radius:6px;color:#102c40;font-size:12px;font-weight:800;pointer-events:none}
 
 /* Bench gestures scroll vertically; drag sideways to assign. */
@@ -2436,7 +2436,7 @@ body.hasCompactMatchCommand .appbar {
 .fieldPreviewPitch:after{content:"";position:absolute;inset:0 32%;border-top:8px solid #ffffff30;border-bottom:8px solid #ffffff30;pointer-events:none}
 .fieldPreviewPitch .fieldPlayer--orange i{background:#ff9d4d}.fieldPlayer--preview{pointer-events:none;cursor:inherit;width:84px;min-height:48px}.fieldPlayer--preview i{width:22px;height:22px;line-height:18px}.fieldPlayer--preview>span:not(.playerPhoto){display:block;max-width:84px;padding:2px 4px;font-size:10px;line-height:1.15;white-space:normal}
 .fieldPreview__hint{display:block;padding:7px;color:#526976;font-size:11px}.fieldPreview:focus-visible{outline:3px solid #2175a0;outline-offset:3px}
-@media(max-width:600px){.fieldRoster td:last-child{display:table-cell}.fieldWorkspace__head .small{font-size:10px}.fieldPreviewPitch{height:clamp(540px,145vw,620px)}.fieldPlayer--preview{width:72px;min-height:46px}.fieldPlayer--preview>span:not(.playerPhoto){max-width:72px;font-size:10px}}
+@media(max-width:600px){.fieldRoster td:last-child{display:table-cell}.fieldWorkspace__head .small{font-size:10px}.fieldPreviewPitch{height:clamp(760px,205vw,900px)}.fieldPlayer--preview{width:58px;min-height:40px}.fieldPlayer--preview>.playerPhoto{width:32px;height:32px}.fieldPlayer--preview>span:not(.playerPhoto){max-width:56px;font-size:8.5px}.fieldPlayer--preview>small{font-size:8px}}
 
 /* Versioned player identity photos. The dark outer ring reads like a shirt
    badge and keeps portraits legible against both halves of the pitch. */
@@ -2483,7 +2483,7 @@ body.hasCompactMatchCommand .appbar {
 /* Keep every pitch identity as one compact, collision-resistant unit. */
 .fieldPlayer>span:not(.playerPhoto),
 .fieldPlayer--preview>span:not(.playerPhoto),
-.digitalPlayer>span:last-child,
+.digitalPlayer>span:not(.playerPhoto),
 .potmFieldPlayer>span:last-child {
   display:block;
   width:max-content;
@@ -2496,12 +2496,15 @@ body.hasCompactMatchCommand .appbar {
 }
 .fieldPlayer,.fieldPlayer--preview,.digitalPlayer--positioned,.potmFieldPlayer{gap:4px}
 .digitalTeam__pitch--positioned .digitalPlayer{width:72px}
-.digitalTeam__pitch--positioned .digitalPlayer>span:last-child{font-size:10px}
+.digitalTeam__pitch--positioned .digitalPlayer>span:not(.playerPhoto){font-size:10px}
 .digitalTeam__pitch--shared{min-height:760px}
 @media(max-width:700px){
-  .fieldPlayer>span:not(.playerPhoto),.fieldPlayer--preview>span:not(.playerPhoto),.digitalPlayer>span:last-child,.potmFieldPlayer>span:last-child{max-width:60px;font-size:9px}
+  .fieldPlayer>span:not(.playerPhoto),.fieldPlayer--preview>span:not(.playerPhoto),.digitalPlayer>span:not(.playerPhoto),.potmFieldPlayer>span:last-child{max-width:60px;font-size:9px}
   .digitalTeam__pitch--positioned .digitalPlayer{width:60px}
-  .digitalTeam__pitch--shared{min-height:680px}
+  .digitalTeam__pitch--shared{min-height:900px}
+  .digitalTeam__pitch--shared .digitalPlayer{width:56px}
+  .digitalTeam__pitch--shared .digitalPlayer>.playerPhoto{width:32px;height:32px}
+  .digitalTeam__pitch--shared .digitalPlayer>span:not(.playerPhoto){max-width:54px;font-size:8.5px}
 }
 
 /* Compact notification inbox with touch-safe swipe dismissal. */

@@ -153,8 +153,10 @@ export function mountTeamField(root, options) {
   }
 
   function slotMarkers(preview) {
-    if (preview) return '';
+    if (preview || !selected || !canMove(selected)) return '';
     return groups.flatMap(group => FIELD_POSITIONS.map(slot => {
+      const occupied = group.players.some(player => player !== selected && fieldPositionCode(positions[player] || defaults()[player]) === slot.code);
+      if (occupied) return '';
       const x = upper(group) ? 100-slot.positionX : slot.positionX;
       const y = upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2;
       return `<span class="fieldSlot ${upper(group)?'fieldSlot--upper':''}" style="left:${x}%;top:${y}%" aria-hidden="true">${slot.code}</span>`;
@@ -162,7 +164,7 @@ export function mountTeamField(root, options) {
   }
 
   function pitchMarkup(preview = false) {
-    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}" aria-label="${preview?'Team field preview':'Shared team field'}">
+    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}${!preview && selected ? ' isChoosingPosition' : ''}" aria-label="${preview?'Team field preview':'Shared team field'}">
       <div class="teamField__circle" aria-hidden="true"></div>
       ${slotMarkers(preview)}
       ${groups.flatMap(group => group.players.map(name => playerMarker(name, group, preview))).join('')}
