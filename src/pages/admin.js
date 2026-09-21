@@ -1124,6 +1124,10 @@ function renderAdminShell(root, view) {
         Create seasons like: <b>24 Winter</b>, <b>24-25 Summer</b>, <b>25 Winter</b>, <b>25-26 Summer</b>.
       </div>
 
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap">
+        <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button">Share top 20 FC Cards</button>
+      </div>
+
       <div class="field"><label class="field__label" for="seasonName">Season name</label><input id="seasonName" class="input" placeholder="For example, 25-26 Summer" /></div>
       <div class="formGrid formGrid--two">
         <div class="field"><label class="field__label" for="seasonStart">Start date</label><input id="seasonStart" class="input" type="date" /></div>

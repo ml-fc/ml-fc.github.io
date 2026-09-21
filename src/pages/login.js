@@ -44,10 +44,14 @@ function safeHttpsUrl(value) {
   try { const url = new URL(String(value || "")); return url.protocol === "https:" ? url.href : ""; } catch { return ""; }
 }
 
-export async function renderLoginPage(root) {
+const playerStatusIcon = status => ({ ACTIVE:"●", INJURED:"🩹", UNAVAILABLE:"×", INACTIVE:"Ⅱ" })[String(status || "ACTIVE").toUpperCase()] || "●";
+
+export async function renderLoginPage(root, query = new URLSearchParams()) {
   const token = getToken();
   let me = getCachedUser();
   if (token && !me) me = await refreshMe().catch(() => null);
+  const requestedReturn = String(query?.get?.("return") || "");
+  const returnHash = requestedReturn.startsWith("#/match") ? requestedReturn : "";
 
   // If logged in already, show account page + logout
   if (token && me) {
@@ -67,9 +71,9 @@ export async function renderLoginPage(root) {
           <button class="btn gray" id="openPasswordDialog" type="button">Password</button>
           <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
-        <button class="profileStatusCard" id="openStatusDialog" type="button" aria-haspopup="dialog"><span><span class="field__label">Player status</span><strong>${String(me.playerStatus||"ACTIVE")==="INJURED"?"🩹 ":""}${esc(String(me.playerStatus||"ACTIVE")[0]+String(me.playerStatus||"ACTIVE").slice(1).toLowerCase())}</strong><small>Only Active players can update match availability.</small></span><b aria-hidden="true">Change ›</b></button>
+        <button class="profileStatusCard" id="openStatusDialog" type="button" aria-haspopup="dialog"><span><span class="field__label">Player status</span><strong><span class="profileStatusIcon profileStatusIcon--${esc(String(me.playerStatus||"ACTIVE").toLowerCase())}" aria-hidden="true">${playerStatusIcon(me.playerStatus)}</span>${esc(String(me.playerStatus||"ACTIVE")[0]+String(me.playerStatus||"ACTIVE").slice(1).toLowerCase())}</strong><small>Only Active players can update match availability.</small></span><b aria-hidden="true">Change ›</b></button>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="goMatches">Go to matches</button>
+          <button class="btn primary" id="goMatches">${returnHash ? "Back to availability" : "Go to matches"}</button>
           <button class="btn gray" id="goSeason">My season</button>
           <button class="btn gray" id="updateApp">Update app</button>
           <button class="btn gray" id="logout">Logout</button>
@@ -90,7 +94,7 @@ export async function renderLoginPage(root) {
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
-      <dialog id="statusDialog" class="requiredPhotoDialog" aria-labelledby="statusDialogTitle"><div class="requiredPhotoSheet"><div class="stepEyebrow">Availability</div><div class="h1" id="statusDialogTitle">Set player status</div><p>Choose the status that best reflects whether you can play.</p><div class="profileStatus__choices" role="radiogroup" aria-label="Player status">${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}">${status==="INJURED"?"🩹 ":""}${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}</div><div class="small">Active lets you answer match availability. After 10 consecutive missed club matches, Active changes automatically to Inactive.</div><button class="requiredPhotoLogout" id="closeStatusDialog" type="button">Cancel</button></div></dialog>
+      <dialog id="statusDialog" class="requiredPhotoDialog" aria-labelledby="statusDialogTitle"><div class="requiredPhotoSheet"><div class="stepEyebrow">Availability</div><div class="h1" id="statusDialogTitle">Set player status</div><p>Choose the status that best reflects whether you can play.</p><div class="profileStatus__choices" role="radiogroup" aria-label="Player status">${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}"><span class="profileStatusIcon profileStatusIcon--${status.toLowerCase()}" aria-hidden="true">${playerStatusIcon(status)}</span>${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}</div><div class="small">Active lets you answer match availability. After 10 consecutive missed club matches, Active changes automatically to Inactive.</div><button class="requiredPhotoLogout" id="closeStatusDialog" type="button">Cancel</button></div></dialog>
       <dialog id="profilePhoneDialog" class="requiredPhotoDialog" aria-labelledby="profilePhoneTitle">
         <div class="requiredPhotoSheet">
           <div class="requiredPhoneIcon" aria-hidden="true">☎</div>
@@ -148,11 +152,12 @@ export async function renderLoginPage(root) {
       </dialog>`}
     `;
 
-    root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
+    root.querySelector("#goMatches").onclick = () => (location.hash = returnHash || "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
     const statusDialog=root.querySelector("#statusDialog");
     root.querySelector("#openStatusDialog").onclick=()=>statusDialog.showModal();
     root.querySelector("#closeStatusDialog").onclick=()=>statusDialog.close();
+    if(query?.get?.("status")==="1") setTimeout(()=>statusDialog.showModal(),0);
     root.querySelectorAll("[data-player-status]").forEach(button=>button.onclick=async()=>{
       const next=button.dataset.playerStatus;
       if(next===String(me.playerStatus||"ACTIVE")) return;
@@ -163,7 +168,9 @@ export async function renderLoginPage(root) {
       if(!result?.ok){toastError(result?.error||"Could not update status.");root.querySelectorAll("[data-player-status]").forEach(item=>item.disabled=false);return;}
       me={...me,playerStatus:result.playerStatus};setCachedUser(me);updateNavForUser(me);
       toastSuccess(`Status changed to ${result.playerStatus[0]+result.playerStatus.slice(1).toLowerCase()}`);
-      await renderLoginPage(root);
+      const nextQuery = new URLSearchParams(query);
+      nextQuery.delete("status");
+      await renderLoginPage(root, nextQuery);
     });
     const cleanPhoneInput = input => input?.addEventListener("input", () => { input.value = String(input.value || "").replace(/\D+/g, ""); });
     const savePhone = async (country, input, status) => {
@@ -176,7 +183,7 @@ export async function renderLoginPage(root) {
       me = { ...me, phone: result.phone };
       setCachedUser(me); updateNavForUser(me);
       toastSuccess("WhatsApp number updated");
-      await renderLoginPage(root);
+      await renderLoginPage(root, query);
     };
     const profilePhone = root.querySelector("#profilePhone");
     cleanPhoneInput(profilePhone);
@@ -209,7 +216,7 @@ export async function renderLoginPage(root) {
         invalidatePlayerPhotoCaches();
         setCachedUser(updated); updateNavForUser(updated);
         toastSuccess("Profile photo updated");
-        await renderLoginPage(root);
+        await renderLoginPage(root, query);
       } catch (error) {
         setPhotoStatus(error?.message || "Could not upload photo.");
         toastError(error?.message || "Could not upload photo.");

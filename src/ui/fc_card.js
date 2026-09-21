@@ -5,12 +5,20 @@ let sequence = 0;
 const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 const score = value => Math.max(0, Math.min(99, Number(value) || 50));
 
+function playerStatusBadge(status) {
+  if (status === "INJURED") return `<g aria-label="Injured"><title>Injured</title><circle r="31" fill="#fff" stroke="#d71920" stroke-width="5"/><g transform="rotate(-42)"><rect x="-21" y="-9" width="42" height="18" rx="7" fill="#d71920"/><rect x="-6" y="-9" width="12" height="18" fill="#fff"/><circle cx="-14" cy="0" r="2.2" fill="#fff"/><circle cx="14" cy="0" r="2.2" fill="#fff"/></g></g>`;
+  if (status === "INACTIVE") return `<g aria-label="Inactive"><title>Inactive</title><circle r="31" fill="#f4f7f8" stroke="#52616b" stroke-width="5"/><rect x="-10" y="-14" width="7" height="28" rx="2" fill="#52616b"/><rect x="3" y="-14" width="7" height="28" rx="2" fill="#52616b"/></g>`;
+  if (status === "UNAVAILABLE") return `<g aria-label="Unavailable"><title>Unavailable</title><circle r="31" fill="#fff8e1" stroke="#e28a00" stroke-width="5"/><path d="M-12-12 12 12M12-12-12 12" stroke="#c86f00" stroke-width="7" stroke-linecap="round"/></g>`;
+  return `<g aria-label="Active"><title>Active</title><circle r="31" fill="#eafff4" stroke="#118a57" stroke-width="5"/><path d="m-14 1 9 10 20-23" fill="none" stroke="#118a57" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+}
+
 export function fcCardSvg(card, name, photo = card.photoUrl) {
   const id = `fc-${++sequence}`;
-  const injured = String(card.playerStatus).toUpperCase() === "INJURED";
+  const playerStatus = String(card.playerStatus || "ACTIVE").toUpperCase();
+  const playerStatusLabel = ({ACTIVE:"Active",INJURED:"Injured",UNAVAILABLE:"Unavailable",INACTIVE:"Inactive"})[playerStatus] || "Active";
   const nameSize = Math.min(49, 760 / Math.max(14, String(name).length));
   const lines = Array.from({length: 95}, (_, i) => `<path d="M${-550+i*14} 530 L${180+i*14} -30"/>`).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="750" viewBox="0 0 600 750" role="img" aria-label="${escape(name)} · ${score(card.overall)} OVR · ${escape(card.position || "CM")}${injured ? " · Injured" : ""}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="750" viewBox="0 0 600 750" role="img" aria-label="${escape(name)} · ${score(card.overall)} OVR · ${escape(card.position || "CM")} · ${playerStatusLabel}">
     <defs>
       <linearGradient id="${id}-gold" x2=".85" y2="1"><stop stop-color="#fff5b7"/><stop offset=".28" stop-color="#f6d86d"/><stop offset=".52" stop-color="#cf961e"/><stop offset=".73" stop-color="#ffe68d"/><stop offset="1" stop-color="#bb821c"/></linearGradient>
       <linearGradient id="${id}-panel" x2=".8" y2="1"><stop stop-color="#ffe99a"/><stop offset=".48" stop-color="#edc85d"/><stop offset="1" stop-color="#d4a039"/></linearGradient>
@@ -38,7 +46,7 @@ export function fcCardSvg(card, name, photo = card.photoUrl) {
         <path d="M277 648 H323 V674 L300 688 L277 674Z" fill="#302609"/>
         <text x="300" y="669" fill="#f8db7c" font-size="12" font-weight="900">MLFC</text>
       </g>
-      ${injured ? `<g transform="translate(514 111)" aria-label="Injured"><title>Injured</title><circle r="25" fill="#fff1bb" stroke="#8c651c" stroke-width="2"/><g transform="rotate(-40)"><rect x="-18" y="-8" width="36" height="16" rx="5" fill="#ca935c" stroke="#593e1f"/><path d="M-6 -7V7M6 -7V7" stroke="#704d29"/><path d="M-13 -2V2M13 -2V2" stroke="#fff1bb" stroke-width="2"/></g></g>` : ""}
+      <g transform="translate(514 111)" style="filter:drop-shadow(0 4px 4px rgba(0,0,0,.48))">${playerStatusBadge(playerStatus)}</g>
     </g>
     <path d="${SHAPE}" fill="none" stroke="url(#${id}-edge)" stroke-width="5"/>
   </svg>`;

@@ -834,6 +834,13 @@ function availabilityPresentation(availability) {
   return { label: "Response needed", tone: "pending", detail: "Let the club know if you can play." };
 }
 
+function profileStatusRoute(publicCode = "") {
+  const returnHash = publicCode
+    ? `#/match?code=${encodeURIComponent(publicCode)}`
+    : "#/match";
+  return `#/login?status=1&return=${encodeURIComponent(returnHash)}`;
+}
+
 function latestResultEventLine(result) {
   const events = Array.isArray(result?.events) ? result.events : [];
   const potm = Array.isArray(result?.potm) ? result.potm : [];
@@ -1029,6 +1036,8 @@ function renderNextMatchDashboard(host, data) {
   const canRespond = Boolean(match.availability?.canRespond);
   const availabilityStatus = String(match.availability?.status || "NOT_RESPONDED").toUpperCase();
   const hasAvailabilityResponse = ["YES", "NO", "WAITING"].includes(availabilityStatus);
+  const playerStatus = String(getCachedUser()?.playerStatus || "ACTIVE").toUpperCase();
+  const statusBlocksAvailability = ["INJURED", "INACTIVE"].includes(playerStatus);
   const showResponse = canRespond && !hasAvailabilityResponse && (!action || action.type === "RESPOND");
   const result = data?.latestResult;
 
@@ -1048,8 +1057,10 @@ function renderNextMatchDashboard(host, data) {
       <div class="nextMatch__stateGrid">
         <div class="nextMatch__state">
           <span class="nextMatch__label">Availability</span>
-          <strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>
-          <small>${escapeHtml(availability.detail)}</small>
+          ${statusBlocksAvailability && !hasAvailabilityResponse
+            ? `<a class="statusPill statusPill--pending statusPillLink" href="${escapeHtml(profileStatusRoute(match.publicCode))}"><span aria-hidden="true">!</span>Response needed</a>`
+            : `<strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>`}
+          <small>${statusBlocksAvailability && !hasAvailabilityResponse ? `Your profile is ${escapeHtml(playerStatus.toLowerCase())}. Change it to Active to respond.` : escapeHtml(availability.detail)}</small>
         </div>
         ${team || availabilityStatus === "YES" ? `<div class="nextMatch__state">
           <span class="nextMatch__label">Your role</span>
@@ -1064,6 +1075,7 @@ function renderNextMatchDashboard(host, data) {
       </div>
 
       <footer class="nextMatch__actions">
+        ${statusBlocksAvailability && !hasAvailabilityResponse ? `<a class="btn primary nextMatch__primary" href="${escapeHtml(profileStatusRoute(match.publicCode))}">Update player status</a>` : ""}
         ${showResponse ? `
           <div class="quickResponse" role="group" aria-label="Set your availability">
             <button class="btn quickResponse__yes" type="button" data-next-response="YES"><span aria-hidden="true">✓</span> Yes, I can play</button>
@@ -1071,7 +1083,7 @@ function renderNextMatchDashboard(host, data) {
           </div>` : ""}
         ${hasAvailabilityResponse && canRespond ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">Update availability</button>` : ""}
         ${!assignment.isCaptain && !hasAvailabilityResponse && action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
-        ${!hasAvailabilityResponse && !showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+        ${!statusBlocksAvailability && !hasAvailabilityResponse && !showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
         ${hasAvailabilityResponse && !canRespond ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
         ${assignment.isCaptain ? `<button class="btn primary nextMatch__primary" type="button" data-next-captain="${escapeHtml(match.publicCode)}">Manage team</button>` : ""}
         ${hasAvailabilityResponse ? `<button class="btn whatsappBtn" type="button" data-next-share>Share to WhatsApp</button>` : ""}
@@ -1732,7 +1744,7 @@ const cap = availabilityLimitForMatch(m);
               ${ratingsClosed
                 ? `<div class="small"><b>Availability is closed.</b></div>`
                 : (profileUnavailable
-                    ? `<div class="small"><b>Your profile is ${escapeHtml(String(me.playerStatus).toLowerCase())}.</b> Change it to Active in Profile before updating availability.</div>`
+                    ? `<div class="small"><b>Your profile is ${escapeHtml(String(me.playerStatus).toLowerCase())}.</b> Change it to Active in Profile before updating availability.</div><a class="btn primary" href="${escapeHtml(profileStatusRoute(code))}" style="margin-top:12px">Update player status</a>`
                     : availabilityClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
