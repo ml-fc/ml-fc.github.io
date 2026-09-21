@@ -64,6 +64,7 @@ export async function renderLoginPage(root) {
           <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
           <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           <button class="btn gray" id="changePhone" type="button">${me.phone ? "Change number" : "Add number"}</button>
+          <button class="btn gray" id="openPasswordDialog" type="button">Password</button>
           <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
@@ -75,23 +76,6 @@ export async function renderLoginPage(root) {
       </div>
 
       <div class="card">
-        <div class="h1">Change password</div>
-        <div class="small">Choose any password you will remember.</div>
-        <div class="field">
-          <label class="field__label" for="oldPass">Current password</label>
-          <input id="oldPass" type="password" class="input" autocomplete="current-password" />
-        </div>
-        <div class="field">
-          <label class="field__label" for="newPass">New password</label>
-          <input id="newPass" type="password" class="input" autocomplete="new-password" aria-describedby="passHelp passMsg" />
-          <div class="field__help" id="passHelp">Any non-empty password is accepted.</div>
-        </div>
-        <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="changePass">Update password</button>
-        </div>
-        <div class="field__message" id="passMsg" role="status" aria-live="polite"></div>
-      </div>
-      <div class="card">
         <div class="notificationHeader"><div class="h1">Notifications</div><button class="btn gray" id="clearNotifications" type="button" hidden>Clear all</button></div>
         <div class="small" id="pushStatus"></div>
         <div class="row" id="pushActions" style="margin-top:10px; gap:10px; flex-wrap:wrap">
@@ -100,6 +84,7 @@ export async function renderLoginPage(root) {
         </div>
         <div class="small" id="notiMsg" role="status" aria-live="polite">Loading…</div>
         <div id="notiList" style="margin-top:10px"></div>
+        <button class="btn gray notificationMore" id="showMoreNotifications" type="button" hidden>Show more</button>
       </div>
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
@@ -113,6 +98,27 @@ export async function renderLoginPage(root) {
           <button class="btn primary requiredPhotoChoose" id="savePhone" type="button">Save number</button>
           <div class="small" id="phoneStatus" role="status" aria-live="polite"></div>
           <button class="requiredPhotoLogout" id="closePhoneDialog" type="button">Cancel</button>
+        </div>
+      </dialog>
+      <dialog id="passwordDialog" class="requiredPhotoDialog" aria-labelledby="passwordDialogTitle">
+        <div class="requiredPhotoSheet">
+          <div class="requiredPasswordIcon" aria-hidden="true"></div>
+          <div class="h1" id="passwordDialogTitle">Change password</div>
+          <p>Enter your current password, then choose a new one you will remember.</p>
+          <div class="profileDialogFields">
+            <div class="field">
+              <label class="field__label" for="oldPass">Current password</label>
+              <input id="oldPass" type="password" class="input" autocomplete="current-password" />
+            </div>
+            <div class="field">
+              <label class="field__label" for="newPass">New password</label>
+              <input id="newPass" type="password" class="input" autocomplete="new-password" aria-describedby="passHelp passMsg" />
+              <div class="field__help" id="passHelp">Any non-empty password is accepted.</div>
+            </div>
+          </div>
+          <button class="btn primary requiredPhotoChoose" id="changePass" type="button">Update password</button>
+          <div class="field__message" id="passMsg" role="status" aria-live="polite"></div>
+          <button class="requiredPhotoLogout" id="closePasswordDialog" type="button">Cancel</button>
         </div>
       </dialog>
       ${me.photoUrl ? "" : `<dialog id="requiredPhotoDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhotoTitle" aria-describedby="requiredPhotoHelp">
@@ -161,6 +167,9 @@ export async function renderLoginPage(root) {
     const profilePhoneDialog = root.querySelector("#profilePhoneDialog");
     root.querySelector("#changePhone").onclick = () => profilePhoneDialog.showModal();
     root.querySelector("#closePhoneDialog").onclick = () => profilePhoneDialog.close();
+    const passwordDialog = root.querySelector("#passwordDialog");
+    root.querySelector("#openPasswordDialog").onclick = () => passwordDialog.showModal();
+    root.querySelector("#closePasswordDialog").onclick = () => passwordDialog.close();
     const photoInput = root.querySelector("#profilePhotoInput");
     const photoStatus = root.querySelector("#profilePhotoStatus");
     const requiredPhotoStatus = root.querySelector("#requiredPhotoStatus");
@@ -312,6 +321,7 @@ export async function renderLoginPage(root) {
       toastSuccess("Password updated");
       root.querySelector("#oldPass").value = "";
       root.querySelector("#newPass").value = "";
+      passwordDialog.close();
     };
 
     const pushStatus = root.querySelector("#pushStatus");
@@ -374,21 +384,46 @@ export async function renderLoginPage(root) {
     const msg = root.querySelector("#notiMsg");
     const list = root.querySelector("#notiList");
     const clearAll = root.querySelector("#clearNotifications");
+    const showMore = root.querySelector("#showMoreNotifications");
     let items = [];
+    let visibleCount = 10;
     let clearing = false;
+    const oneWeekAgo = () => Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const currentNotifications = notifications => notifications.filter(notification => {
+      const createdAt = new Date(notification.createdAt).getTime();
+      return Number.isFinite(createdAt) && createdAt >= oneWeekAgo();
+    });
+    const notificationGroup = createdAt => {
+      const date = new Date(createdAt);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const dateKey = value => `${value.getFullYear()}-${value.getMonth()}-${value.getDate()}`;
+      if (dateKey(date) === dateKey(today)) return "Today";
+      if (dateKey(date) === dateKey(yesterday)) return "Yesterday";
+      return "Earlier this week";
+    };
     const renderNoti = () => {
+      items = currentNotifications(items);
+      const visibleItems = items.slice(0, visibleCount);
       clearAll.hidden = !items.length;
       clearAll.disabled = clearing;
+      showMore.hidden = visibleItems.length >= items.length;
+      showMore.disabled = clearing;
       msg.textContent = items.length ? `${items.length} notification${items.length === 1 ? "" : "s"} · Swipe left or right to clear` : "You’re all caught up.";
       document.querySelectorAll('a[href="#/login"], [data-tab="register"]').forEach(a => a.classList.toggle("has-noti", items.length > 0));
-      list.innerHTML = items.map(n => {
+      let activeGroup = "";
+      list.innerHTML = visibleItems.map(n => {
         const link = safeHttpsUrl(n.linkUrl);
         const embed = safeHttpsUrl(n.embedUrl);
         const appLink = link && new URL(link).origin === location.origin && new URL(link).hash.startsWith("#/captain?") ? new URL(link).hash : "";
         const date = new Date(n.createdAt);
         const when = Number.isNaN(date.getTime()) ? "" : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-        return `<div class="notificationSwipe"><div class="notificationSwipe__hint" aria-hidden="true"><span>✓ Clear</span><span>Clear ✓</span></div>
-          <article class="notificationCard" data-notification-id="${esc(n.id)}">
+        const group = notificationGroup(n.createdAt);
+        const groupHeading = group === activeGroup ? "" : `<div class="notificationGroupTitle">${esc(group)}</div>`;
+        activeGroup = group;
+        return `${groupHeading}<div class="notificationSwipe"><div class="notificationSwipe__hint" aria-hidden="true"><span>✓ Clear</span><span>Clear ✓</span></div>
+          <article class="notificationCard" data-notification-id="${esc(n.id)}" tabindex="-1">
             ${safeHttpsUrl(n.imageUrl) ? `<img class="notificationCard__image" src="${esc(safeHttpsUrl(n.imageUrl))}" alt="" loading="lazy" decoding="async">` : ""}
             <div class="notificationCard__head"><div class="notificationCard__title">${esc(n.title || "Club update")}</div><button class="notificationCard__clear" type="button" data-close="${esc(n.id)}" aria-label="Clear notification: ${esc(n.title || "Club update")}"><span aria-hidden="true">×</span> Clear</button></div>
             <div class="notificationCard__message">${esc(n.message)}</div>
@@ -451,6 +486,11 @@ export async function renderLoginPage(root) {
     };
     msg.tabIndex = -1;
     clearAll.onclick = () => clearNotifications(items.map(n => n.id));
+    showMore.onclick = () => {
+      visibleCount += 10;
+      renderNoti();
+      list.querySelectorAll(".notificationCard")[visibleCount - 10]?.focus({ preventScroll: true });
+    };
     const dialog = root.querySelector("#announcementDialog");
     const frame = root.querySelector("#announcementFrame");
     root.querySelector("#closeAnnouncementDialog")?.addEventListener("click", () => { dialog.close(); frame.src = "about:blank"; });
@@ -477,7 +517,7 @@ export async function renderLoginPage(root) {
     };
     const cached = lsGet(LS_NOTI_CACHE)?.data?.notifications;
     if (Array.isArray(cached) && cached.length) {
-      items = cached;
+      items = currentNotifications(cached);
       renderNoti();
     }
     // Keep cached cards read-only until the current list arrives.
@@ -486,8 +526,8 @@ export async function renderLoginPage(root) {
     const out = await API.notifications().catch(() => null);
     clearing = false;
     if (out?.ok) {
-      items = Array.isArray(out.notifications) ? out.notifications : [];
-      lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: out });
+      items = currentNotifications(Array.isArray(out.notifications) ? out.notifications : []);
+      lsSet(LS_NOTI_CACHE, { ts: Date.now(), data: { ...out, notifications: items } });
       renderNoti();
     } else {
       renderNoti();

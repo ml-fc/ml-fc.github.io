@@ -1567,7 +1567,7 @@ const cap = availabilityLimitForMatch(m);
 
   const teamsSelected = Array.isArray(data.teams) && data.teams.length > 0;
   const ratingsClosed = Number(m.ratingsLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
-  const availabilityClosed = ratingsClosed;
+  const availabilityClosed = Number(m.availabilityLocked || 0) === 1 || String(m.availabilityLocked || "").toUpperCase() === "TRUE";
   // Captain assignment grants immediate access; it is independent of availability.
   const captainPageEnabled = isCaptain;
   const hideAvailability = false;
@@ -1733,7 +1733,7 @@ const cap = availabilityLimitForMatch(m);
             ? `
               ${ratingsClosed
                 ? `<div class="small"><b>Availability is closed.</b></div>`
-                : (adminClosed
+                : (availabilityClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
                         ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${cap} available), you can join the waiting list.</div>`
@@ -1743,7 +1743,7 @@ const cap = availabilityLimitForMatch(m);
               `}
               ${ratingsClosed ? `` : `
                 <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-                  ${adminClosed ? `` : `<button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>`}
+                  ${availabilityClosed ? `` : `<button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>`}
                   <button class="btn bad" id="btnNo" ${meName ? "" : "disabled"}>NO</button>
                   <button class="btn warn" id="btnWait" disabled>WAITING LIST</button>
                 </div>
@@ -1818,7 +1818,7 @@ const cap = availabilityLimitForMatch(m);
   async function submit(choice) {
     if (!meName) return toastWarn("Please login first.");
 
-    if (adminClosed && String(choice || "").toUpperCase() === "YES") {
+    if (availabilityClosed && String(choice || "").toUpperCase() === "YES") {
       return toastWarn("Availability is closed — you can only set NO or WAITING.");
     }
 
