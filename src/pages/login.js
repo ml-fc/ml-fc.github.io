@@ -67,6 +67,12 @@ export async function renderLoginPage(root) {
           <button class="btn gray" id="openPasswordDialog" type="button">Password</button>
           <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
+        <div class="profileStatus" aria-labelledby="profileStatusTitle">
+          <div><div class="field__label" id="profileStatusTitle">Player status</div><div class="small" id="profileStatusHelp">Only Active players can update match availability.</div></div>
+          <div class="profileStatus__choices" role="radiogroup" aria-label="Player status">
+            ${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}">${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}
+          </div>
+        </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
           <button class="btn gray" id="goSeason">My season</button>
@@ -148,6 +154,18 @@ export async function renderLoginPage(root) {
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
+    root.querySelectorAll("[data-player-status]").forEach(button=>button.onclick=async()=>{
+      const next=button.dataset.playerStatus;
+      if(next===String(me.playerStatus||"ACTIVE")) return;
+      const message=next==="ACTIVE"?"Return to Active? You can update match availability again.":`Change your status to ${next[0]+next.slice(1).toLowerCase()}? Your future availability and unlocked team selections will be cleared.`;
+      if(!window.confirm(message)) return;
+      root.querySelectorAll("[data-player-status]").forEach(item=>item.disabled=true);
+      const result=await API.userSetStatus(next).catch(()=>null);
+      if(!result?.ok){toastError(result?.error||"Could not update status.");root.querySelectorAll("[data-player-status]").forEach(item=>item.disabled=false);return;}
+      me={...me,playerStatus:result.playerStatus};setCachedUser(me);updateNavForUser(me);
+      toastSuccess(`Status changed to ${result.playerStatus[0]+result.playerStatus.slice(1).toLowerCase()}`);
+      await renderLoginPage(root);
+    });
     const cleanPhoneInput = input => input?.addEventListener("input", () => { input.value = String(input.value || "").replace(/\D+/g, ""); });
     const savePhone = async (country, input, status) => {
       const phone = internationalPhone(country, input);

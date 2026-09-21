@@ -37,6 +37,27 @@ let ACTIVE_ADMIN = { root: null, routeToken: "", view: "", refreshList: null };
 let MANAGE_COMMAND_SCROLL_HANDLER = null;
 
 function now() { return Date.now(); }
+
+async function leadersBoardFile(payload){
+  const cards=payload.cards||[],cols=5,rows=Math.max(1,Math.ceil(cards.length/cols)),cardW=960,cardH=1220,gap=55,pad=110,header=250;
+  const canvas=document.createElement("canvas");canvas.width=pad*2+cols*cardW+(cols-1)*gap;canvas.height=header+pad+rows*cardH+(rows-1)*gap;const c=canvas.getContext("2d");
+  c.fillStyle="#061827";c.fillRect(0,0,canvas.width,canvas.height);c.fillStyle="#f0d473";c.font="400 104px Impact, Arial Narrow, sans-serif";c.fillText("MLFC SEASON LEADERS",pad,125);c.fillStyle="#b8dcec";c.font="700 42px Arial";c.fillText(`${payload.season?.name||"Season"} · TOP ${cards.length} RATED PLAYERS`,pad,190);
+  for(let index=0;index<cards.length;index++){
+    const item=cards[index],card=item.card||{},x=pad+(index%cols)*(cardW+gap),y=header+Math.floor(index/cols)*(cardH+gap);const g=c.createLinearGradient(x,y,x+cardW,y+cardH);g.addColorStop(0,"#0a2942");g.addColorStop(.55,"#0c5482");g.addColorStop(1,"#071c30");c.fillStyle=g;c.fillRect(x,y,cardW,cardH);c.strokeStyle="#efd16f";c.lineWidth=10;c.strokeRect(x+14,y+14,cardW-28,cardH-28);
+    c.fillStyle="#f3d77b";c.font="400 106px Impact,Arial Narrow,sans-serif";c.fillText(String(card.overall||50),x+55,y+135);c.fillStyle="#fff";c.font="900 43px Arial";c.fillText(String(card.position||"CM"),x+65,y+195);c.textAlign="right";c.fillStyle="#efd16f";c.font="900 34px Arial";c.fillText(`#${index+1} MLFC`,x+cardW-55,y+75);c.textAlign="left";
+    if(card.photoUrl){try{const image=await loadCanvasImage(card.photoUrl);c.save();c.beginPath();c.arc(x+cardW/2,y+390,205,0,Math.PI*2);c.clip();c.drawImage(image,x+cardW/2-205,y+175,410,475);c.restore();}catch{}}
+    c.textAlign="center";c.fillStyle="#fff";c.font="400 58px Impact,Arial Narrow,sans-serif";c.fillText(String(item.playerName).toUpperCase(),x+cardW/2,y+670,cardW-100);c.fillStyle="#efd16f";c.fillRect(x+110,y+705,cardW-220,4);
+    const stats=["PAC","SHO","PAS","DRI","DEF","PHY"];c.font="900 42px Arial";stats.forEach((key,i)=>{const col=i%2,row=Math.floor(i/2),sx=x+(col?cardW*.64:cardW*.36),sy=y+790+row*105;c.textAlign="right";c.fillStyle="#efd16f";c.fillText(String(card.attributes?.[key]||50),sx-12,sy);c.textAlign="left";c.fillStyle="#fff";c.fillText(key,sx,sy);});c.textAlign="center";c.fillStyle="#b9deed";c.font="700 27px Arial";c.fillText(`${Number(item.avgRating||0).toFixed(2)} AVG · ${item.matchesRated} RATED`,x+cardW/2,y+1155);
+  }
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));return blob?new File([blob],`mlfc-${String(payload.season?.name||"season").toLowerCase().replace(/[^a-z0-9]+/g,"-")}-top-20.png`,{type:"image/png"}):null;
+}
+
+async function shareLeaders(root,button){
+  const seasonId=MEM.selectedSeasonId;if(!seasonId)return toastWarn("Select a season first.");setDisabled(button,true,"Building HD image…");
+  try{const payload=await API.adminFcCardLeaders(seasonId);if(!payload?.ok)throw new Error(payload?.error||"Could not load leaders");if(!payload.cards?.length)throw new Error("No rated players in this season yet.");const file=await leadersBoardFile(payload);if(!file)throw new Error("Could not create the image");const text=`⚽ MLFC ${payload.season.name} · Top ${payload.cards.length} rated players`;
+    if(navigator.canShare?.({files:[file]}))await navigator.share({title:"MLFC season leaders",text,files:[file]});else{const link=document.createElement("a");link.href=URL.createObjectURL(file);link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);toastInfo("HD leaders image downloaded.");}
+  }catch(error){if(error?.name!=="AbortError")toastError(error?.message||"Could not share leaders");}finally{setDisabled(button,false);}
+}
 function currentHashPath() { return (location.hash || "#/match").split("?")[0]; }
 function currentHashQuery() { return new URLSearchParams(location.hash.split("?")[1] || ""); }
 function stillOnAdmin(routeToken) {
@@ -949,6 +970,7 @@ function renderLogin(root) {
         <button id="login" class="btn primary">Login</button>
         <button id="clear" class="btn gray">Clear key</button>
       </div>
+      <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button" style="margin-top:10px">Share top 20 FC Cards</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </details>
   `;
@@ -1317,6 +1339,8 @@ function bindSeasonMgmt(root, routeToken) {
   const createBtn = root.querySelector("#createSeason");
   const updateBtn = root.querySelector("#updateSeason");
   const cancelBtn = root.querySelector("#cancelSeasonEdit");
+  const shareLeadersBtn=root.querySelector("#shareSeasonLeaders");
+  if(shareLeadersBtn) shareLeadersBtn.onclick=()=>shareLeaders(root,shareLeadersBtn);
 
   function setMode(editSeasonId = "") {
     MEM.editSeasonId = editSeasonId;

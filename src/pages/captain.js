@@ -730,6 +730,12 @@ export async function renderCaptainPage(root, query) {
     const oppList = isInternalCaptainView ? ordered.filter(p => isOpponentPlayer(p)) : ordered;
     const myList = isInternalCaptainView ? ordered.filter(p => !isOpponentPlayer(p)) : [];
 
+    const boostControlHtml=(p,canEdit)=>{
+      if(!canEdit) return "";
+      const d=drafts[p]||{};
+      return `<div class="ratingBoost"><span>Boost</span><select class="input" data-boost-attribute="${encodeURIComponent(p)}" aria-label="Boost attribute for ${p}"><option value="">None</option>${["PAC","SHO","PAS","DRI","DEF","PHY"].map(value=>`<option value="${value}"${d.boostAttribute===value?" selected":""}>${value}</option>`).join("")}</select><select class="input" data-boost-multiplier="${encodeURIComponent(p)}" aria-label="Boost strength for ${p}">${[-3,-2,-1,1,2,3].map(value=>`<option value="${value}"${Number(d.boostMultiplier||1)===value?" selected":""}>${value>0?"+":""}${value}×</option>`).join("")}</select></div>`;
+    };
+
     function playerCardHtml(p) {
       const tm = safeUpper(teamMap[p] || "BLUE");
       const canEdit = ratingsEnabled && isOpponentPlayer(p);
@@ -788,6 +794,7 @@ export async function renderCaptainPage(root, query) {
                 ${assistsInput}
               </div>
             </div>
+            ${boostControlHtml(p,canEdit)}
           ` : `
             <div class="small muted" style="margin-top:10px">${ratingsEnabled ? "No rating box (not opponent)." : "Ratings unlock at kick-off."}</div>
           `}
@@ -823,6 +830,7 @@ export async function renderCaptainPage(root, query) {
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
             <td style="padding:10px; text-align:center">
+              ${boostControlHtml(p,canEdit)}
               <button class="btn gray" data-remove="${encodeURIComponent(p)}" style="padding:8px 10px; border-radius:12px">Remove</button>
             </td>
           </tr>
@@ -865,7 +873,7 @@ export async function renderCaptainPage(root, query) {
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
-            <td style="padding:10px; text-align:center">${type === "OPPONENT" ? `<span class="small muted">Admin managed</span>` : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
+            <td style="padding:10px; text-align:center">${boostControlHtml(p,canEdit)}${type === "OPPONENT" ? `<span class="small muted">Admin managed</span>` : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
           </tr>
         `;
       }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
@@ -947,6 +955,12 @@ export async function renderCaptainPage(root, query) {
         saveRatingsDraft();
       });
     });
+    root.querySelectorAll("[data-boost-attribute]").forEach(input=>input.addEventListener("change",()=>{
+      const p=decodeURIComponent(input.dataset.boostAttribute);drafts[p]=drafts[p]||{};drafts[p].boostAttribute=input.value;drafts[p].boostMultiplier=input.value?Number(drafts[p].boostMultiplier||1):0;saveRatingsDraft();renderRows();
+    }));
+    root.querySelectorAll("[data-boost-multiplier]").forEach(input=>input.addEventListener("change",()=>{
+      const p=decodeURIComponent(input.dataset.boostMultiplier);drafts[p]=drafts[p]||{};drafts[p].boostMultiplier=Number(input.value||1);saveRatingsDraft();
+    }));
   }
 
   renderRows();
@@ -1020,6 +1034,7 @@ export async function renderCaptainPage(root, query) {
             goals: goalsVal,
             assists: assistsVal,
             teamAtMatch: teamMap[p] || ""
+            ,boostAttribute: String(d.boostAttribute||""), boostMultiplier: d.boostAttribute ? Number(d.boostMultiplier||1) : 0
           });
         }
 

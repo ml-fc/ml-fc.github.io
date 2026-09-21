@@ -18,6 +18,8 @@ export const API = {
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
   playerHistory: (seasonId, playerName) => apiGet({ action: "player_history", seasonId, playerName }),
+  playerFcCard: (seasonId, playerName) => apiGet({ action: "player_fc_card", seasonId, playerName }),
+  adminFcCardLeaders: (seasonId) => apiGet({ action: "admin_fc_card_leaders", seasonId }),
 
   // public matches (season-scoped)
   publicOpenMatches: (seasonId) => apiGet({ action: "public_open_matches", seasonId }),
@@ -68,6 +70,7 @@ export const API = {
   // user self-service
   userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
   userSetPhone: (phone) => apiPost({ action: "user_set_phone", phone }),
+  userSetStatus: (playerStatus) => apiPost({ action: "user_set_status", playerStatus }),
   userSetPhoto: (blob) => {
     const form = new FormData();
     form.set("action", "user_set_photo");

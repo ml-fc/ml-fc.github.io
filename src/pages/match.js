@@ -496,7 +496,6 @@ async function availabilityImageFile(match, availability) {
   const available = { title: "AVAILABLE", names: groups.yes, color: "#45dc8a", maximum };
   const lowerGroups = [
     { title: "WAITING LIST", names: groups.waiting, color: "#ffe16a" },
-    { title: "UNAVAILABLE", names: groups.no, color: "#ff8b78" },
   ];
   const allGroups = [available, ...lowerGroups];
   const photoByName = new Map((availability || []).map(row => [String(row.playerName || "").trim().toLowerCase(), row.photoUrl]));
@@ -604,8 +603,8 @@ async function availabilityImageFile(match, availability) {
 
   drawPanel(available, margin, contentTop, logicalWidth - margin * 2, availableHeight, 2);
   const lowerTop = contentTop + availableHeight + gap;
-  const lowerWidth = (logicalWidth - margin * 2 - gap) / 2;
-  lowerGroups.forEach((group, index) => drawPanel(group, margin + index * (lowerWidth + gap), lowerTop, lowerWidth, lowerHeight, lowerColumns[index]));
+  const lowerWidth = logicalWidth - margin * 2;
+  lowerGroups.forEach((group, index) => drawPanel(group, margin, lowerTop, lowerWidth, lowerHeight, lowerColumns[index]));
   context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
   context.fillText("Generated from the live MLFC availability list", 54, logicalHeight - 35);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
@@ -1565,7 +1564,8 @@ const cap = availabilityLimitForMatch(m);
 
   const teamsSelected = Array.isArray(data.teams) && data.teams.length > 0;
   const ratingsClosed = Number(m.ratingsLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
-  const availabilityClosed = Number(m.availabilityLocked || 0) === 1 || String(m.availabilityLocked || "").toUpperCase() === "TRUE";
+  const profileUnavailable = meName && String(me?.playerStatus||"ACTIVE").toUpperCase()!=="ACTIVE";
+  const availabilityClosed = profileUnavailable || Number(m.availabilityLocked || 0) === 1 || String(m.availabilityLocked || "").toUpperCase() === "TRUE";
   // Captain assignment grants immediate access; it is independent of availability.
   const captainPageEnabled = isCaptain;
   const hideAvailability = false;
@@ -1731,7 +1731,9 @@ const cap = availabilityLimitForMatch(m);
             ? `
               ${ratingsClosed
                 ? `<div class="small"><b>Availability is closed.</b></div>`
-                : (availabilityClosed
+                : (profileUnavailable
+                    ? `<div class="small"><b>Your profile is ${escapeHtml(String(me.playerStatus).toLowerCase())}.</b> Change it to Active in Profile before updating availability.</div>`
+                    : availabilityClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
                         ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${cap} available), you can join the waiting list.</div>`
@@ -1741,9 +1743,7 @@ const cap = availabilityLimitForMatch(m);
               `}
               ${ratingsClosed ? `` : `
                 <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-                  ${availabilityClosed ? `` : `<button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>`}
-                  <button class="btn bad" id="btnNo" ${meName ? "" : "disabled"}>NO</button>
-                  <button class="btn warn" id="btnWait" disabled>WAITING LIST</button>
+                  ${profileUnavailable ? `` : `${availabilityClosed ? `` : `<button class="btn good" id="btnYes" ${meName ? "" : "disabled"}>YES</button>`}<button class="btn bad" id="btnNo" ${meName ? "" : "disabled"}>NO</button><button class="btn warn" id="btnWait" disabled>WAITING LIST</button>`}
                 </div>
 
                 <div class="small" id="saveMsg" style="margin-top:10px"></div>
