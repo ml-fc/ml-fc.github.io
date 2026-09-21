@@ -27,6 +27,7 @@ const CARD_STATS=["PAC","SHO","PAS","DRI","DEF","PHY"];
 function fcCardHtml(card,userName){
   return `<article class="fcCard" aria-label="${esc(userName)} ${card.overall} rated ${card.position} player card">
     <div class="fcCard__shine" aria-hidden="true"></div><div class="fcCard__crest">MLFC</div>
+    ${String(card.playerStatus||"").toUpperCase()==="INJURED"?`<span class="fcCard__injured" title="Injured" aria-label="Injured">🩹</span>`:""}
     <div class="fcCard__rating"><strong>${Number(card.overall||50)}</strong><span>${esc(card.position||"CM")}</span></div>
     <div class="fcCard__photo">${card.photoUrl?`<img src="${esc(card.photoUrl)}" alt="${esc(userName)}">`:`<span>${esc(String(userName||"?").slice(0,1).toUpperCase())}</span>`}</div>
     <div class="fcCard__name">${esc(userName)}</div>
@@ -39,16 +40,15 @@ function loadImage(url){return new Promise((resolve,reject)=>{const image=new Im
 
 async function fcCardFile(card,userName,seasonName){
   const canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1350;const c=canvas.getContext("2d");
-  const gradient=c.createLinearGradient(0,0,1080,1350);gradient.addColorStop(0,"#061d33");gradient.addColorStop(.52,"#0b4772");gradient.addColorStop(1,"#071a2b");c.fillStyle=gradient;c.fillRect(0,0,1080,1350);
-  c.strokeStyle="#efcc6a";c.lineWidth=12;c.beginPath();c.moveTo(75,230);c.lineTo(190,70);c.lineTo(890,70);c.lineTo(1005,230);c.lineTo(970,1180);c.lineTo(540,1300);c.lineTo(110,1180);c.closePath();c.stroke();
-  c.globalAlpha=.12;c.strokeStyle="#8fe7ff";c.lineWidth=3;for(let x=-500;x<1400;x+=90){c.beginPath();c.moveTo(x,1250);c.lineTo(x+700,100);c.stroke();}c.globalAlpha=1;
-  c.fillStyle="#f5dc8b";c.font="900 132px Impact, Arial Narrow, sans-serif";c.fillText(String(card.overall||50),105,245);c.font="900 55px Arial";c.fillText(String(card.position||"CM"),120,315);
-  c.textAlign="right";c.font="900 38px Arial";c.fillText("MLFC",930,135);c.textAlign="left";
-  if(card.photoUrl){try{const image=await loadImage(card.photoUrl);c.save();c.beginPath();c.arc(540,430,220,0,Math.PI*2);c.clip();c.drawImage(image,320,180,440,500);c.restore();}catch{}}
-  c.textAlign="center";c.fillStyle="#fff";c.font="900 66px Impact, Arial Narrow, sans-serif";c.fillText(String(userName).toUpperCase(),540,735,820);
-  c.fillStyle="#efcc6a";c.fillRect(180,775,720,4);c.font="900 49px Arial";
-  CARD_STATS.forEach((key,index)=>{const col=index%2,row=Math.floor(index/2),x=col?695:385,y=855+row*105;c.textAlign="right";c.fillText(String(card.attributes?.[key]||50),x-25,y);c.textAlign="left";c.fillStyle="#fff";c.fillText(key,x,y);c.fillStyle="#efcc6a";});
-  c.textAlign="center";c.fillStyle="#bfe9fb";c.font="700 28px Arial";c.fillText(`${seasonName} · ${card.status} · ${card.appearances} APPEARANCES`,540,1215,850);
+  const gradient=c.createLinearGradient(0,0,1080,1350);gradient.addColorStop(0,"#fff0a5");gradient.addColorStop(.48,"#e4b83c");gradient.addColorStop(1,"#b67a12");c.fillStyle=gradient;c.fillRect(0,0,1080,1350);
+  c.strokeStyle="#61450e";c.lineWidth=10;c.beginPath();c.moveTo(80,190);c.quadraticCurveTo(155,180,185,72);c.quadraticCurveTo(540,8,895,72);c.quadraticCurveTo(925,180,1000,190);c.lineTo(1000,1125);c.quadraticCurveTo(980,1250,540,1320);c.quadraticCurveTo(100,1250,80,1125);c.closePath();c.stroke();
+  c.globalAlpha=.18;c.strokeStyle="#fff7c7";c.lineWidth=5;for(let x=-700;x<1500;x+=65){c.beginPath();c.moveTo(x,1180);c.lineTo(x+900,60);c.stroke();}c.globalAlpha=1;
+  c.fillStyle="#322407";c.font="900 142px Impact, Arial Narrow, sans-serif";c.fillText(String(card.overall||50),112,270);c.font="900 64px Arial";c.fillText(String(card.position||"CM"),125,342);
+  c.textAlign="right";c.font="900 38px Arial";c.fillText("MLFC",925,145);if(String(card.playerStatus||"").toUpperCase()==="INJURED"){c.font="58px Arial";c.fillText("🩹",925,215);}c.textAlign="left";
+  if(card.photoUrl){try{const image=await loadImage(card.photoUrl);c.save();c.beginPath();c.ellipse(590,455,285,330,0,0,Math.PI*2);c.clip();c.drawImage(image,305,110,570,690);c.restore();}catch{}}
+  c.fillStyle="rgba(255,232,134,.92)";c.fillRect(82,755,916,170);c.textAlign="center";c.fillStyle="#2e2107";c.font="900 76px Impact, Arial Narrow, sans-serif";c.fillText(String(userName).toUpperCase(),540,855,850);
+  c.font="900 31px Arial";CARD_STATS.forEach((key,index)=>{const x=135+index*162;c.fillText(key,x,980);c.font="900 61px Arial";c.fillText(String(card.attributes?.[key]||50),x,1045);c.font="900 31px Arial";});
+  c.fillStyle="#3c2a08";c.font="700 27px Arial";c.fillText(`${seasonName} · ${card.status} · ${card.appearances} APPEARANCES`,540,1190,850);c.font="900 35px Arial";c.fillText("MANOR LAKES FC",540,1250);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));return blob?new File([blob],`mlfc-${String(userName).toLowerCase().replace(/[^a-z0-9]+/g,"-")}-card.png`,{type:"image/png"}):null;
 }
 
@@ -88,7 +88,7 @@ export async function renderSeasonPage(root) {
       <div class="seasonHistory__head"><div><div class="stepEyebrow">Every appearance</div><div class="h1" id="historyTitle">Match history</div></div><span class="badge">PRIVATE</span></div>
       <div id="seasonMatches" class="seasonHistory__loading" aria-live="polite">Loading match history…</div>
     </section>
-    <dialog class="fcLogicDialog" id="fcLogicDialog" aria-labelledby="fcLogicTitle"><div class="fcLogicDialog__sheet"><header><div><div class="stepEyebrow">FC Card guide</div><div class="h1" id="fcLogicTitle">How your card grows</div></div><button type="button" class="fcLogicDialog__close" aria-label="Close">×</button></header><div class="fcLogicDialog__scroll"><p><b>Everyone starts at 50.</b> Your card changes once per week, even if you play twice.</p><ul><li><b>9+:</b> full weekly growth</li><li><b>8–8.9:</b> 80% growth</li><li><b>7–7.9:</b> 55% growth</li><li><b>6–6.9:</b> small growth</li><li><b>Below 6:</b> a small drop</li></ul><p>Goals help SHO. Assists help PAS. A hat-trick adds an extra SHO point.</p><p><b>Boost:</b> a captain can give half-strength ±1× to ±3×. An admin Boost has full strength.</p><p>Your position follows where you regularly play. It changes how all six attributes combine into OVR.</p><p><b>Example:</b> In a 16-week season, a 9.0 week gives about +3.1 development. Two games that week are averaged, not doubled.</p><p>After 10 appearances, Injured players receive reduced protected growth. Unavailable and Inactive players do not.</p><p>Every attribute is capped at 99. The card becomes Final when the season closes.</p></div></div></dialog>`;
+    <dialog class="fcLogicDialog" id="fcLogicDialog" aria-labelledby="fcLogicTitle"><div class="fcLogicDialog__sheet"><header><div><div class="stepEyebrow">FC Card guide</div><div class="h1" id="fcLogicTitle">How your card grows</div></div><button type="button" class="fcLogicDialog__close" aria-label="Close">×</button></header><div class="fcLogicDialog__scroll"><p><b>Every card starts at 50</b> and can reach 99. The season length decides the weekly step, so a consistently excellent player can reach 99 by the final week.</p><h3>Match rating</h3><ul><li><b>9.0+:</b> 100% of the weekly step</li><li><b>8.0–8.9:</b> 80%</li><li><b>7.0–7.9:</b> 55%</li><li><b>6.0–6.9:</b> 25%</li><li><b>5.0–5.9:</b> small decrease</li><li><b>Below 5:</b> larger decrease</li></ul><p>Two matches in one week are averaged, so playing twice cannot double the weekly growth.</p><h3>Stats and Boosts</h3><p>Goals add a little to <b>SHO</b>, assists add a little to <b>PAS</b>, and a hat-trick adds an extra SHO point.</p><p>A captain can give a half-strength <b>Boost</b> from −3× to +3×. An admin Boost has full strength. Attributes never rise above 99.</p><h3>Position and OVR</h3><p>Your most-played field position becomes the card position. OVR uses all six attributes, with extra weight on the skills important to that position—for example, SHO matters more for ST and DEF matters more for CB.</p><h3>Missing matches</h3><p>After 10 appearances, an Injured player receives reduced protected growth based on their own season average. Unavailable and Inactive players receive no protected growth. An Active player who misses 10 consecutive club matches is marked Inactive automatically.</p><h3>Example</h3><p>In a 16-week season, a 9.0 week gives about +3.1 development. If you play twice and receive 8.0 and 9.0, the week uses the 8.5 average. Your card becomes Final when the season closes.</p></div></div></dialog>`;
 
   const out = await API.mySeasonStats("", true).catch(() => null);
   if (!out?.ok) {

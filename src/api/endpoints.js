@@ -58,6 +58,7 @@ export const API = {
   adminShareTeams: (matchId) => apiPost({ action: "admin_share_teams", matchId }),
   adminUsers: () => apiGet({ action: "admin_users" }),
   adminSetAdmin: (name, isAdmin) => apiPost({ action: "admin_set_admin", name, isAdmin: isAdmin ? 1 : 0 }),
+  adminSetStatus: (name, playerStatus) => apiPost({ action: "admin_set_status", name, playerStatus }),
   adminSetPassword: (name, password) => apiPost({ action: "admin_set_password", name, password }),
   adminDeleteUser: (name) => apiPost({ action: "admin_delete_user", name }),
   adminBroadcastNotification: (payload) => apiPost({ action: "admin_broadcast_notification", ...payload }),

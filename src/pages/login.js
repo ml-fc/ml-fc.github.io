@@ -67,12 +67,7 @@ export async function renderLoginPage(root) {
           <button class="btn gray" id="openPasswordDialog" type="button">Password</button>
           <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
-        <div class="profileStatus" aria-labelledby="profileStatusTitle">
-          <div><div class="field__label" id="profileStatusTitle">Player status</div><div class="small" id="profileStatusHelp">Only Active players can update match availability.</div></div>
-          <div class="profileStatus__choices" role="radiogroup" aria-label="Player status">
-            ${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}">${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}
-          </div>
-        </div>
+        <button class="profileStatusCard" id="openStatusDialog" type="button" aria-haspopup="dialog"><span><span class="field__label">Player status</span><strong>${String(me.playerStatus||"ACTIVE")==="INJURED"?"🩹 ":""}${esc(String(me.playerStatus||"ACTIVE")[0]+String(me.playerStatus||"ACTIVE").slice(1).toLowerCase())}</strong><small>Only Active players can update match availability.</small></span><b aria-hidden="true">Change ›</b></button>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
           <button class="btn gray" id="goSeason">My season</button>
@@ -95,6 +90,7 @@ export async function renderLoginPage(root) {
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
+      <dialog id="statusDialog" class="requiredPhotoDialog" aria-labelledby="statusDialogTitle"><div class="requiredPhotoSheet"><div class="stepEyebrow">Availability</div><div class="h1" id="statusDialogTitle">Set player status</div><p>Choose the status that best reflects whether you can play.</p><div class="profileStatus__choices" role="radiogroup" aria-label="Player status">${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}">${status==="INJURED"?"🩹 ":""}${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}</div><div class="small">Active lets you answer match availability. After 10 consecutive missed club matches, Active changes automatically to Inactive.</div><button class="requiredPhotoLogout" id="closeStatusDialog" type="button">Cancel</button></div></dialog>
       <dialog id="profilePhoneDialog" class="requiredPhotoDialog" aria-labelledby="profilePhoneTitle">
         <div class="requiredPhotoSheet">
           <div class="requiredPhoneIcon" aria-hidden="true">☎</div>
@@ -154,6 +150,9 @@ export async function renderLoginPage(root) {
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
+    const statusDialog=root.querySelector("#statusDialog");
+    root.querySelector("#openStatusDialog").onclick=()=>statusDialog.showModal();
+    root.querySelector("#closeStatusDialog").onclick=()=>statusDialog.close();
     root.querySelectorAll("[data-player-status]").forEach(button=>button.onclick=async()=>{
       const next=button.dataset.playerStatus;
       if(next===String(me.playerStatus||"ACTIVE")) return;

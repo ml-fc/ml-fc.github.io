@@ -44,7 +44,7 @@ async function leadersBoardFile(payload){
   c.fillStyle="#061827";c.fillRect(0,0,canvas.width,canvas.height);c.fillStyle="#f0d473";c.font="400 104px Impact, Arial Narrow, sans-serif";c.fillText("MLFC SEASON LEADERS",pad,125);c.fillStyle="#b8dcec";c.font="700 42px Arial";c.fillText(`${payload.season?.name||"Season"} · TOP ${cards.length} RATED PLAYERS`,pad,190);
   for(let index=0;index<cards.length;index++){
     const item=cards[index],card=item.card||{},x=pad+(index%cols)*(cardW+gap),y=header+Math.floor(index/cols)*(cardH+gap);const g=c.createLinearGradient(x,y,x+cardW,y+cardH);g.addColorStop(0,"#0a2942");g.addColorStop(.55,"#0c5482");g.addColorStop(1,"#071c30");c.fillStyle=g;c.fillRect(x,y,cardW,cardH);c.strokeStyle="#efd16f";c.lineWidth=10;c.strokeRect(x+14,y+14,cardW-28,cardH-28);
-    c.fillStyle="#f3d77b";c.font="400 106px Impact,Arial Narrow,sans-serif";c.fillText(String(card.overall||50),x+55,y+135);c.fillStyle="#fff";c.font="900 43px Arial";c.fillText(String(card.position||"CM"),x+65,y+195);c.textAlign="right";c.fillStyle="#efd16f";c.font="900 34px Arial";c.fillText(`#${index+1} MLFC`,x+cardW-55,y+75);c.textAlign="left";
+    c.fillStyle="#f3d77b";c.font="400 106px Impact,Arial Narrow,sans-serif";c.fillText(String(card.overall||50),x+55,y+135);c.fillStyle="#fff";c.font="900 43px Arial";c.fillText(String(card.position||"CM"),x+65,y+195);c.textAlign="right";c.fillStyle="#efd16f";c.font="900 34px Arial";c.fillText(`#${index+1} MLFC`,x+cardW-55,y+75);if(String(card.playerStatus||"").toUpperCase()==="INJURED"){c.font="54px Arial";c.fillText("🩹",x+cardW-55,y+145);}c.textAlign="left";
     if(card.photoUrl){try{const image=await loadCanvasImage(card.photoUrl);c.save();c.beginPath();c.arc(x+cardW/2,y+390,205,0,Math.PI*2);c.clip();c.drawImage(image,x+cardW/2-205,y+175,410,475);c.restore();}catch{}}
     c.textAlign="center";c.fillStyle="#fff";c.font="400 58px Impact,Arial Narrow,sans-serif";c.fillText(String(item.playerName).toUpperCase(),x+cardW/2,y+670,cardW-100);c.fillStyle="#efd16f";c.fillRect(x+110,y+705,cardW-220,4);
     const stats=["PAC","SHO","PAS","DRI","DEF","PHY"];c.font="900 42px Arial";stats.forEach((key,i)=>{const col=i%2,row=Math.floor(i/2),sx=x+(col?cardW*.64:cardW*.36),sy=y+790+row*105;c.textAlign="right";c.fillStyle="#efd16f";c.fillText(String(card.attributes?.[key]||50),sx-12,sy);c.textAlign="left";c.fillStyle="#fff";c.fillText(key,sx,sy);});c.textAlign="center";c.fillStyle="#b9deed";c.font="700 27px Arial";c.fillText(`${Number(item.avgRating||0).toFixed(2)} AVG · ${item.matchesRated} RATED`,x+cardW/2,y+1155);
@@ -1763,15 +1763,17 @@ async function renderUsers(root, opts = {}) {
               ? "Only admins can change admin rights"
               : (isSelf ? "You cannot change your own admin access" : (isAdmin ? "Remove admin access" : "Grant admin access"));
             const initial = String(u.name || "?").trim().charAt(0).toUpperCase();
+            const playerStatus = String(u.playerStatus || "ACTIVE").toUpperCase();
             return `
               <article class="userRow" role="listitem">
                 <span class="userRow__avatar" aria-hidden="true">${escapeHtml(initial)}</span>
                 <div class="userRow__identity">
-                  <strong>${escapeHtml(u.name)}${isSelf ? ` <span class="userRow__you">You</span>` : ""}</strong>
+                  <strong>${escapeHtml(u.name)}${playerStatus === "INJURED" ? ` <span title="Injured" aria-label="Injured">🩹</span>` : ""}${isSelf ? ` <span class="userRow__you">You</span>` : ""}</strong>
                   <span>${escapeHtml(u.phone || "No phone number")}</span>
                 </div>
                 <span class="userRole ${isAdmin ? "userRole--admin" : ""}">${isAdmin ? "Admin" : "Member"}</span>
                 <div class="usersActions">
+                  <label class="userStatus"><span class="visuallyHidden">Status for ${escapeHtml(u.name)}</span><select class="userStatus__select" data-user-status="${encodeURIComponent(u.name)}" aria-label="Status for ${escapeHtml(u.name)}">${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status => `<option value="${status}" ${status === playerStatus ? "selected" : ""}>${status[0] + status.slice(1).toLowerCase()}</option>`).join("")}</select></label>
                   <button class="userAction" data-toggle-admin="${encodeURIComponent(u.name)}" ${toggleDisabled ? "disabled" : ""} title="${toggleTitle}">${isAdmin ? "Revoke admin" : "Make admin"}</button>
                   <button class="userAction" data-reset-pass="${encodeURIComponent(u.name)}" title="Change password">Password</button>
                   <button class="userAction userAction--danger" data-del-user="${encodeURIComponent(u.name)}" ${isSelf ? "disabled" : ""} title="${isSelf ? "You cannot delete your own admin account" : "Delete user"}">Delete</button>
@@ -1844,6 +1846,27 @@ async function renderUsers(root, opts = {}) {
       toastSuccess("User deleted");
       renderResults();
     }
+  };
+
+  results.onchange = async (event) => {
+    const select = event.target.closest("[data-user-status]");
+    if (!select) return;
+    const name = decodeURIComponent(select.getAttribute("data-user-status") || "");
+    const current = users.find(user => user.name === name);
+    const previous = String(current?.playerStatus || "ACTIVE").toUpperCase();
+    const next = String(select.value || "").toUpperCase();
+    if (next === previous) return;
+    select.disabled = true;
+    const res = await API.adminSetStatus(name, next).catch(() => null);
+    if (!res?.ok) {
+      select.value = previous;
+      select.disabled = false;
+      return toastError(res?.error || "Could not update player status");
+    }
+    users = users.map(user => user.name === name ? { ...user, playerStatus: res.playerStatus } : user);
+    lsSet(LS_USERS_CACHE, { ts: Date.now(), users });
+    toastSuccess(`${name} is now ${res.playerStatus[0] + res.playerStatus.slice(1).toLowerCase()}`);
+    renderResults();
   };
 
   renderResults();

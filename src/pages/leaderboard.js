@@ -102,6 +102,7 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQue
       isEligible && maxAssists > 0 && Number(x.assists || 0) === maxAssists ? `<span class="playerAward" title="Top assists" aria-label="Top assists">🎯</span>` : "",
       isEligible && Number(x.matchesRated || 0) > 0 && Number(x.avgRating || 0) === maxRating ? `<span class="playerAward" title="Top rated" aria-label="Top rated">⭐</span>` : "",
       Number(x.potmAwards || 0) > 0 ? `<span class="playerAward" title="${Number(x.potmAwards)} Player of the Match award${Number(x.potmAwards) === 1 ? "" : "s"}" aria-label="Player of the Match awards">🏆</span>` : "",
+      String(x.playerStatus || "").toUpperCase() === "INJURED" ? `<span class="playerAward" title="Injured" aria-label="Injured">🩹</span>` : "",
     ].join("");
     const ratingCols = showRating ? `
       <td class="lb__cell lb__num lb__rating"><strong>${Number(x.matchesRated || 0) ? Number(x.avgRating || 0).toFixed(2) : "—"}</strong><small>${Number(x.matchesRated || 0)} rated</small></td>
@@ -153,7 +154,7 @@ function renderPlayerHistory(dialog, data) {
 
 function leaderboardCardHtml(card,name){
   const stats=["PAC","SHO","PAS","DRI","DEF","PHY"];
-  return `<div class="leaderCardWrap"><article class="fcCard fcCard--dialog"><div class="fcCard__shine"></div><div class="fcCard__crest">MLFC</div><div class="fcCard__rating"><strong>${Number(card.overall||50)}</strong><span>${esc(card.position||"CM")}</span></div><div class="fcCard__photo">${card.photoUrl?`<img src="${esc(card.photoUrl)}" alt="${esc(name)}">`:`<span>${esc(String(name).slice(0,1))}</span>`}</div><div class="fcCard__name">${esc(name)}</div><div class="fcCard__rule"></div><div class="fcCard__stats">${stats.map(key=>`<div><b>${Number(card.attributes?.[key]||50)}</b><span>${key}</span></div>`).join("")}</div><div class="fcCard__foot"><span>${esc(card.status||"LIVE")}</span><span>${Number(card.appearances||0)} APPS</span></div></article></div>`;
+  return `<div class="leaderCardWrap"><article class="fcCard fcCard--dialog"><div class="fcCard__shine"></div><div class="fcCard__crest">MLFC</div>${String(card.playerStatus||"").toUpperCase()==="INJURED"?`<span class="fcCard__injured" title="Injured" aria-label="Injured">🩹</span>`:""}<div class="fcCard__rating"><strong>${Number(card.overall||50)}</strong><span>${esc(card.position||"CM")}</span></div><div class="fcCard__photo">${card.photoUrl?`<img src="${esc(card.photoUrl)}" alt="${esc(name)}">`:`<span>${esc(String(name).slice(0,1))}</span>`}</div><div class="fcCard__name">${esc(name)}</div><div class="fcCard__rule"></div><div class="fcCard__stats">${stats.map(key=>`<div><b>${Number(card.attributes?.[key]||50)}</b><span>${key}</span></div>`).join("")}</div><div class="fcCard__foot"><span>${esc(card.status||"LIVE")}</span><span>${Number(card.appearances||0)} APPS</span></div></article></div>`;
 }
 
 function isLeaderboardRouteActive() {
