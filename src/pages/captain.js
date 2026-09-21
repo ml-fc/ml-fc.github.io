@@ -556,6 +556,8 @@ export async function renderCaptainPage(root, query) {
         const out = await API.saveTeamPositions(code,g.team,positionRows([g],fieldPositions));
         if (!out.ok) throw new Error(out.error || "Could not save positions");
       }
+      localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
+      localStorage.removeItem(`mlfc_next_match_cache_v1:${captain.toLowerCase()}`);
       fieldEditor.status("Positions saved"); toastSuccess("Team positions saved.");
     } catch(e) { fieldEditor.status(e.message); toastError(e.message); }
     finally { button.disabled = false; }

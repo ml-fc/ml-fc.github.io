@@ -1,19 +1,66 @@
 import { playerPhotoHtml } from "./player_photo.js";
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const clamp = n => Math.max(7, Math.min(93, n));
+export const FIELD_POSITIONS = Object.freeze([
+  { code:'LS',  name:'Left striker',         positionX:42, positionY:10 },
+  { code:'ST',  name:'Striker',              positionX:50, positionY:8 },
+  { code:'RS',  name:'Right striker',        positionX:58, positionY:10 },
+  { code:'LW',  name:'Left wing',            positionX:12, positionY:24 },
+  { code:'LF',  name:'Left forward',         positionX:28, positionY:20 },
+  { code:'CF',  name:'Centre forward',       positionX:50, positionY:20 },
+  { code:'RF',  name:'Right forward',        positionX:72, positionY:20 },
+  { code:'RW',  name:'Right wing',           positionX:88, positionY:24 },
+  { code:'CAM', name:'Attacking midfielder', positionX:50, positionY:33 },
+  { code:'LAM', name:'Left attacking midfielder',  positionX:38, positionY:33 },
+  { code:'RAM', name:'Right attacking midfielder', positionX:62, positionY:33 },
+  { code:'LM',  name:'Left midfielder',      positionX:20, positionY:48 },
+  { code:'LCM', name:'Left centre midfielder',positionX:38, positionY:48 },
+  { code:'CM',  name:'Centre midfielder',    positionX:50, positionY:48 },
+  { code:'RCM', name:'Right centre midfielder',positionX:62, positionY:48 },
+  { code:'RM',  name:'Right midfielder',     positionX:80, positionY:48 },
+  { code:'LCDM',name:'Left defensive midfielder',  positionX:38, positionY:65 },
+  { code:'CDM', name:'Defensive midfielder',       positionX:50, positionY:65 },
+  { code:'RCDM',name:'Right defensive midfielder', positionX:62, positionY:65 },
+  { code:'LWB', name:'Left wing-back',       positionX:12, positionY:72 },
+  { code:'RWB', name:'Right wing-back',      positionX:88, positionY:72 },
+  { code:'LB',  name:'Left-back',            positionX:28, positionY:82 },
+  { code:'LCB', name:'Left centre-back',     positionX:40, positionY:82 },
+  { code:'CB',  name:'Centre-back',          positionX:50, positionY:82 },
+  { code:'RCB', name:'Right centre-back',    positionX:60, positionY:82 },
+  { code:'RB',  name:'Right-back',           positionX:72, positionY:82 },
+  { code:'GK',  name:'Goalkeeper',           positionX:50, positionY:94 },
+]);
+
+export function fieldPosition(position = {}) {
+  const x = Number(position.positionX), y = Number(position.positionY);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return FIELD_POSITIONS.reduce((best, slot) => {
+    const distance = Math.hypot(slot.positionX - x, slot.positionY - y);
+    return !best || distance < best.distance ? { ...slot, distance } : best;
+  }, null);
+}
+
+export function fieldPositionCode(position) { return fieldPosition(position)?.code || ''; }
+
+const formationSlots = count => {
+  const formations = {
+    1:['GK'], 2:['GK','ST'], 3:['GK','CB','ST'], 4:['GK','LB','RB','ST'],
+    5:['GK','LB','RB','CM','ST'], 6:['GK','LB','CB','RB','CM','ST'],
+    7:['GK','LB','CB','RB','LM','RM','ST'], 8:['GK','LB','CB','RB','CM','LW','RW','ST'],
+    9:['GK','LB','CB','RB','CDM','LM','RM','CF','ST'],
+    10:['GK','LB','CB','RB','CDM','LM','RM','LW','RW','ST'],
+    11:['GK','LB','CB','RB','CDM','CM','LM','RM','LW','RW','ST'],
+  };
+  const base = formations[Math.min(11, Math.max(1, count))] || [];
+  return [...base, ...FIELD_POSITIONS.map(s=>s.code).filter(code=>!base.includes(code))].slice(0, count);
+};
 
 export function defaultPositions(players) {
   const result = Object.create(null);
-  const outfield = players.slice(1);
-  const lines = Math.max(1, Math.ceil(outfield.length / 4));
-  if (players.length) result[players[0]] = { positionX: 50, positionY: 86 };
-  let offset = 0;
-  for (let line = 0; line < lines; line++) {
-    const count = Math.ceil((outfield.length - offset) / (lines - line));
-    const positionY = lines === 1 ? 48 : 12 + (lines - 1 - line) * 44 / (lines - 1);
-    for (let i = 0; i < count; i++) result[outfield[offset++]] = { positionX: 100 * (i + 1) / (count + 1), positionY };
-  }
+  formationSlots(players.length).forEach((code, index) => {
+    const slot = FIELD_POSITIONS.find(item => item.code === code);
+    result[players[index]] = { positionX:slot.positionX, positionY:slot.positionY };
+  });
   return result;
 }
 
@@ -57,13 +104,19 @@ export function presentationPositions(players, positions = {}) {
 }
 
 export function positionMap(rows = []) {
-  return Object.fromEntries(rows.filter(r => Number.isFinite(r.positionX) && Number.isFinite(r.positionY)).map(r => [r.playerName, {positionX:r.positionX, positionY:r.positionY}]));
+  return Object.fromEntries(rows.filter(r => Number.isFinite(r.positionX) && Number.isFinite(r.positionY)).map(r => {
+    const slot = fieldPosition(r);
+    return [r.playerName, {positionX:slot.positionX, positionY:slot.positionY}];
+  }));
 }
 
 export function positionRows(groups, positions) {
   return groups.flatMap(g => {
     const defaults = defaultPositions(g.players);
-    return g.players.map(playerName => ({playerName, team:g.team, ...(positions[playerName] || defaults[playerName])}));
+    return g.players.map(playerName => {
+      const slot = fieldPosition(positions[playerName] || defaults[playerName]);
+      return {playerName, team:g.team, positionX:slot.positionX, positionY:slot.positionY};
+    });
   });
 }
 
@@ -94,13 +147,24 @@ export function mountTeamField(root, options) {
     const p = point(name);
     const captain = group.captain === name;
     const portrait = playerPhotoHtml(name, options.photos?.[name], 'playerPhoto playerPhoto--field');
-    if (preview) return `<span class="fieldPlayer fieldPlayer--preview ${upper(group)?'fieldPlayer--orange':''}" style="left:${p.x}%;top:${p.y}%">${portrait}${captain?'<em aria-label="Captain">C</em>':''}<span>${esc(name)}</span></span>`;
-    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span></button>`;
+    const role = fieldPositionCode(positions[name] || defaults()[name]);
+    if (preview) return `<span class="fieldPlayer fieldPlayer--preview ${upper(group)?'fieldPlayer--orange':''}" style="left:${p.x}%;top:${p.y}%">${portrait}${captain?'<em aria-label="Captain">C</em>':''}<span>${esc(name)}</span><small>${role}</small></span>`;
+    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(role)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span><small>${role}</small></button>`;
+  }
+
+  function slotMarkers(preview) {
+    if (preview) return '';
+    return groups.flatMap(group => FIELD_POSITIONS.map(slot => {
+      const x = upper(group) ? 100-slot.positionX : slot.positionX;
+      const y = upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2;
+      return `<span class="fieldSlot ${upper(group)?'fieldSlot--upper':''}" style="left:${x}%;top:${y}%" aria-hidden="true">${slot.code}</span>`;
+    })).join('');
   }
 
   function pitchMarkup(preview = false) {
     return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}" aria-label="${preview?'Team field preview':'Shared team field'}">
       <div class="teamField__circle" aria-hidden="true"></div>
+      ${slotMarkers(preview)}
       ${groups.flatMap(group => group.players.map(name => playerMarker(name, group, preview))).join('')}
       ${!groups.some(group => group.players.length) ? '<span class="teamField__empty">No players assigned</span>' : ''}
     </div>`;
@@ -116,7 +180,12 @@ export function mountTeamField(root, options) {
     const old = owner(name);
     const target = options.onAssign ? (groups.find(group => upper(group) === (y < 50)) || groups[0]) : old;
     if (!target) return;
-    positions[name] = {positionX:clamp(upper(target) ? 100-x : x), positionY:clamp(upper(target) ? (50-y)*2 : (y-50)*2)};
+    const local = { positionX:upper(target) ? 100-x : x, positionY:upper(target) ? (50-y)*2 : (y-50)*2 };
+    const slot = fieldPosition(local);
+    const occupying = target.players.find(player => player !== name && fieldPositionCode(positions[player] || defaults()[player]) === slot.code);
+    const previous = positions[name] || defaults()[name];
+    positions[name] = {positionX:slot.positionX, positionY:slot.positionY};
+    if (occupying && old === target && previous) positions[occupying] = {positionX:previous.positionX, positionY:previous.positionY};
     selected = name;
     root.dataset.selected = name;
     if (old !== target) options.onAssign(name, target.team);
@@ -190,7 +259,7 @@ export function mountTeamField(root, options) {
         root.querySelectorAll('.fieldPlayer').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });
       };
       button.onkeydown = event => {
-        const delta={ArrowLeft:[-2,0],ArrowRight:[2,0],ArrowUp:[0,-2],ArrowDown:[0,2]}[event.key];
+        const delta={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[event.key];
         if (!delta || !owner(name) || !canMove(name)) return;
         event.preventDefault(); const p=point(name); place(name,p.x+delta[0],p.y+delta[1]);
         root.querySelectorAll('.fieldPlayer').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });

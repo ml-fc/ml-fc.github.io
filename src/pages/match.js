@@ -3,7 +3,7 @@ import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
-import { defaultPositions, presentationPositions } from "../ui/team_field.js";
+import { defaultPositions, fieldPositionCode } from "../ui/team_field.js";
 import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
@@ -233,7 +233,6 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
   const defaults = defaultPositions(players);
   const savedPositions = Object.fromEntries(rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
-  const displayPositions = presentationPositions(players, savedPositions);
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
     <div class="digitalTeam__pitch digitalTeam__pitch--positioned"><span class="digitalTeam__centre" aria-hidden="true"></span>
@@ -241,11 +240,11 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const player = String(row.playerName || "").trim();
         if (!player) return "";
         const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-        const rawX = displayPositions[player]?.positionX;
-        const rawY = displayPositions[player]?.positionY;
+        const rawX = savedPositions[player]?.positionX;
+        const rawY = savedPositions[player]?.positionY;
         const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
         const y = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
-        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span></div>`;
+        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -268,18 +267,17 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
         const players = team.rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
         const defaults = defaultPositions(players);
         const savedPositions = Object.fromEntries(team.rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
-        const displayPositions = presentationPositions(players, savedPositions);
         return team.rows.map((row) => {
           const player = String(row.playerName || "").trim();
           if (!player) return "";
           const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-          const rawX = displayPositions[player]?.positionX;
-          const rawY = displayPositions[player]?.positionY;
+          const rawX = savedPositions[player]?.positionX;
+          const rawY = savedPositions[player]?.positionY;
           const positionX = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
           const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
           const x = team.upper ? 100 - positionX : positionX;
           const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
-          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span></div>`;
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
         });
       }).join("")}
     </div>
@@ -1026,7 +1024,7 @@ function renderNextMatchDashboard(host, data) {
   const hasScore = String(score.home ?? "") !== "" && String(score.away ?? "") !== "";
   const team = String(assignment.team || "").toUpperCase();
   const teamName = String(assignment.teamName || team);
-  const fieldRole = String(assignment.fieldRole || "").toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+  const fieldRole = String(assignment.fieldRole || "").toUpperCase();
   const roleLabel = assignment.isCaptain ? "Captain" : team ? "Player" : "Check back after team selection.";
   const action = match.contextualAction || null;
   const canRespond = Boolean(match.availability?.canRespond);
@@ -1054,7 +1052,7 @@ function renderNextMatchDashboard(host, data) {
           <strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>
           <small>${escapeHtml(availability.detail)}</small>
         </div>
-        ${availabilityStatus === "YES" ? `<div class="nextMatch__state">
+        ${team || availabilityStatus === "YES" ? `<div class="nextMatch__state">
           <span class="nextMatch__label">Your role</span>
           <strong>${assignment.isCaptain ? `<span class="badge nextMatch__captainTag" aria-label="Captain">C</span> ` : ""}${team ? escapeHtml(`${teamName} team${fieldRole ? ` · ${fieldRole}` : ""}`) : "Team not assigned"}</strong>
           <small>${escapeHtml(roleLabel)}</small>
