@@ -31,6 +31,11 @@ function internationalPhone(countrySelect, numberInput) {
   return `${String(countrySelect?.value || "61").replace(/\D+/g, "")}${local}`;
 }
 
+function phoneDisplay(parts) {
+  const label = PHONE_COUNTRIES.find(([code]) => code === parts.country)?.[1] || "🌐";
+  return `${label.split(" ")[0]} +${parts.country} ${parts.local}`;
+}
+
 function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
 }
@@ -53,17 +58,13 @@ export async function renderLoginPage(root) {
       <div class="card">
         <div class="profileIdentity">
           ${playerPhotoHtml(me.name, me.photoUrl, "playerPhoto playerPhoto--profile")}
-          <div><div class="stepEyebrow">Player profile</div><div class="h1">${esc(me.name)}</div><div class="small">${me.isAdmin ? "<span class=\"badge\">ADMIN</span> · " : ""}Your photo appears on team sheets and POTM cards.</div></div>
+          <div><div class="stepEyebrow">Player profile</div><div class="h1">${esc(me.name)}</div>${me.phone ? `<div class="profilePhone">${esc(phoneDisplay(savedPhone))}</div>` : ""}<div class="small">${me.isAdmin ? "<span class=\"badge\">ADMIN</span> · " : ""}Your photo appears on team sheets and POTM cards.</div></div>
         </div>
         <div class="profilePhotoActions">
           <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
           <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-          <span class="small" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear photo, then crop closely around your face for the best view.</span>
-        </div>
-        <div class="profilePhotoActions">
-          <div class="field" style="flex:1 1 280px;margin:0"><label class="field__label" for="profilePhone">WhatsApp number</label><div class="phoneField"><select id="profileCountry" class="input" aria-label="Country code">${countryOptions(savedPhone.country)}</select><input id="profilePhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" value="${esc(savedPhone.local)}" aria-label="Phone number" /></div><div class="field__help">Choose the country code, then enter the number without the leading zero.</div></div>
-          <button class="btn primary" id="savePhone" type="button">${me.phone ? "Update number" : "Save number"}</button>
-          <span class="small" id="phoneStatus" role="status" aria-live="polite"></span>
+          <button class="btn gray" id="changePhone" type="button">${me.phone ? "Change number" : "Add number"}</button>
+          <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
@@ -102,6 +103,17 @@ export async function renderLoginPage(root) {
       </div>
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
+      </dialog>
+      <dialog id="profilePhoneDialog" class="requiredPhotoDialog" aria-labelledby="profilePhoneTitle">
+        <div class="requiredPhotoSheet">
+          <div class="requiredPhoneIcon" aria-hidden="true">☎</div>
+          <div class="h1" id="profilePhoneTitle">Change WhatsApp number</div>
+          <p>Choose the country code, then enter the number without the leading zero.</p>
+          <div class="phoneField"><select id="profileCountry" class="input" aria-label="Country code">${countryOptions(savedPhone.country)}</select><input id="profilePhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" value="${esc(savedPhone.local)}" aria-label="Phone number" /></div>
+          <button class="btn primary requiredPhotoChoose" id="savePhone" type="button">Save number</button>
+          <div class="small" id="phoneStatus" role="status" aria-live="polite"></div>
+          <button class="requiredPhotoLogout" id="closePhoneDialog" type="button">Cancel</button>
+        </div>
       </dialog>
       ${me.photoUrl ? "" : `<dialog id="requiredPhotoDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhotoTitle" aria-describedby="requiredPhotoHelp">
         <div class="requiredPhotoSheet">
@@ -146,6 +158,9 @@ export async function renderLoginPage(root) {
     const profilePhone = root.querySelector("#profilePhone");
     cleanPhoneInput(profilePhone);
     root.querySelector("#savePhone").onclick = () => savePhone(root.querySelector("#profileCountry"), profilePhone, root.querySelector("#phoneStatus"));
+    const profilePhoneDialog = root.querySelector("#profilePhoneDialog");
+    root.querySelector("#changePhone").onclick = () => profilePhoneDialog.showModal();
+    root.querySelector("#closePhoneDialog").onclick = () => profilePhoneDialog.close();
     const photoInput = root.querySelector("#profilePhotoInput");
     const photoStatus = root.querySelector("#profilePhotoStatus");
     const requiredPhotoStatus = root.querySelector("#requiredPhotoStatus");
