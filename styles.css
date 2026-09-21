@@ -966,6 +966,45 @@ a:hover { text-decoration: underline; }
   outline:none;
   background:rgba(11,18,32,0.08);
 }
+.playerSelectionChips{
+  flex:1 0 100%;
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:10px;
+}
+.playerSelectionChips[hidden]{display:none}
+.playerSelectionChip{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:38px;
+  max-width:100%;
+  border:1px solid rgba(24,148,92,.28);
+  border-radius:999px;
+  background:rgba(69,220,138,.12);
+  color:var(--ink);
+  padding:7px 10px 7px 12px;
+  font:inherit;
+  font-size:13px;
+  font-weight:850;
+  cursor:pointer;
+}
+.playerSelectionChip span:first-child{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.playerSelectionChip span:last-child{
+  color:var(--muted);
+  font-size:18px;
+  line-height:1;
+}
+.playerSelectionChip:hover{background:rgba(69,220,138,.2)}
+.playerSelectionChip:focus-visible{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+}
 
 /* =========================
    Footer + Update banner
@@ -2286,6 +2325,8 @@ body.hasCompactMatchCommand .appbar {
 .autoTeamReport[hidden] { display:none; }.autoTeamReport strong{font-size:14px}.autoTeamReport span{font-size:12px;font-weight:850}.autoTeamReport small{grid-column:1/-1;color:#47705c;font-size:10px}
 @media(max-width:520px){.autoTeamReport{grid-template-columns:1fr;gap:4px}.autoTeamReport small{grid-column:1}}
 .whatsappBtn { color:white; background:#128c4a; border:1px solid #0c793e; box-shadow:0 8px 20px rgba(18,140,74,.18); }.whatsappBtn:hover{background:#0e7b40}.whatsappBtn:disabled{opacity:.48}
+.teamBalance{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;margin-top:14px;padding:14px;border:1px solid #b9dbe6;border-radius:12px;background:#effaff;color:#123443}.teamBalance__score{display:grid;place-items:center;min-width:82px;padding:9px;border-radius:10px;background:#0e3a52;color:#fff}.teamBalance__score strong{font-size:24px;line-height:1}.teamBalance__score span{margin-top:4px;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}.teamBalance small{display:block;margin-top:4px;color:#496776}.teamBalance small b{color:inherit}
+@media(max-width:520px){.teamBalance{grid-template-columns:1fr}.teamBalance__score{min-width:0}}
 .teamSheetCard { padding:clamp(18px,3vw,26px); }
 .matchTimeline { display:grid; gap:1px; margin-top:16px; background:#dbe4e8; }.matchTimeline__item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f4f7f8}.matchTimeline__item>span{display:grid;place-items:center;width:30px;height:30px;background:white;border-radius:50%}.matchTimeline__item>div{display:grid}.matchTimeline__item small{color:#627887}
 

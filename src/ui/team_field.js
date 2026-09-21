@@ -17,6 +17,13 @@ export function defaultPositions(players) {
   return result;
 }
 
+export function randomGoalkeeperPositions(players, random = Math.random) {
+  if (!players.length) return Object.create(null);
+  const goalkeeperIndex = Math.min(players.length - 1, Math.floor(random() * players.length));
+  const goalkeeper = players[goalkeeperIndex];
+  return defaultPositions([goalkeeper, ...players.filter((_, index) => index !== goalkeeperIndex)]);
+}
+
 export function positionMap(rows = []) {
   return Object.fromEntries(rows.filter(r => Number.isFinite(r.positionX) && Number.isFinite(r.positionY)).map(r => [r.playerName, {positionX:r.positionX, positionY:r.positionY}]));
 }
@@ -129,7 +136,13 @@ export function mountTeamField(root, options) {
     bind('[data-save]', () => { close(); options.onSave(); });
     bind('[data-captain]', () => options.onCaptain(selected, owner(selected).team));
     bind('[data-remove]', () => options.onRemove(selected));
-    bind('[data-reset]', () => { for (const group of groups) for (const name of group.players) if (canMove(name)) delete positions[name]; options.onChange?.(); draw(); });
+    bind('[data-reset]', () => {
+      for (const group of groups) {
+        const randomized = randomGoalkeeperPositions(group.players);
+        for (const name of group.players) if (canMove(name)) positions[name] = randomized[name];
+      }
+      options.onChange?.(); draw();
+    });
     root.querySelectorAll('[data-assign]').forEach(button => { button.onclick = () => options.onAssign(selected, button.dataset.assign); });
 
     const pitch = root.querySelector('.sharedPitch');

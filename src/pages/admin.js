@@ -1,4 +1,4 @@
-import { mountTeamField, positionMap, positionRows, defaultPositions } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, defaultPositions, randomGoalkeeperPositions } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -278,10 +278,10 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
   });
 }
 
-async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}) {
+async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}, balance = null) {
   const canvas = document.createElement("canvas");
   canvas.width = 2160;
-  canvas.height = 2700;
+  canvas.height = balance ? 3000 : 2700;
   const context = canvas.getContext("2d");
   if (!context) return null;
 
@@ -290,7 +290,7 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   gradient.addColorStop(0, "#061724");
   gradient.addColorStop(1, "#0e3a52");
   context.fillStyle = gradient;
-  context.fillRect(0, 0, 1080, 1350);
+  context.fillRect(0, 0, 1080, balance ? 1500 : 1350);
   context.strokeStyle = "rgba(114,215,250,.25)";
   context.lineWidth = 3;
   context.beginPath(); context.arc(940, 250, 280, 0, Math.PI * 2); context.stroke();
@@ -363,19 +363,29 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
     }
   }
   context.textAlign="left";
+  if (balance) {
+    context.fillStyle="#dff7ff"; context.fillRect(70,1248,940,154);
+    context.fillStyle="#0e3a52"; context.font="900 42px Arial";
+    context.fillText(`${Number(balance.balancePercent || 0)}% TEAM BALANCE`,94,1300);
+    context.font="800 23px Arial";
+    context.fillText(`${homeName} ${Number(balance.blueStrength || 0).toFixed(1)} · ${awayName} ${Number(balance.orangeStrength || 0).toFixed(1)}`,94,1340);
+    context.font="700 19px Arial";
+    context.fillText(`Considerations: recent ratings · goals and assists · past team combinations`,94,1375);
+  }
   context.fillStyle = "#bed2dc";
   context.font = "700 22px Arial";
-  context.fillText("Shared by the Manor Lakes FC club desk", 70, 1305);
+  context.fillText("Shared by the Manor Lakes FC club desk", 70, balance ? 1460 : 1305);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
 }
 
-async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}) {
-  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions, captains, photos);
+async function shareTeamSheet(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}, balance = null) {
+  const file = await teamSheetImageFile(match, when, homeName, homePlayers, awayName, awayPlayers, positions, captains, photos, balance);
   if (!file) throw new Error("Could not create team sheet image");
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
-    const caption = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${matchLink(match.publicCode)}`;
+    const balanceText = balance ? `\n⚖️ ${Number(balance.balancePercent || 0)}% balanced · ${homeName} ${Number(balance.blueStrength || 0).toFixed(1)} / ${awayName} ${Number(balance.orangeStrength || 0).toFixed(1)}\nConsidered: recent ratings, goals, assists and past team combinations\n` : "";
+    const caption = `⚽ ${match.title}\n🗓️ ${when}${balanceText}\nView match: ${matchLink(match.publicCode)}`;
     await navigator.share({ title: `${match.title} team sheet`, text: caption, files: [file] });
     return "image";
   }
@@ -2351,6 +2361,116 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   const manageBody = manageArea.querySelector("#manageBody");
 
+  function wireAdminAvailabilityPicker() {
+    const input = manageBody.querySelector("#adminPlayerCombo");
+    const list = manageBody.querySelector("#adminPlayerComboList");
+    const selectedList = manageBody.querySelector("#adminSelectedPlayers");
+    const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
+    const availEl = manageBody.querySelector("#adminAddAvailability");
+    const msgEl = manageBody.querySelector("#adminAddPlayerMsg");
+    if (!input || !list || !selectedList || !addBtn) return;
+
+    let allPlayers = [];
+    const selectedPlayers = new Set();
+
+    const hideList = () => { list.style.display = "none"; };
+    const updateSelection = () => {
+      selectedList.innerHTML = [...selectedPlayers].map(name => `
+        <button type="button" class="playerSelectionChip" data-remove-player="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">
+          <span>${escapeHtml(name)}</span><span aria-hidden="true">×</span>
+        </button>
+      `).join("");
+      selectedList.hidden = selectedPlayers.size === 0;
+      addBtn.textContent = selectedPlayers.size ? `Add / Update ${selectedPlayers.size} player${selectedPlayers.size === 1 ? "" : "s"}` : "Add / Update players";
+      selectedList.querySelectorAll("[data-remove-player]").forEach(button => {
+        button.onclick = () => {
+          selectedPlayers.delete(String(button.dataset.removePlayer || ""));
+          updateSelection();
+          input.focus();
+        };
+      });
+    };
+    const renderList = (filterText = "") => {
+      const q = String(filterText || "").trim().toLowerCase();
+      const items = (q ? allPlayers.filter(name => name.toLowerCase().includes(q)) : allPlayers)
+        .filter(name => !selectedPlayers.has(name));
+      list.innerHTML = items.slice(0, 60).map(name => `
+        <button type="button" class="comboItem" data-name="${escapeHtml(name)}">${escapeHtml(name)}</button>
+      `).join("");
+      list.style.display = items.length ? "block" : "none";
+      list.querySelectorAll(".comboItem").forEach(button => {
+        button.onclick = () => {
+          const name = String(button.dataset.name || "").trim();
+          if (name) selectedPlayers.add(name);
+          input.value = "";
+          updateSelection();
+          renderList("");
+          input.focus();
+        };
+      });
+    };
+
+    getUsersCached(false).then(users => {
+      allPlayers = uniqueSorted((users || []).map(user => String(user?.name || user || "").trim()).filter(Boolean));
+      input.onfocus = () => renderList(input.value);
+      input.oninput = () => renderList(input.value);
+      input.onblur = () => setTimeout(hideList, 120);
+      input.onkeydown = event => {
+        if (event.key === "Escape") { hideList(); input.blur(); }
+      };
+    }).catch(() => {
+      addBtn.disabled = true;
+      if (msgEl) msgEl.textContent = "Failed to load players list.";
+    });
+
+    updateSelection();
+    addBtn.onclick = async () => {
+      if (!stillOnAdmin(routeToken)) return;
+      const playerNames = [...selectedPlayers];
+      const desired = String(availEl?.value || "YES").trim().toUpperCase();
+      if (!playerNames.length) return toastWarn("Select at least one player");
+      if (desired === "WAITING" && yesPlayers.length < cap) {
+        return toastWarn(`Waiting list is only available once ${cap} players are marked YES.`);
+      }
+
+      setDisabled(addBtn, true, `Saving 0/${playerNames.length}…`);
+      if (msgEl) msgEl.textContent = `Saving 0 of ${playerNames.length} players…`;
+      const saved = [];
+      const failed = [];
+      for (let index = 0; index < playerNames.length; index += 1) {
+        const playerName = playerNames[index];
+        try {
+          const out = await API.adminSetAvailabilityFor(m.matchId, playerName, desired);
+          if (!out?.ok) throw new Error(out?.error || "Failed");
+          saved.push({ playerName, availability: String(out.effectiveAvailability || desired).toUpperCase() });
+        } catch (error) {
+          failed.push({ playerName, error: String(error?.message || error) });
+        }
+        setDisabled(addBtn, true, `Saving ${index + 1}/${playerNames.length}…`);
+        if (msgEl) msgEl.textContent = `Saving ${index + 1} of ${playerNames.length} players…`;
+      }
+
+      if (saved.length) {
+        const waiting = saved.filter(row => row.availability === "WAITING").length;
+        const summary = `${saved.length} player${saved.length === 1 ? "" : "s"} updated${waiting ? ` · ${waiting} placed on waiting list` : ""}.`;
+        failed.length ? toastWarn(`${summary} ${failed.length} failed.`) : toastSuccess(summary);
+        clearPublicMatchDetailCache(m.publicCode);
+        clearManageCache(m.publicCode);
+        const fresh = await API.getPublicMatch(m.publicCode);
+        if (stillOnAdmin(routeToken) && fresh?.ok) {
+          lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+          renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+          return;
+        }
+      }
+
+      addBtn.disabled = false;
+      updateSelection();
+      if (failed.length && msgEl) msgEl.textContent = failed.map(row => `${row.playerName}: ${row.error}`).join(" · ");
+      if (failed.length && !saved.length) toastError(`Could not update ${failed.length} player${failed.length === 1 ? "" : "s"}.`);
+    };
+  }
+
   let fieldPositions = positionMap(teams);
   let savedPositions = JSON.stringify(fieldPositions);
 
@@ -2392,7 +2512,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
         onSave:() => manageBody.querySelector("#saveOpponent").click(),
         onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
-        onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); updateOpponentDraft(); renderSquadLists(); },
+        onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); fieldPositions=randomGoalkeeperPositions(squad); updateOpponentDraft(); renderSquadLists(); },
         onChange:updateOpponentDraft,
         onAssign:p => { squad=uniqueSorted([...squad,p]); updateOpponentDraft(); renderSquadLists(); },
         onCaptain:p => { opponentCaptain=p; updateOpponentDraft(); renderSquadLists(); },
@@ -2417,11 +2537,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div class="hr"></div>
 
         <div class="h1">Availability (admin)</div>
-        <div class="small">Add/update any player’s availability (including people without the app).</div>
+        <div class="small">Select several players, then update their availability together.</div>
 
         <label class="field__label" for="adminPlayerCombo">Player name</label>
         <input id="adminPlayerCombo" class="input" type="search" placeholder="Start typing a name" autocomplete="off" style="margin-top:7px" ${isEditLocked ? "disabled" : ""} />
         <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
+        <div id="adminSelectedPlayers" class="playerSelectionChips" aria-label="Selected players" hidden></div>
 
         <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
           <select id="adminAddAvailability" class="input" aria-label="Player availability" style="width:200px" ${isEditLocked ? "disabled" : ""}>
@@ -2429,7 +2550,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
             <option value="WAITING">WAITING</option>
             <option value="NO">NO</option>
           </select>
-          <button class="btn primary" id="adminAddPlayerBtn" ${isEditLocked ? "disabled" : ""}>Save availability</button>
+          <button class="btn primary" id="adminAddPlayerBtn" ${isEditLocked ? "disabled" : ""}>Add / Update players</button>
         </div>
         <div class="small" id="adminAddPlayerMsg" style="margin-top:10px"></div>
 
@@ -2525,117 +2646,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       };
     }
 
-    // Availability admin combo logic (duplicated from internal block)
-    let __adminAllPlayers = [];
-    let __adminSelectedPlayer = "";
-
-    function getComboEls() {
-      return {
-        input: manageBody.querySelector("#adminPlayerCombo"),
-        list: manageBody.querySelector("#adminPlayerComboList"),
-      };
-    }
-    function hideComboList() {
-      const { list } = getComboEls();
-      if (list) list.style.display = "none";
-    }
-    function renderComboList(filterText = "") {
-      const { list } = getComboEls();
-      if (!list) return;
-      const q = String(filterText || "").trim().toLowerCase();
-      const items = q ? __adminAllPlayers.filter(n => n.toLowerCase().includes(q)) : __adminAllPlayers;
-      if (!items.length) {
-        list.innerHTML = "";
-        list.style.display = "none";
-        return;
-      }
-      list.innerHTML = items.slice(0, 60).map(n => `<button type="button" class="comboItem" data-name="${n}">${n}</button>`).join("");
-      list.style.display = "block";
-      list.querySelectorAll(".comboItem").forEach(btn => {
-        btn.onclick = () => {
-          const name = String(btn.dataset.name || "").trim();
-          __adminSelectedPlayer = name;
-          const { input } = getComboEls();
-          if (input) input.value = name;
-          hideComboList();
-        };
-      });
-    }
-
-    (async () => {
-      try {
-        const users = await getUsersCached(false);
-        __adminAllPlayers = uniqueSorted((users || []).map(u => String(u?.name || u || "").trim()).filter(Boolean));
-        const { input } = getComboEls();
-        if (input) {
-          input.onfocus = () => renderComboList(input.value);
-          input.oninput = () => {
-            __adminSelectedPlayer = "";
-            renderComboList(input.value);
-          };
-          input.onblur = () => setTimeout(hideComboList, 120);
-          input.onkeydown = (e) => {
-            if (e.key === "Escape") { hideComboList(); input.blur(); }
-          };
-        }
-      } catch (e) {
-        const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
-        if (addBtn) addBtn.disabled = true;
-        const msgEl = manageBody.querySelector("#adminAddPlayerMsg");
-        if (msgEl) msgEl.textContent = "Failed to load players list.";
-      }
-    })();
-
-    const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
-    if (addBtn) {
-      addBtn.onclick = async () => {
-        if (!stillOnAdmin(routeToken)) return;
-        const availEl = manageBody.querySelector("#adminAddAvailability");
-        const msgEl = manageBody.querySelector("#adminAddPlayerMsg");
-
-        const playerName = String(__adminSelectedPlayer || "").trim();
-        const desired = String(availEl?.value || "YES").trim().toUpperCase();
-
-        if (!playerName) return toastWarn("Search and select a player");
-        if (desired === "WAITING" && yesPlayers.length < cap) {
-          return toastWarn(`Waiting list is only available once ${cap} players are marked YES.`);
-        }
-
-        setDisabled(addBtn, true, "Saving…");
-        if (msgEl) msgEl.textContent = "Saving…";
-        try {
-          const out = await API.adminSetAvailabilityFor(m.matchId, playerName, desired);
-          if (!out?.ok) throw new Error(out?.error || "Failed");
-
-          const eff = String(out.effectiveAvailability || desired).toUpperCase();
-          if (eff === "WAITING") toastInfo(`${playerName} added to waiting list.`);
-          else if (eff === "YES") toastSuccess(`${playerName} marked YES.`);
-          else toastSuccess(`${playerName} marked NO.`);
-
-          try {
-            const searchEl = manageBody.querySelector("#adminPlayerCombo");
-            if (searchEl) searchEl.value = "";
-            __adminSelectedPlayer = "";
-            hideComboList();
-          } catch {}
-
-          clearPublicMatchDetailCache(m.publicCode);
-          clearManageCache(m.publicCode);
-          const fresh = await API.getPublicMatch(m.publicCode);
-          if (stillOnAdmin(routeToken) && fresh?.ok) {
-            lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-            renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-            return;
-          }
-          if (msgEl) msgEl.textContent = "Saved.";
-        } catch (e) {
-          toastError(String(e?.message || e));
-          if (msgEl) msgEl.textContent = String(e?.message || e);
-        } finally {
-          setDisabled(addBtn, false);
-        }
-      };
-    }
+    wireAdminAvailabilityPicker();
 
     return;
   }
@@ -2645,7 +2656,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   let orange = uniqueSorted(teams.filter(t => String(t.team).toUpperCase() === "ORANGE").map(t => String(t.playerName || "").trim()));
   let captainBlue = String(captains.captain1 || "");
   let captainOrange = String(captains.captain2 || "");
-  let autoBalanceReport = null;
+  let autoBalanceReport = data.teamBalance || null;
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
 
@@ -2713,8 +2724,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <summary style="font-weight:950">Add players to this match (Admin)</summary>
 
       <div class="small" style="margin-top:8px">
-        Search and select an existing player to add/update their availability.
-        (Only existing names are allowed.)
+        Search and select multiple existing players, then update their availability together.
       </div>
 
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
@@ -2724,13 +2734,15 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           <div id="adminPlayerComboList" class="comboList" style="display:none"></div>
         </div>
 
+        <div id="adminSelectedPlayers" class="playerSelectionChips" aria-label="Selected players" hidden></div>
+
         <select class="input" id="adminAddAvailability" aria-label="Player availability" style="min-width:160px">
           <option value="YES" selected>YES (Available)</option>
           <option value="NO">NO (Not available)</option>
           <option value="WAITING" ${yesPlayers.length >= cap ? "" : "disabled"}>WAITING LIST</option>
         </select>
 
-        <button class="btn primary" id="adminAddPlayerBtn" ${isEditLocked ? "disabled" : ""}>Add / Update</button>
+        <button class="btn primary" id="adminAddPlayerBtn" ${isEditLocked ? "disabled" : ""}>Add / Update players</button>
 </div>
 
       <div id="adminAddPlayerMsg" class="small" style="margin-top:10px"></div>
@@ -2764,90 +2776,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   wireAvailabilityLimitEditor();
 
-  
-// Populate a single "search + select" combobox (registered users).
-// Mobile-friendly: one control, enforces existing names only.
-let __adminAllPlayers = [];
-let __adminSelectedPlayer = ""; // only set when user picks an option from the list
-
-function getComboEls() {
-  return {
-    input: manageBody.querySelector("#adminPlayerCombo"),
-    list: manageBody.querySelector("#adminPlayerComboList"),
-  };
-}
-
-function hideComboList() {
-  const { list } = getComboEls();
-  if (list) list.style.display = "none";
-}
-
-function renderComboList(filterText = "") {
-  const { list } = getComboEls();
-  if (!list) return;
-
-  const q = String(filterText || "").trim().toLowerCase();
-  const items = q
-    ? __adminAllPlayers.filter(n => n.toLowerCase().includes(q))
-    : __adminAllPlayers;
-
-  if (!items.length) {
-    list.innerHTML = "";
-    list.style.display = "none";
-    return;
-  }
-
-  list.innerHTML = items.slice(0, 60).map(n => `
-    <button type="button" class="comboItem" data-name="${n}">${n}</button>
-  `).join("");
-
-  list.style.display = "block";
-
-  list.querySelectorAll(".comboItem").forEach(btn => {
-    btn.onclick = () => {
-      const name = String(btn.dataset.name || "").trim();
-      __adminSelectedPlayer = name;
-      const { input } = getComboEls();
-      if (input) input.value = name;
-      hideComboList();
-    };
-  });
-}
-
-(async () => {
-  try {
-    const users = await getUsersCached(false);
-    __adminAllPlayers = uniqueSorted(
-      (users || [])
-        .map(u => String(u?.name || u || "").trim())
-        .filter(Boolean)
-    );
-
-    const { input } = getComboEls();
-    if (input) {
-      input.onfocus = () => renderComboList(input.value);
-
-      input.oninput = () => {
-        __adminSelectedPlayer = "";
-        renderComboList(input.value);
-      };
-
-      input.onblur = () => setTimeout(hideComboList, 120);
-
-      input.onkeydown = (e) => {
-        if (e.key === "Escape") {
-          hideComboList();
-          input.blur();
-        }
-      };
-    }
-  } catch (e) {
-    const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
-    if (addBtn) addBtn.disabled = true;
-    const msgEl = manageBody.querySelector("#adminAddPlayerMsg");
-    if (msgEl) msgEl.textContent = "Failed to load players list.";
-  }
-})();
+  wireAdminAvailabilityPicker();
 
   const closeAvailabilityBtn = manageBody.querySelector("#closeAvailability");
   if (closeAvailabilityBtn) {
@@ -2900,62 +2829,6 @@ function renderComboList(filterText = "") {
       if (stillOnAdmin(routeToken) && fresh.ok) {
         lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
         renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-      }
-    };
-  }
-
-  // Add/update availability for any named player (admin only)
-  const addBtn = manageBody.querySelector("#adminAddPlayerBtn");
-  if (addBtn) {
-    addBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      const availEl = manageBody.querySelector("#adminAddAvailability");
-      const msgEl = manageBody.querySelector("#adminAddPlayerMsg");
-
-      const playerName = String(__adminSelectedPlayer || "").trim();
-      const desired = String(availEl?.value || "YES").trim().toUpperCase();
-
-      if (!playerName) return toastWarn("Search and select a player");
-
-      // Enforce UI rule: waiting list only enabled when the match capacity is reached.
-      if (desired === "WAITING" && yesPlayers.length < cap) {
-        return toastWarn(`Waiting list is only available once ${cap} players are marked YES.`);
-      }
-
-      setDisabled(addBtn, true, "Saving…");
-      if (msgEl) msgEl.textContent = "Saving…";
-      try {
-        const out = await API.adminSetAvailabilityFor(m.matchId, playerName, desired);
-        if (!out?.ok) throw new Error(out?.error || "Failed");
-
-        const eff = String(out.effectiveAvailability || desired).toUpperCase();
-        if (eff === "WAITING") toastInfo(`${playerName} added to waiting list.`);
-        else if (eff === "YES") toastSuccess(`${playerName} marked YES.`);
-        else toastSuccess(`${playerName} marked NO.`);
-
-        // Clear selection/search for quick entry
-        try {
-          const searchEl = manageBody.querySelector("#adminPlayerCombo");
-          if (searchEl) searchEl.value = "";
-          __adminSelectedPlayer = "";
-          hideComboList();
-        } catch {}
-
-        // Reload match so lists/teams reflect latest availability
-        clearPublicMatchDetailCache(m.publicCode);
-        clearManageCache(m.publicCode);
-        const fresh = await API.getPublicMatch(m.publicCode);
-        if (stillOnAdmin(routeToken) && fresh?.ok) {
-          lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-          renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-          return;
-        }
-        if (msgEl) msgEl.textContent = "Saved.";
-      } catch (e) {
-        toastError(String(e?.message || e));
-        if (msgEl) msgEl.textContent = String(e?.message || e);
-      } finally {
-        setDisabled(addBtn, false);
       }
     };
   }
@@ -3014,7 +2887,10 @@ function renderComboList(filterText = "") {
       orange = uniqueSorted(out.orangePlayers || []);
       if (!blue.includes(captainBlue)) captainBlue = "";
       if (!orange.includes(captainOrange)) captainOrange = "";
-      fieldPositions = {};
+      fieldPositions = {
+        ...randomGoalkeeperPositions(blue),
+        ...randomGoalkeeperPositions(orange)
+      };
       autoBalanceReport = out.balance || null;
       updateInternalDraft();
       renderAll();
@@ -3095,7 +2971,9 @@ function renderComboList(filterText = "") {
     setDisabled(shareTeamsBtn, true, "Opening…");
 
   try {
-    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange], playerPhotos);
+    const fresh = await API.getPublicMatch(m.publicCode).catch(() => null);
+    const shareBalance = autoBalanceReport || fresh?.teamBalance || null;
+    const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange], playerPhotos, shareBalance);
     const published = await API.adminShareTeams(m.matchId);
     if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
     toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");

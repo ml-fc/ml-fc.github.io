@@ -282,6 +282,18 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
   </section>`;
 }
 
+function publicTeamBalance(balance, homeName, awayName) {
+  if (!balance) return "";
+  const considerations = Array.isArray(balance.considerations) ? balance.considerations : [];
+  return `<div class="teamBalance" aria-label="Team balance">
+    <div class="teamBalance__score"><strong>${Number(balance.balancePercent || 0)}%</strong><span>team balance</span></div>
+    <div><b>${escapeHtml(homeName)} ${Number(balance.blueStrength || 0).toFixed(1)} · ${escapeHtml(awayName)} ${Number(balance.orangeStrength || 0).toFixed(1)}</b>
+      <small>${Number(balance.ratedPlayers || 0)}/${Number(balance.playerCount || 0)} players rated · ${Number(balance.historicalMatches || 0)} past internal matches considered</small>
+      ${considerations.length ? `<small><b>Considerations:</b> ${considerations.map(escapeHtml).join(" · ")}</small>` : ""}
+    </div>
+  </div>`;
+}
+
 // Handle both normalized and Sheets Date-string formats
 function normalizeDateStr(dateStr) {
   const s = String(dateStr || "").trim();
@@ -1692,6 +1704,7 @@ const cap = availabilityLimitForMatch(m);
           ? publicSharedTeamSheet(teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, caps.captain1, caps.captain2)
           : publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
       </div>
+      ${publicTeamBalance(data.teamBalance, teamLabel("HOME"), teamLabel("AWAY"))}
     </div>` : ``}
 
     ${hideAvailability ? `` : `
