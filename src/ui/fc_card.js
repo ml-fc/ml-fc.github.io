@@ -8,8 +8,7 @@ const score = value => Math.max(0, Math.min(99, Number(value) || 50));
 function playerStatusBadge(status) {
   if (status === "INJURED") return `<g aria-label="Injured"><title>Injured</title><circle r="31" fill="#fff" stroke="#d71920" stroke-width="5"/><g transform="rotate(-42)"><rect x="-21" y="-9" width="42" height="18" rx="7" fill="#d71920"/><rect x="-6" y="-9" width="12" height="18" fill="#fff"/><circle cx="-14" cy="0" r="2.2" fill="#fff"/><circle cx="14" cy="0" r="2.2" fill="#fff"/></g></g>`;
   if (status === "INACTIVE") return `<g aria-label="Inactive"><title>Inactive</title><circle r="31" fill="#f4f7f8" stroke="#52616b" stroke-width="5"/><rect x="-10" y="-14" width="7" height="28" rx="2" fill="#52616b"/><rect x="3" y="-14" width="7" height="28" rx="2" fill="#52616b"/></g>`;
-  if (status === "UNAVAILABLE") return `<g aria-label="Unavailable"><title>Unavailable</title><circle r="31" fill="#fff8e1" stroke="#e28a00" stroke-width="5"/><path d="M-12-12 12 12M12-12-12 12" stroke="#c86f00" stroke-width="7" stroke-linecap="round"/></g>`;
-  return `<g aria-label="Active"><title>Active</title><circle r="31" fill="#eafff4" stroke="#118a57" stroke-width="5"/><path d="m-14 1 9 10 20-23" fill="none" stroke="#118a57" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  return "";
 }
 
 export function fcCardSvg(card, name, photo = card.photoUrl) {
@@ -46,9 +45,9 @@ export function fcCardSvg(card, name, photo = card.photoUrl) {
         <path d="M277 648 H323 V674 L300 688 L277 674Z" fill="#302609"/>
         <text x="300" y="669" fill="#f8db7c" font-size="12" font-weight="900">MLFC</text>
       </g>
-      <g transform="translate(514 111)" style="filter:drop-shadow(0 4px 4px rgba(0,0,0,.48))">${playerStatusBadge(playerStatus)}</g>
     </g>
     <path d="${SHAPE}" fill="none" stroke="url(#${id}-edge)" stroke-width="5"/>
+    <g transform="translate(530 95) scale(1.8)" style="filter:drop-shadow(0 4px 4px rgba(0,0,0,.48))">${playerStatusBadge(playerStatus)}</g>
   </svg>`;
 }
 

@@ -12,8 +12,6 @@ const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
-// Preference: show/hide ratings on leaderboard
-const LS_SHOW_RATING = "mlfc_lb_show_rating_v1";
 // v3 restores a 10-game qualification line while keeping the full roster visible.
 const LS_MINIMUM_MATCHES = "mlfc_lb_minimum_matches_v3";
 const DEFAULT_MINIMUM_MATCHES = 10;
@@ -73,26 +71,26 @@ function pickSelectedSeason(seasonsRes) {
   return { seasons, selected };
 }
 
-function sortRows(rows, mode, showRating) {
+function sortRows(rows, mode) {
   const r = (rows||[]).slice();
   if (mode === "goals") r.sort((a,b)=>(b.goals||0)-(a.goals||0));
   else if (mode === "assists") r.sort((a,b)=>(b.assists||0)-(a.assists||0));
   else if (mode === "potm") r.sort((a,b)=>(b.potmAwards||0)-(a.potmAwards||0) || (b.goals||0)-(a.goals||0));
-  else if (showRating) r.sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
-  else r.sort((a,b)=>(b.goals||0)-(a.goals||0));
+  else if (mode === "fc") r.sort((a,b)=>(b.fcCard?.overall||0)-(a.fcCard?.overall||0) || (b.avgRating||0)-(a.avgRating||0));
+  else r.sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
   return r;
 }
 
-function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQuery = "") {
+function renderTable(root, rows, sortMode, minimumMatches, searchQuery = "") {
   const body = root.querySelector("#lbBody");
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const visibleRows = (rows || []).filter(row => !normalizedQuery || String(row?.playerName || "").toLocaleLowerCase().includes(normalizedQuery));
   const eligibleRows = visibleRows.filter(row => playerMatches(row) >= minimumMatches);
   const remainingRows = minimumMatches > 0 ? visibleRows.filter(row => playerMatches(row) < minimumMatches) : [];
-  const sortedEligible = sortRows(eligibleRows, sortMode, showRating);
-  const sortedRemaining = sortRows(remainingRows, sortMode, showRating);
+  const sortedEligible = sortRows(eligibleRows, sortMode);
+  const sortedRemaining = sortRows(remainingRows, sortMode);
 
-  const cols = showRating ? 6 : 5;
+  const cols = 6;
   const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
   const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
   const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
@@ -105,13 +103,14 @@ function renderTable(root, rows, sortMode, showRating, minimumMatches, searchQue
       Number(x.potmAwards || 0) > 0 ? `<span class="playerAward" title="${Number(x.potmAwards)} Player of the Match award${Number(x.potmAwards) === 1 ? "" : "s"}" aria-label="Player of the Match awards">🏆</span>` : "",
       String(x.playerStatus || "").toUpperCase() === "INJURED" ? `<span class="playerAward" title="Injured" aria-label="Injured">🩹</span>` : "",
     ].join("");
-    const ratingCols = showRating ? `
+    const ratingCols = `
       <td class="lb__cell lb__num lb__rating"><strong>${Number(x.matchesRated || 0) ? Number(x.avgRating || 0).toFixed(2) : "—"}</strong><small>${Number(x.matchesRated || 0)} rated</small></td>
-    ` : "";
+    `;
+    const fcThumb = sortMode === "fc" && x.fcCard ? `<span class="lbFcThumb" aria-label="${esc(x.fcCard.overall)} overall ${esc(x.fcCard.position || "CM")} FC Card">${x.fcCard.photoUrl ? `<img src="${esc(x.fcCard.photoUrl)}" alt="" loading="lazy" />` : ""}<b>${Number(x.fcCard.overall || 50)}</b><small>${esc(x.fcCard.position || "CM")}</small></span>` : "";
     return `
       <tr class="lb__row${isEligible ? "" : " lb__row--remaining"}">
         <td class="lb__cell lb__rank">${isEligible ? `<span>${rank}</span>` : `<span aria-label="Not yet ranked">—</span>`}</td>
-        <td class="lb__cell lb__player"><div class="lb__playerIdentity"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><span class="playerAwards">${awards}</span></div><small>${playerMatches(x)} ${playerMatches(x) === 1 ? "game" : "games"}</small></td>
+        <td class="lb__cell lb__player"><div class="lb__playerIdentity">${fcThumb}<span class="lb__playerText"><button class="playerLink" data-player="${encodeURIComponent(x.playerName)}" title="View ${esc(x.playerName)} season history">${esc(x.playerName)}</button><small>${playerMatches(x)} ${playerMatches(x) === 1 ? "game" : "games"}</small></span><span class="playerAwards">${awards}</span></div></td>
         <td class="lb__cell lb__num">${x.goals || 0}</td>
         <td class="lb__cell lb__num">${x.assists || 0}</td>
         <td class="lb__cell lb__num">${x.potmAwards || 0}</td>
@@ -199,15 +198,10 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
 
   // Leaderboard is public, including ratings view.
   await refreshMe(false);
-  let showRating = localStorage.getItem(LS_SHOW_RATING) === "1";
   let minimumMatches = savedMinimumMatches();
   let searchQuery = "";
 
-  let sortMode = showRating ? "rating" : "goals";
-
-  const ratingToggleHtml = `<label class="ladderToggle"><input type="checkbox" id="toggleRating" ${showRating ? "checked" : ""} /><span>Ratings</span></label>`;
-
-  const sortRatingBtnHtml = showRating ? `<button class="btn gray" id="sortRating">Rating</button>` : "";
+  let sortMode = "rating";
 
   root.innerHTML = `
     <div class="card ladderControls">
@@ -221,9 +215,9 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
             <button class="btn gray" id="sortGoals">Goals</button>
             <button class="btn gray" id="sortAssists">Assists</button>
             <button class="btn gray" id="sortPotm">POTM</button>
-            ${sortRatingBtnHtml}
+            <button class="btn gray" id="sortRating">Rating</button>
+            <button class="btn gray" id="sortFcCard">FC Card</button>
           </div>
-          ${ratingToggleHtml}
         </div>
       </div>
       <span class="visuallyHidden" id="minimumMatchesHelp">Players who meet this minimum are ranked first. Everyone else remains visible below the qualification line.</span>
@@ -241,9 +235,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
               <th class="lb__th lb__num">G</th>
               <th class="lb__th lb__num">A</th>
               <th class="lb__th lb__num">POTM</th>
-              ${ showRating ? `
-                <th class="lb__th lb__num">Rating</th>
-              ` : "" }
+              <th class="lb__th lb__num">Rating</th>
             </tr>
           </thead>
           <tbody id="lbBody"></tbody>
@@ -274,7 +266,10 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   } else {
     msg.textContent = "No cached data. Refreshing latest…";
   }
-  const renderCurrentTable = () => renderTable(root, rows, sortMode, showRating, minimumMatches, searchQuery);
+  const renderCurrentTable = () => {
+    renderTable(root, rows, sortMode, minimumMatches, searchQuery);
+    root.querySelectorAll(".ladderSort .btn").forEach(button => button.classList.toggle("primary", button.id === ({goals:"sortGoals",assists:"sortAssists",potm:"sortPotm",rating:"sortRating",fc:"sortFcCard"})[sortMode]));
+  };
   renderCurrentTable();
 
   root.querySelector("#lbBody").addEventListener("click", async (event) => {
@@ -311,7 +306,7 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     try {
       if (!silent) lsDel(lbKey(seasonId));
 
-      const res = await API.leaderboardSeason(seasonId);
+      const res = await API.leaderboardSeason(seasonId, sortMode === "fc");
       if (getRouteToken() !== token) return;
 
       if (!res.ok) {
@@ -356,8 +351,27 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   root.querySelector("#sortGoals").onclick = () => { sortMode = "goals"; renderCurrentTable(); };
   root.querySelector("#sortAssists").onclick = () => { sortMode = "assists"; renderCurrentTable(); };
   root.querySelector("#sortPotm").onclick = () => { sortMode = "potm"; renderCurrentTable(); };
-  const sortRatingBtn = root.querySelector("#sortRating");
-  if (sortRatingBtn) sortRatingBtn.onclick = () => { sortMode = "rating"; renderCurrentTable(); };
+  root.querySelector("#sortRating").onclick = () => { sortMode = "rating"; renderCurrentTable(); };
+  root.querySelector("#sortFcCard").onclick = async () => {
+    sortMode = "fc";
+    if (rows.length && rows.every(row => row.fcCard)) return renderCurrentTable();
+    const button = root.querySelector("#sortFcCard");
+    button.disabled = true;
+    button.textContent = "Loading…";
+    msg.textContent = "Loading FC Cards once for this season…";
+    try {
+      const res = await API.leaderboardSeason(seasonId, true);
+      if (getRouteToken() !== token) return;
+      if (!res.ok) return toastError(res.error || "Could not load FC Cards");
+      rows = res.rows || [];
+      lsSet(lbKey(seasonId), { ts: now(), data: res });
+      msg.textContent = "FC Cards cached on this device.";
+      renderCurrentTable();
+    } finally {
+      button.disabled = false;
+      button.textContent = "FC Card";
+    }
+  };
 
   root.querySelector("#playerSearch").oninput = event => {
     searchQuery = event.target.value;
@@ -371,16 +385,6 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     localStorage.setItem(LS_MINIMUM_MATCHES, String(minimumMatches));
     renderCurrentTable();
   };
-
-  const toggle = root.querySelector("#toggleRating");
-  if (toggle) {
-    toggle.onchange = () => {
-      showRating = !!toggle.checked;
-      localStorage.setItem(LS_SHOW_RATING, showRating ? "1" : "0");
-      // Re-render page quickly to update columns/buttons.
-      renderLeaderboardPage(root, query, tokenFromRouter).catch(() => {});
-    };
-  }
 
   root.querySelector("#refresh").onclick = () => refreshLeaderboard({ force: true, notify: true });
 

@@ -16,7 +16,7 @@ export const API = {
     apiGet({ action: "my_season_stats", seasonId, includeHistory: includeHistory ? 1 : 0 }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
-  leaderboardSeason: (seasonId) => apiGet({ action: "leaderboard_season", seasonId }),
+  leaderboardSeason: (seasonId, includeCards = false) => apiGet({ action: "leaderboard_season", seasonId, includeCards: includeCards ? 1 : 0 }),
   playerHistory: (seasonId, playerName) => apiGet({ action: "player_history", seasonId, playerName }),
   playerFcCard: (seasonId, playerName) => apiGet({ action: "player_fc_card", seasonId, playerName }),
   adminFcCardLeaders: (seasonId) => apiGet({ action: "admin_fc_card_leaders", seasonId }),
