@@ -86,6 +86,7 @@ const STATIC_ASSETS = [
   "/src/ui/toast.js",
   "/src/ui/team_field.js",
   "/src/ui/player_photo.js",
+  "/src/ui/fc_card.js",
   "/src/ui/face_detection.js",
   "/src/ui/push_reminder.js",
   "/src/api/client.js",

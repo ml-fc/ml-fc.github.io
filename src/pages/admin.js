@@ -1,3 +1,4 @@
+import { drawFcCard } from "../ui/fc_card.js";
 import { mountTeamField, positionMap, positionRows, defaultPositions, randomGoalkeeperPositions } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
@@ -43,11 +44,9 @@ async function leadersBoardFile(payload){
   const canvas=document.createElement("canvas");canvas.width=pad*2+cols*cardW+(cols-1)*gap;canvas.height=header+pad+rows*cardH+(rows-1)*gap;const c=canvas.getContext("2d");
   c.fillStyle="#061827";c.fillRect(0,0,canvas.width,canvas.height);c.fillStyle="#f0d473";c.font="400 104px Impact, Arial Narrow, sans-serif";c.fillText("MLFC SEASON LEADERS",pad,125);c.fillStyle="#b8dcec";c.font="700 42px Arial";c.fillText(`${payload.season?.name||"Season"} · TOP ${cards.length} RATED PLAYERS`,pad,190);
   for(let index=0;index<cards.length;index++){
-    const item=cards[index],card=item.card||{},x=pad+(index%cols)*(cardW+gap),y=header+Math.floor(index/cols)*(cardH+gap);const g=c.createLinearGradient(x,y,x+cardW,y+cardH);g.addColorStop(0,"#0a2942");g.addColorStop(.55,"#0c5482");g.addColorStop(1,"#071c30");c.fillStyle=g;c.fillRect(x,y,cardW,cardH);c.strokeStyle="#efd16f";c.lineWidth=10;c.strokeRect(x+14,y+14,cardW-28,cardH-28);
-    c.fillStyle="#f3d77b";c.font="400 106px Impact,Arial Narrow,sans-serif";c.fillText(String(card.overall||50),x+55,y+135);c.fillStyle="#fff";c.font="900 43px Arial";c.fillText(String(card.position||"CM"),x+65,y+195);c.textAlign="right";c.fillStyle="#efd16f";c.font="900 34px Arial";c.fillText(`#${index+1} MLFC`,x+cardW-55,y+75);if(String(card.playerStatus||"").toUpperCase()==="INJURED"){c.font="54px Arial";c.fillText("🩹",x+cardW-55,y+145);}c.textAlign="left";
-    if(card.photoUrl){try{const image=await loadCanvasImage(card.photoUrl);c.save();c.beginPath();c.arc(x+cardW/2,y+390,205,0,Math.PI*2);c.clip();c.drawImage(image,x+cardW/2-205,y+175,410,475);c.restore();}catch{}}
-    c.textAlign="center";c.fillStyle="#fff";c.font="400 58px Impact,Arial Narrow,sans-serif";c.fillText(String(item.playerName).toUpperCase(),x+cardW/2,y+670,cardW-100);c.fillStyle="#efd16f";c.fillRect(x+110,y+705,cardW-220,4);
-    const stats=["PAC","SHO","PAS","DRI","DEF","PHY"];c.font="900 42px Arial";stats.forEach((key,i)=>{const col=i%2,row=Math.floor(i/2),sx=x+(col?cardW*.64:cardW*.36),sy=y+790+row*105;c.textAlign="right";c.fillStyle="#efd16f";c.fillText(String(card.attributes?.[key]||50),sx-12,sy);c.textAlign="left";c.fillStyle="#fff";c.fillText(key,sx,sy);});c.textAlign="center";c.fillStyle="#b9deed";c.font="700 27px Arial";c.fillText(`${Number(item.avgRating||0).toFixed(2)} AVG · ${item.matchesRated} RATED`,x+cardW/2,y+1155);
+    const item=cards[index],card=item.card||{},x=pad+(index%cols)*(cardW+gap),y=header+Math.floor(index/cols)*(cardH+gap);
+    await drawFcCard(c,card,item.playerName,x,y,cardW,1200);
+    c.textAlign="center";c.fillStyle="#f0d473";c.font="700 24px Arial";c.fillText(`#${index+1} · ${Number(item.avgRating||0).toFixed(2)} AVG · ${Number(item.matchesRated||0)} RATED`,x+cardW/2,y+1220);c.textAlign="left";
   }
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));return blob?new File([blob],`mlfc-${String(payload.season?.name||"season").toLowerCase().replace(/[^a-z0-9]+/g,"-")}-top-20.png`,{type:"image/png"}):null;
 }

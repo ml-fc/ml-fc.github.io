@@ -1,3 +1,4 @@
+import { fcCardHtml, drawFcCard } from "../ui/fc_card.js";
 import { API } from "../api/endpoints.js";
 import { getCachedUser } from "../auth.js";
 import { toastError, toastInfo } from "../ui/toast.js";
@@ -24,31 +25,11 @@ function formTone(rating) {
 
 const CARD_STATS=["PAC","SHO","PAS","DRI","DEF","PHY"];
 
-function fcCardHtml(card,userName){
-  return `<article class="fcCard" aria-label="${esc(userName)} ${card.overall} rated ${card.position} player card">
-    <div class="fcCard__shine" aria-hidden="true"></div><div class="fcCard__crest">MLFC</div>
-    ${String(card.playerStatus||"").toUpperCase()==="INJURED"?`<span class="fcCard__injured" title="Injured" aria-label="Injured">🩹</span>`:""}
-    <div class="fcCard__rating"><strong>${Number(card.overall||50)}</strong><span>${esc(card.position||"CM")}</span></div>
-    <div class="fcCard__photo">${card.photoUrl?`<img src="${esc(card.photoUrl)}" alt="${esc(userName)}">`:`<span>${esc(String(userName||"?").slice(0,1).toUpperCase())}</span>`}</div>
-    <div class="fcCard__name">${esc(userName)}</div>
-    <div class="fcCard__rule"></div><div class="fcCard__stats">${CARD_STATS.map(key=>`<div><b>${Number(card.attributes?.[key]||50)}</b><span>${key}</span></div>`).join("")}</div>
-    <div class="fcCard__foot"><span>${esc(card.status||"LIVE")}</span><span>${Number(card.appearances||0)} APPS</span></div>
-  </article>`;
-}
-
-function loadImage(url){return new Promise((resolve,reject)=>{const image=new Image();image.crossOrigin="anonymous";image.onload=()=>resolve(image);image.onerror=reject;image.src=url;});}
-
 async function fcCardFile(card,userName,seasonName){
-  const canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1350;const c=canvas.getContext("2d");
-  const gradient=c.createLinearGradient(0,0,1080,1350);gradient.addColorStop(0,"#fff0a5");gradient.addColorStop(.48,"#e4b83c");gradient.addColorStop(1,"#b67a12");c.fillStyle=gradient;c.fillRect(0,0,1080,1350);
-  c.strokeStyle="#61450e";c.lineWidth=10;c.beginPath();c.moveTo(80,190);c.quadraticCurveTo(155,180,185,72);c.quadraticCurveTo(540,8,895,72);c.quadraticCurveTo(925,180,1000,190);c.lineTo(1000,1125);c.quadraticCurveTo(980,1250,540,1320);c.quadraticCurveTo(100,1250,80,1125);c.closePath();c.stroke();
-  c.globalAlpha=.18;c.strokeStyle="#fff7c7";c.lineWidth=5;for(let x=-700;x<1500;x+=65){c.beginPath();c.moveTo(x,1180);c.lineTo(x+900,60);c.stroke();}c.globalAlpha=1;
-  c.fillStyle="#322407";c.font="900 142px Impact, Arial Narrow, sans-serif";c.fillText(String(card.overall||50),112,270);c.font="900 64px Arial";c.fillText(String(card.position||"CM"),125,342);
-  c.textAlign="right";c.font="900 38px Arial";c.fillText("MLFC",925,145);if(String(card.playerStatus||"").toUpperCase()==="INJURED"){c.font="58px Arial";c.fillText("🩹",925,215);}c.textAlign="left";
-  if(card.photoUrl){try{const image=await loadImage(card.photoUrl);c.save();c.beginPath();c.ellipse(590,455,285,330,0,0,Math.PI*2);c.clip();c.drawImage(image,305,110,570,690);c.restore();}catch{}}
-  c.fillStyle="rgba(255,232,134,.92)";c.fillRect(82,755,916,170);c.textAlign="center";c.fillStyle="#2e2107";c.font="900 76px Impact, Arial Narrow, sans-serif";c.fillText(String(userName).toUpperCase(),540,855,850);
-  c.font="900 31px Arial";CARD_STATS.forEach((key,index)=>{const x=135+index*162;c.fillText(key,x,980);c.font="900 61px Arial";c.fillText(String(card.attributes?.[key]||50),x,1045);c.font="900 31px Arial";});
-  c.fillStyle="#3c2a08";c.font="700 27px Arial";c.fillText(`${seasonName} · ${card.status} · ${card.appearances} APPEARANCES`,540,1190,850);c.font="900 35px Arial";c.fillText("MANOR LAKES FC",540,1250);
+  const canvas=document.createElement("canvas");canvas.width=1440;canvas.height=1920;const c=canvas.getContext("2d");
+  const background=c.createRadialGradient(720,830,100,720,830,1200);background.addColorStop(0,"#234c43");background.addColorStop(1,"#061e25");c.fillStyle=background;c.fillRect(0,0,1440,1920);
+  await drawFcCard(c,card,userName,48,38,1344,1680);
+  c.textAlign="center";c.fillStyle="#f4db91";c.font="700 34px Arial";c.fillText(seasonName,720,1790,1260);c.fillStyle="#c5d6d2";c.font="24px Arial";c.fillText("MANOR LAKES FOOTBALL CLUB",720,1844);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));return blob?new File([blob],`mlfc-${String(userName).toLowerCase().replace(/[^a-z0-9]+/g,"-")}-card.png`,{type:"image/png"}):null;
 }
 
