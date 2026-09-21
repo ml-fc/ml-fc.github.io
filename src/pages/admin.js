@@ -2108,7 +2108,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const locked = isTrueFlag(m.ratingsLocked);
   const availabilityLocked = isTrueFlag(m.availabilityLocked);
   const isCompleted = status === "COMPLETED";
-  const isEditLocked = locked || status === "CLOSED" || isCompleted;
+  const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
+  const isEditLocked = locked || status === "CLOSED" || isCompleted || scoreStarted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
   const potm = data.potm || {};
   const potmStarted = String(potm.openedAt || "").trim() !== "";
@@ -2432,14 +2433,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         </div>
         <div class="small" id="adminAddPlayerMsg" style="margin-top:10px"></div>
 
-        <div class="hr"></div>
-
-        <div class="h1">Ratings</div>
-        <div class="small">Rate players for this match (admin can rate anyone).</div>
-        <div class="row" style="margin-top:10px">
-          <button class="btn primary" id="openRatingsAdmin">Give ratings</button>
-        </div>
-
         <div class="small" id="msg" style="margin-top:10px"></div>
       </details>
     `;
@@ -2448,11 +2441,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
     renderSquadLists();
     updateOpponentDraft();
-
-    const openAdmin = manageBody.querySelector("#openRatingsAdmin");
-    if (openAdmin) openAdmin.onclick = () => {
-      location.hash = `#/captain?code=${encodeURIComponent(m.publicCode)}&src=admin`;
-    };
 
     manageBody.querySelector("#shareSquad").onclick = async () => {
       if (!squad.length) return toastWarn("Select the MLFC squad first.");
@@ -2768,15 +2756,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
       </div>
 
-      <div class="hr"></div>
-
-      <div class="h1">Ratings</div>
-      <div class="small">Admin can rate all players for this match (partial submission allowed).</div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="openRatingsAdminInternal" ${hasAnyTeams ? "" : "disabled"}>Give ratings</button>
-      </div>
-      ${hasAnyTeams ? "" : `<div class="small" style="margin-top:8px">Assign players to teams and save setup before giving ratings.</div>`}
-
       <div id="setupMsg" class="small" style="margin-top:10px"></div>
     </details>
 
@@ -3060,15 +3039,6 @@ function renderComboList(filterText = "") {
     updateInternalDraft();
     renderAll();
   };
-
-  // Admin ratings entry point (internal matches)
-  const openRatingsInternal = manageBody.querySelector("#openRatingsAdminInternal");
-  if (openRatingsInternal) {
-    openRatingsInternal.onclick = () => {
-      if ((blue.length + orange.length) === 0) return toastWarn("Assign players to teams and save setup before giving ratings.");
-      location.hash = `#/captain?code=${encodeURIComponent(m.publicCode)}&src=admin`;
-    };
-  }
 
   // Save setup
   manageBody.querySelector("#saveSetup").onclick = async () => {

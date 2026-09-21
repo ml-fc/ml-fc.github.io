@@ -129,6 +129,7 @@ export async function renderCaptainPage(root, query) {
   const visibleTeamName = (team) => safeUpper(team) === "BLUE" ? homeTeamName : safeUpper(team) === "ORANGE" ? awayTeamName : team;
   const status = safeUpper(m.status);
   const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE" || Number(m.ratingsLocked) === 1;
+  const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
   const when = formatHumanDateTime(m.date, m.time);
   const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
   const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
@@ -342,7 +343,7 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
 
-    <div class="card"><div class="h1">Team positions</div><div id="captainField"></div><div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team on WhatsApp</button>`}</div></div>
+    <div class="card"><div class="h1">Team positions</div>${scoreStarted ? `<div class="small inlineNote">Team selection and positions are locked because scoring has started.</div>` : ""}<div id="captainField"></div><div class="row" style="gap:10px; flex-wrap:wrap">${scoreStarted ? "" : `<button class="btn primary" id="saveField">Save positions</button>`}${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team on WhatsApp</button>`}</div></div>
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
@@ -458,7 +459,7 @@ export async function renderCaptainPage(root, query) {
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
   const fieldPhotos = Object.fromEntries((data.teams || []).filter(row => row.photoUrl).map(row => [row.playerName, row.photoUrl]));
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:scoreStarted,onSave:scoreStarted ? null : () => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
   root.querySelector("#shareCaptainTeam")?.addEventListener("click", () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
     if (!team || !team.players.length) return toastWarn("No players are assigned to your team yet.");
@@ -467,7 +468,8 @@ export async function renderCaptainPage(root, query) {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     toastInfo("WhatsApp opened with your team only.");
   });
-  root.querySelector("#saveField").onclick = async () => {
+  const saveFieldButton = root.querySelector("#saveField");
+  if (saveFieldButton) saveFieldButton.onclick = async () => {
     const button = root.querySelector("#saveField"); button.disabled = true;
     try {
       for (const g of fieldGroups.filter(g => ownTeams.includes(g.team))) {
