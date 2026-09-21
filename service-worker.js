@@ -91,6 +91,7 @@ const STATIC_ASSETS = [
   "/src/api/client.js",
   "/src/api/endpoints.js",
   "/src/pages/match.js",
+  "/src/pages/login.js",
   "/src/pages/register.js",
   "/src/pages/leaderboard.js",
   "/src/pages/admin.js",
