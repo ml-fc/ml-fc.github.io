@@ -1673,6 +1673,8 @@ details.card[open] > summary { margin-bottom: 14px; }
 .statusPill--pending span { color: #09253a; background: #bae6fd; }
 .statusPillLink{color:#fff;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}.statusPillLink:hover{color:#bae6fd}.statusPillLink:focus-visible{outline:3px solid #f0c94b;outline-offset:4px;border-radius:4px}
 .nextMatch__actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.availabilityStatusPrompt { display: grid; justify-items: start; gap: 12px; }
+.availabilityStatusPrompt .btn { width: auto; max-width: 100%; }
 .quickResponse { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .quickResponse .btn { color: #fff; border-color: rgba(255,255,255,.26); background: rgba(5, 24, 38, .5); }
 .quickResponse .btn:hover { background: rgba(255,255,255,.1); }

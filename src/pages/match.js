@@ -1058,7 +1058,7 @@ function renderNextMatchDashboard(host, data) {
         <div class="nextMatch__state">
           <span class="nextMatch__label">Availability</span>
           ${statusBlocksAvailability && !hasAvailabilityResponse
-            ? `<a class="statusPill statusPill--pending statusPillLink" href="${escapeHtml(profileStatusRoute(match.publicCode))}"><span aria-hidden="true">!</span>Response needed</a>`
+            ? `<a class="statusPill statusPill--pending statusPillLink" href="${escapeHtml(profileStatusRoute(match.publicCode))}"><span aria-hidden="true">!</span>Update status</a>`
             : `<strong class="statusPill statusPill--${availability.tone}"><span aria-hidden="true">${availability.tone === "yes" ? "✓" : availability.tone === "no" ? "×" : availability.tone === "waiting" ? "↗" : "!"}</span>${escapeHtml(availability.label)}</strong>`}
           <small>${statusBlocksAvailability && !hasAvailabilityResponse ? `Your profile is ${escapeHtml(playerStatus.toLowerCase())}. Change it to Active to respond.` : escapeHtml(availability.detail)}</small>
         </div>
@@ -1075,7 +1075,6 @@ function renderNextMatchDashboard(host, data) {
       </div>
 
       <footer class="nextMatch__actions">
-        ${statusBlocksAvailability && !hasAvailabilityResponse ? `<a class="btn primary nextMatch__primary" href="${escapeHtml(profileStatusRoute(match.publicCode))}">Update player status</a>` : ""}
         ${showResponse ? `
           <div class="quickResponse" role="group" aria-label="Set your availability">
             <button class="btn quickResponse__yes" type="button" data-next-response="YES"><span aria-hidden="true">✓</span> Yes, I can play</button>
@@ -1744,7 +1743,7 @@ const cap = availabilityLimitForMatch(m);
               ${ratingsClosed
                 ? `<div class="small"><b>Availability is closed.</b></div>`
                 : (profileUnavailable
-                    ? `<div class="small"><b>Your profile is ${escapeHtml(String(me.playerStatus).toLowerCase())}.</b> Change it to Active in Profile before updating availability.</div><a class="btn primary" href="${escapeHtml(profileStatusRoute(code))}" style="margin-top:12px">Update player status</a>`
+                    ? `<div class="availabilityStatusPrompt"><div class="small"><b>Your profile is ${escapeHtml(String(me.playerStatus).toLowerCase())}.</b> Change it to Active in Profile before updating availability.</div><a class="btn primary" href="${escapeHtml(profileStatusRoute(code))}">Update status</a></div>`
                     : availabilityClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
