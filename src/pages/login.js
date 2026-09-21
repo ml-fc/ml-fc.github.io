@@ -8,6 +8,28 @@ import { showPushEnableReminder } from "../ui/push_reminder.js";
 import { choosePhotoCrop, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
+const PHONE_COUNTRIES = [
+  ["61", "🇦🇺 Australia (+61)"], ["64", "🇳🇿 New Zealand (+64)"], ["91", "🇮🇳 India (+91)"],
+  ["44", "🇬🇧 United Kingdom (+44)"], ["1", "🇺🇸 USA / Canada (+1)"], ["971", "🇦🇪 UAE (+971)"],
+  ["65", "🇸🇬 Singapore (+65)"], ["60", "🇲🇾 Malaysia (+60)"], ["94", "🇱🇰 Sri Lanka (+94)"],
+  ["63", "🇵🇭 Philippines (+63)"], ["92", "🇵🇰 Pakistan (+92)"], ["880", "🇧🇩 Bangladesh (+880)"],
+];
+
+function phoneParts(value) {
+  const digits = String(value || "").replace(/\D+/g, "");
+  if (!digits || digits.startsWith("0")) return { country: "61", local: digits.replace(/^0+/, "") };
+  const country = PHONE_COUNTRIES.map(([code]) => code).sort((a, b) => b.length - a.length).find(code => digits.startsWith(code)) || "61";
+  return { country, local: country === "61" && !digits.startsWith("61") ? digits : digits.slice(country.length) };
+}
+
+function countryOptions(selected = "61") {
+  return PHONE_COUNTRIES.map(([code, label]) => `<option value="${code}"${code === selected ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function internationalPhone(countrySelect, numberInput) {
+  const local = String(numberInput?.value || "").replace(/\D+/g, "").replace(/^0+/, "");
+  return `${String(countrySelect?.value || "61").replace(/\D+/g, "")}${local}`;
+}
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
@@ -24,6 +46,8 @@ export async function renderLoginPage(root) {
 
   // If logged in already, show account page + logout
   if (token && me) {
+    const savedPhone = phoneParts(me.phone);
+    const isSuperAdmin = String(me.name || "").trim().toLowerCase() === "admin";
     updateNavForUser(me);
     root.innerHTML = `
       <div class="card">
@@ -35,6 +59,11 @@ export async function renderLoginPage(root) {
           <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
           <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           <span class="small" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear photo, then crop closely around your face for the best view.</span>
+        </div>
+        <div class="profilePhotoActions">
+          <div class="field" style="flex:1 1 280px;margin:0"><label class="field__label" for="profilePhone">WhatsApp number</label><div class="phoneField"><select id="profileCountry" class="input" aria-label="Country code">${countryOptions(savedPhone.country)}</select><input id="profilePhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" value="${esc(savedPhone.local)}" aria-label="Phone number" /></div><div class="field__help">Choose the country code, then enter the number without the leading zero.</div></div>
+          <button class="btn primary" id="savePhone" type="button">${me.phone ? "Update number" : "Save number"}</button>
+          <span class="small" id="phoneStatus" role="status" aria-live="polite"></span>
         </div>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="goMatches">Go to matches</button>
@@ -85,10 +114,38 @@ export async function renderLoginPage(root) {
           <button class="requiredPhotoLogout" id="requiredPhotoLogout" type="button">Sign out instead</button>
         </div>
       </dialog>`}
+      ${me.phone || isSuperAdmin ? "" : `<dialog id="requiredPhoneDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhoneTitle" aria-describedby="requiredPhoneHelp">
+        <div class="requiredPhotoSheet">
+          <div class="requiredPhoneIcon" aria-hidden="true">☎</div>
+          <div class="stepEyebrow">One last step</div>
+          <div class="h1" id="requiredPhoneTitle">Add your WhatsApp number</div>
+          <p id="requiredPhoneHelp">A WhatsApp number is now required so your account is ready for future WhatsApp login.</p>
+          <div class="phoneField"><select id="requiredCountry" class="input" aria-label="Country code">${countryOptions("61")}</select><input id="requiredPhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" placeholder="412 345 678" aria-label="Phone number" /></div>
+          <button class="btn primary requiredPhotoChoose" id="requiredPhoneSave" type="button">Save and continue</button>
+          <div class="small" id="requiredPhoneStatus" role="status" aria-live="polite">Include the country code if this is not an Australian number.</div>
+          <button class="requiredPhotoLogout" id="requiredPhoneLogout" type="button">Sign out instead</button>
+        </div>
+      </dialog>`}
     `;
 
     root.querySelector("#goMatches").onclick = () => (location.hash = "#/match");
     root.querySelector("#goSeason").onclick = () => (location.hash = "#/season");
+    const cleanPhoneInput = input => input?.addEventListener("input", () => { input.value = String(input.value || "").replace(/\D+/g, ""); });
+    const savePhone = async (country, input, status) => {
+      const phone = internationalPhone(country, input);
+      input.removeAttribute("aria-invalid");
+      if (phone.length < 8 || phone.length > 15) { input.setAttribute("aria-invalid", "true"); status.textContent = "Enter a valid WhatsApp number."; input.focus(); return; }
+      status.textContent = "Saving…";
+      const result = await API.userSetPhone(phone).catch(() => null);
+      if (!result?.ok) { status.textContent = result?.error || "Could not save the number."; return; }
+      me = { ...me, phone: result.phone };
+      setCachedUser(me); updateNavForUser(me);
+      toastSuccess("WhatsApp number updated");
+      await renderLoginPage(root);
+    };
+    const profilePhone = root.querySelector("#profilePhone");
+    cleanPhoneInput(profilePhone);
+    root.querySelector("#savePhone").onclick = () => savePhone(root.querySelector("#profileCountry"), profilePhone, root.querySelector("#phoneStatus"));
     const photoInput = root.querySelector("#profilePhotoInput");
     const photoStatus = root.querySelector("#profilePhotoStatus");
     const requiredPhotoStatus = root.querySelector("#requiredPhotoStatus");
@@ -130,8 +187,17 @@ export async function renderLoginPage(root) {
     };
     root.querySelector("#logout").onclick = logout;
     root.querySelector("#requiredPhotoLogout")?.addEventListener("click", logout);
+    root.querySelector("#requiredPhoneLogout")?.addEventListener("click", logout);
+    const requiredPhone = root.querySelector("#requiredPhone");
+    cleanPhoneInput(requiredPhone);
+    root.querySelector("#requiredPhoneSave")?.addEventListener("click", () => savePhone(root.querySelector("#requiredCountry"), requiredPhone, root.querySelector("#requiredPhoneStatus")));
+    const requiredPhoneDialog = root.querySelector("#requiredPhoneDialog");
+    if (requiredPhoneDialog) {
+      requiredPhoneDialog.addEventListener("cancel", event => event.preventDefault());
+      if (typeof requiredPhoneDialog.showModal === "function") requiredPhoneDialog.showModal();
+    }
     const requiredPhotoDialog = root.querySelector("#requiredPhotoDialog");
-    if (requiredPhotoDialog) {
+    if (requiredPhotoDialog && !requiredPhoneDialog) {
       requiredPhotoDialog.addEventListener("cancel", event => event.preventDefault());
       if (typeof requiredPhotoDialog.showModal === "function") requiredPhotoDialog.showModal();
     }
@@ -443,7 +509,7 @@ export async function renderLoginPage(root) {
       <div class="h1">Register</div>
       <div class="small">Create your player account with any password you will remember.</div>
       <div class="field"><label class="field__label" for="rname">Player name</label><input id="rname" class="input" autocomplete="username" maxlength="80" /></div>
-      <div class="field"><label class="field__label" for="rphone">Phone <span class="field__optional">Optional</span></label><input id="rphone" class="input" inputmode="numeric" pattern="[0-9]*" maxlength="15" autocomplete="tel" /></div>
+      <div class="field"><label class="field__label" for="rphone">WhatsApp number</label><div class="phoneField"><select id="rcountry" class="input" aria-label="Country code">${countryOptions("61")}</select><input id="rphone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" required aria-describedby="rphoneHelp rmsg" /></div><div class="field__help" id="rphoneHelp">Choose the country code, then enter the number without the leading zero.</div></div>
       <div class="field"><label class="field__label" for="rpass">Password</label><input id="rpass" type="password" class="input" autocomplete="new-password" aria-describedby="rpassHelp rmsg" /><div class="field__help" id="rpassHelp">Any non-empty password is accepted.</div></div>
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="regBtn" class="btn primary">Create account</button>
@@ -518,14 +584,21 @@ const rmsg = root.querySelector("#rmsg");
     const rnameEl = root.querySelector("#rname");
     const rpassEl = root.querySelector("#rpass");
     const name = rnameEl.value.replace(/\s+/g, " ").trim();
-    const phone = root.querySelector("#rphone").value.trim();
+    const phone = internationalPhone(root.querySelector("#rcountry"), rphoneEl);
     const password = rpassEl.value.trim();
     rnameEl.removeAttribute("aria-invalid");
     rpassEl.removeAttribute("aria-invalid");
+    rphoneEl.removeAttribute("aria-invalid");
     if (!name) {
       rnameEl.setAttribute("aria-invalid", "true");
       rmsg.textContent = "Enter the player name for this account.";
       rnameEl.focus();
+      return;
+    }
+    if (phone.length < 8 || phone.length > 15) {
+      rphoneEl.setAttribute("aria-invalid", "true");
+      rmsg.textContent = "Enter a valid WhatsApp number.";
+      rphoneEl.focus();
       return;
     }
     if (!password) {

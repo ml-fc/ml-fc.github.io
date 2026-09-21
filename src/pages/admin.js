@@ -545,9 +545,9 @@ async function potmImageFile(match, when, players, voteCount) {
   ];
   stats.forEach(([value,label],index)=>{
     const x=70+index*235;
-    context.fillStyle="rgba(3,20,32,.72)"; context.fillRect(x,790,210,190);
-    context.fillStyle="#ffffff"; context.font="900 62px Arial"; context.fillText(value,x+25,875);
-    context.fillStyle="#72d7fa"; context.font="900 20px Arial"; context.fillText(label,x+25,935);
+    context.fillStyle="rgba(3,20,32,.72)"; context.fillRect(x,770,210,230);
+    context.fillStyle="#ffffff"; context.font="900 84px Arial"; context.fillText(value,x+22,875);
+    context.fillStyle="#72d7fa"; context.font="900 26px Arial"; context.fillText(label,x+22,952);
   });
   context.fillStyle="#ffffff"; context.font="900 38px Arial";
   context.fillText(`${match.teamHomeName || "Home"} ${match.scoreHome} – ${match.scoreAway} ${match.teamAwayName || "Away"}`,70,1090);
@@ -2542,7 +2542,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" id="publishOpponent" ${isEditLocked ? "disabled" : ""}>Publish team</button>
           <button class="btn whatsappBtn" id="shareSquad" ${squad.length ? "" : "disabled"}>Share team sheet</button>
-          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
         </div>
 
         <div class="hr"></div>
@@ -2775,7 +2774,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       <div class="row fieldSaveBar" style="margin-top:14px; gap:10px; flex-wrap:wrap">
         <button class="btn primary" id="publishSetup" ${isEditLocked || !hasAnyTeams ? "disabled" : ""}>Publish teams</button>
         <button class="btn whatsappBtn" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share team sheet</button>
-         ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
       </div>
 
       <div id="setupMsg" class="small" style="margin-top:10px"></div>

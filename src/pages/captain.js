@@ -74,6 +74,89 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[c]));
 }
 
+function canvasBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+}
+
+function downloadFile(file) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function captainTeamImageFile(match, when, team, positions) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const context = canvas.getContext("2d");
+  const background = context.createLinearGradient(0, 0, 0, canvas.height);
+  background.addColorStop(0, "#07111e");
+  background.addColorStop(1, "#0b3444");
+  context.fillStyle = background;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#72d7fa";
+  context.fillRect(0, 0, canvas.width, 18);
+  context.fillStyle = "#fff";
+  context.font = "900 34px Arial";
+  context.fillText("MANOR LAKES FC · TEAM SHEET", 60, 76);
+  context.font = "900 52px Arial";
+  context.fillText(String(team.label || "MLFC").toUpperCase(), 60, 145);
+  context.fillStyle = "#b8ced9";
+  context.font = "700 25px Arial";
+  context.fillText(String(match.title || "Match"), 60, 190);
+  context.fillText(when, 60, 228);
+
+  const pitch = { x: 55, y: 270, width: 970, height: 1000 };
+  const grass = context.createLinearGradient(0, pitch.y, 0, pitch.y + pitch.height);
+  grass.addColorStop(0, "#126779");
+  grass.addColorStop(1, "#084155");
+  context.fillStyle = grass;
+  context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height);
+  context.strokeStyle = "rgba(255,255,255,.55)";
+  context.lineWidth = 4;
+  context.strokeRect(pitch.x + 18, pitch.y + 18, pitch.width - 36, pitch.height - 36);
+  context.beginPath();
+  context.moveTo(pitch.x + 18, pitch.y + pitch.height / 2);
+  context.lineTo(pitch.x + pitch.width - 18, pitch.y + pitch.height / 2);
+  context.stroke();
+  context.beginPath();
+  context.arc(pitch.x + pitch.width / 2, pitch.y + pitch.height / 2, 92, 0, Math.PI * 2);
+  context.stroke();
+
+  const rows = positionRows([team], positions);
+  const resolved = Object.fromEntries(rows.map(row => [row.playerName, row]));
+  for (const player of team.players) {
+    const position = resolved[player] || { positionX: 50, positionY: 50 };
+    const x = pitch.x + 45 + Number(position.positionX) / 100 * (pitch.width - 90);
+    const y = pitch.y + 45 + (100 - Number(position.positionY)) / 100 * (pitch.height - 90);
+    context.fillStyle = player === team.captain ? "#ffe16a" : "#72d7fa";
+    context.beginPath();
+    context.arc(x, y, 34, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#08283b";
+    context.font = "900 24px Arial";
+    context.textAlign = "center";
+    context.fillText(player === team.captain ? "C" : "•", x, y + 8);
+    context.font = "900 22px Arial";
+    const labelWidth = Math.min(230, Math.max(110, context.measureText(player).width + 28));
+    context.fillStyle = "rgba(2,14,22,.88)";
+    context.fillRect(x - labelWidth / 2, y + 43, labelWidth, 38);
+    context.fillStyle = "#fff";
+    context.fillText(player, x, y + 70, labelWidth - 16);
+  }
+  context.textAlign = "left";
+  context.fillStyle = "#b8ced9";
+  context.font = "700 20px Arial";
+  context.fillText(`${team.players.length} players · Generated from MLFC`, 60, 1320);
+  const blob = await canvasBlob(canvas);
+  return blob ? new File([blob], `mlfc-${team.team.toLowerCase()}-team-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
 // Some API calls accept a "scope" so the backend can validate permissions.
 // Captain flow defaults to CAPTAIN; when an admin opens the captain page from
 // the admin UI (e.g. #/captain?code=...&src=admin) we send ADMIN.
@@ -129,7 +212,6 @@ export async function renderCaptainPage(root, query) {
   const visibleTeamName = (team) => safeUpper(team) === "BLUE" ? homeTeamName : safeUpper(team) === "ORANGE" ? awayTeamName : team;
   const status = safeUpper(m.status);
   const locked = String(m.ratingsLocked || "").toUpperCase() === "TRUE" || Number(m.ratingsLocked) === 1;
-  const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
   const when = formatHumanDateTime(m.date, m.time);
   const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
   const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
@@ -218,24 +300,8 @@ export async function renderCaptainPage(root, query) {
     ? (captainTeam === "BLUE" ? "ORANGE" : "BLUE")
     : "";
 
-  const opponentScoreField = (type === "INTERNAL" && captainTeam)
-    ? (captainTeam === "BLUE" ? "scoreAway" : "scoreHome")
-    : "";
-
-  // Ratings should only be available after a score has been submitted (as stored in backend).
-  // - INTERNAL: captain can only submit opponent score, so unlock once *their* opponent score field exists.
-  // - OPPONENT / other: unlock once both scores exist.
-  let ratingsEnabled = false;
-  if (!adminMode && type === "INTERNAL" && captainTeam) {
-    // Captains: INTERNAL matches unlock ratings after they submit the opponent score.
-    const oppStored = String(m[opponentScoreField] ?? "").trim();
-    ratingsEnabled = oppStored !== "";
-  } else {
-    // Admins (src=admin) + non-internal: unlock once both scores exist.
-    const a = String(m.scoreHome ?? "").trim();
-    const b = String(m.scoreAway ?? "").trim();
-    ratingsEnabled = a !== "" && b !== "";
-  }
+  // Score entry and ratings are independent; both become available at kick-off.
+  let ratingsEnabled = hasStarted;
 
   function isOpponentPlayer(playerName) {
     if (adminMode) return true;
@@ -343,7 +409,7 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
 
-    <div class="card"><div class="h1">Team positions</div>${scoreStarted ? `<div class="small inlineNote">Team selection and positions are locked because scoring has started.</div>` : ""}<div id="captainField"></div><div class="row" style="gap:10px; flex-wrap:wrap">${scoreStarted ? "" : `<button class="btn primary" id="saveField">Save positions</button>`}${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team on WhatsApp</button>`}</div></div>
+    <div class="card"><div class="h1">Team positions</div><div class="small inlineNote">You can update your team’s formation from the moment you are assigned captain.</div><div id="captainField"></div>${adminMode ? "" : `<div class="field" style="margin-top:12px"><label class="field__label" for="captainShareMessage">Captain’s message (optional)</label><textarea id="captainShareMessage" class="input" rows="3" maxlength="500" placeholder="Add a message for the team…"></textarea></div>`}<div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team PNG</button>`}</div></div>
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
@@ -459,14 +525,28 @@ export async function renderCaptainPage(root, query) {
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
   const fieldPhotos = Object.fromEntries((data.teams || []).filter(row => row.photoUrl).map(row => [row.playerName, row.photoUrl]));
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:scoreStarted,onSave:scoreStarted ? null : () => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
-  root.querySelector("#shareCaptainTeam")?.addEventListener("click", () => {
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:false,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
+  root.querySelector("#shareCaptainTeam")?.addEventListener("click", async () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
     if (!team || !team.players.length) return toastWarn("No players are assigned to your team yet.");
-    const lines = team.players.map(player => `${player === captain ? "(C) " : ""}${player}`);
-    const message = [`${m.title} · ${team.label}`, when, "", ...lines].join("\n");
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-    toastInfo("WhatsApp opened with your team only.");
+    const button = root.querySelector("#shareCaptainTeam");
+    setDisabled(button, true, "Preparing…");
+    try {
+      const file = await captainTeamImageFile(m, when, team, fieldPositions);
+      if (!file) throw new Error("Could not create the team image.");
+      const captainMessage = String(root.querySelector("#captainShareMessage")?.value || "").trim();
+      const text = [`${m.title} · ${team.label}`, captainMessage].filter(Boolean).join("\n\n");
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: `${team.label} team sheet`, text, files: [file] });
+        toastSuccess("Team PNG shared.");
+      } else {
+        downloadFile(file);
+        if (text) window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+        toastInfo("Team PNG downloaded. Attach it to your message.");
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") toastError(error?.message || "Team image could not be shared.");
+    } finally { setDisabled(button, false); }
   });
   const saveFieldButton = root.querySelector("#saveField");
   if (saveFieldButton) saveFieldButton.onclick = async () => {
@@ -694,7 +774,7 @@ export async function renderCaptainPage(root, query) {
               </div>
             </div>
           ` : `
-            <div class="small muted" style="margin-top:10px">${ratingsEnabled ? "No rating box (not opponent)." : "Submit score to unlock ratings."}</div>
+            <div class="small muted" style="margin-top:10px">${ratingsEnabled ? "No rating box (not opponent)." : "Ratings unlock at kick-off."}</div>
           `}
         </div>
       `;
@@ -876,7 +956,7 @@ export async function renderCaptainPage(root, query) {
   if (submitRatingsBtn) {
     submitRatingsBtn.onclick = async () => {
       if (!ratingsEnabled) {
-        toastWarn("Submit your opponent score first to unlock ratings.");
+        toastWarn("Ratings unlock at kick-off.");
         return;
       }
 

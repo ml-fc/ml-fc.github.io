@@ -991,6 +991,12 @@ function wireNextMatchLinks(host) {
       if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
     };
   });
+  host.querySelectorAll("[data-next-captain]").forEach((button) => {
+    button.onclick = () => {
+      const code = button.getAttribute("data-next-captain");
+      if (code) location.hash = `#/captain?code=${encodeURIComponent(code)}&src=match`;
+    };
+  });
 }
 
 function renderNextMatchDashboard(host, data) {
@@ -1050,7 +1056,7 @@ function renderNextMatchDashboard(host, data) {
         </div>
         ${availabilityStatus === "YES" ? `<div class="nextMatch__state">
           <span class="nextMatch__label">Your role</span>
-          <strong>${team ? escapeHtml(`${teamName} team${fieldRole ? ` · ${fieldRole}` : ""}`) : "Team not assigned"}</strong>
+          <strong>${assignment.isCaptain ? `<span class="badge nextMatch__captainTag" aria-label="Captain">C</span> ` : ""}${team ? escapeHtml(`${teamName} team${fieldRole ? ` · ${fieldRole}` : ""}`) : "Team not assigned"}</strong>
           <small>${escapeHtml(roleLabel)}</small>
         </div>` : ""}
         <div class="nextMatch__state">
@@ -1067,9 +1073,10 @@ function renderNextMatchDashboard(host, data) {
             <button class="btn quickResponse__no" type="button" data-next-response="NO"><span aria-hidden="true">×</span> No, I’m unavailable</button>
           </div>` : ""}
         ${hasAvailabilityResponse && canRespond ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">Update availability</button>` : ""}
-        ${!hasAvailabilityResponse && action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
+        ${!assignment.isCaptain && !hasAvailabilityResponse && action && action.type !== "RESPOND" ? `<button class="btn primary nextMatch__primary" type="button" data-next-open="${escapeHtml(action.publicCode || match.publicCode)}">${escapeHtml(action.label)}</button>` : ""}
         ${!hasAvailabilityResponse && !showResponse && (!action || action.type === "RESPOND") ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
         ${hasAvailabilityResponse && !canRespond ? `<button class="btn gray nextMatch__primary" type="button" data-next-open="${escapeHtml(match.publicCode)}">View match</button>` : ""}
+        ${assignment.isCaptain ? `<button class="btn primary nextMatch__primary" type="button" data-next-captain="${escapeHtml(match.publicCode)}">Manage team</button>` : ""}
         ${hasAvailabilityResponse ? `<button class="btn whatsappBtn" type="button" data-next-share>Share to WhatsApp</button>` : ""}
       </footer>
 
@@ -1545,12 +1552,11 @@ const cap = availabilityLimitForMatch(m);
     detail.querySelector("#noList").innerHTML = g.no.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
     detail.querySelector("#waitList").innerHTML = g.waiting.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
 
-    // Waiting list button is only enabled once quota is reached.
-    // Exception: after admin closes availability, people can still opt into the waiting list.
+    // Waiting list button is enabled once the confirmed-player quota is reached.
     const btnWait = detail.querySelector("#btnWait");
     if (btnWait) {
       const quotaReached = yesCount >= cap;
-      const allowWait = quotaReached || adminClosed;
+      const allowWait = quotaReached;
       btnWait.disabled = !meName || !allowWait;
       btnWait.title = allowWait ? "" : `Waiting list unlocks when ${cap} players are available.`;
     }
@@ -1560,15 +1566,10 @@ const cap = availabilityLimitForMatch(m);
   const isCaptain = !!meName && [caps.captain1, caps.captain2].some(c => String(c || "").trim().toLowerCase() === meName.toLowerCase());
 
   const teamsSelected = Array.isArray(data.teams) && data.teams.length > 0;
-  // Availability should NOT auto-close when captains are selected.
-  // Instead, admin can explicitly close availability (match.availabilityLocked=1), and ratings lock will also close it.
-  const adminClosed = Number(m.availabilityLocked || 0) === 1;
   const ratingsClosed = Number(m.ratingsLocked || 0) === 1 || String(m.ratingsLocked || "").toUpperCase() === "TRUE";
-  const availabilityClosed = adminClosed || ratingsClosed;
-  // Captains should only proceed once availability is explicitly closed (admin button / ratings lock).
-  const captainPageEnabled = !!availabilityClosed;
-  // Availability visibility should depend only on availabilityClosed (admin button / ratings lock),
-  // NOT on whether captains/teams have been selected.
+  const availabilityClosed = ratingsClosed;
+  // Captain assignment grants immediate access; it is independent of availability.
+  const captainPageEnabled = isCaptain;
   const hideAvailability = false;
   const teamForPlayer = {};
   (data.teams || []).forEach(t=>{ const pn=String(t.playerName||'').trim(); const tm=String(t.team||'').trim(); if(pn&&tm) teamForPlayer[pn]=tm; });
@@ -1657,9 +1658,9 @@ const cap = availabilityLimitForMatch(m);
       ${isCaptain ? `
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
           ${isCaptain ? `<span class="badge">CAPTAIN</span>` : ``}
-          <button class="btn primary" id="openCaptain" ${captainPageEnabled ? "" : "disabled"} title="${captainPageEnabled ? "" : "Captain page unlocks after availability is closed by admin."}">Open captain page</button>
+          <button class="btn primary" id="openCaptain" ${captainPageEnabled ? "" : "disabled"} title="${captainPageEnabled ? "" : "Available once you are assigned as captain."}">Open captain page</button>
         </div>
-        ${captainPageEnabled ? `` : `<div class="small" style="margin-top:8px"><b>Note:</b> Captain page will unlock after admin closes availability.</div>`}
+        ${captainPageEnabled ? `` : `<div class="small" style="margin-top:8px"><b>Note:</b> Captain tools unlock as soon as you are assigned.</div>`}
       ` : ``}
     </div>
 
@@ -1793,7 +1794,7 @@ const cap = availabilityLimitForMatch(m);
 
   const capBtn = detail.querySelector("#openCaptain");
   if (capBtn) capBtn.onclick = () => {
-    if (!captainPageEnabled) return toastWarn("Captain page unlocks after availability is closed by admin.");
+    if (!captainPageEnabled) return toastWarn("Captain tools unlock as soon as you are assigned.");
     location.hash = `#/captain?code=${encodeURIComponent(code)}&src=match`;
   };
 

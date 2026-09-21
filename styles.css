@@ -1661,6 +1661,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 .nextMatch__stateGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 25px; background: rgba(156, 203, 224, .18); border: 1px solid rgba(156, 203, 224, .18); }
 .nextMatch__state { display: grid; align-content: start; gap: 7px; min-height: 112px; padding: 16px; background: rgba(4, 25, 39, .72); }
 .nextMatch__state > strong { color: #fff; font-size: 18px; }
+.nextMatch__captainTag { padding: 4px 7px; border-color: rgba(114, 215, 250, .55); color: #082236; background: #72d7fa; vertical-align: 2px; }
 .nextMatch__state small { color: #b8ccd8; line-height: 1.4; }
 .statusPill { display: inline-flex; width: fit-content; align-items: center; gap: 7px; }
 .statusPill span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 13px; }
@@ -2452,8 +2453,10 @@ body.hasCompactMatchCommand .appbar {
 .playerPhoto--potm{width:68px;height:68px;font-size:18px;border-width:3px;box-shadow:0 0 0 4px rgba(240,201,75,.35)}
 .profileIdentity{display:flex;align-items:center;gap:18px}.playerPhoto--profile{width:86px;height:86px;font-size:24px;border-width:4px;box-shadow:0 0 0 5px rgba(114,215,250,.22),0 12px 25px rgba(7,17,30,.18)}
 .profilePhotoActions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(11,18,32,.1)}
+.phoneField{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(140px,1fr);gap:8px;width:100%}.phoneField select{min-width:0}.phoneField input{min-width:0}@media(max-width:480px){.phoneField{grid-template-columns:1fr}}
 .requiredPhotoDialog{width:min(430px,calc(100% - 20px));padding:0;border:0;border-radius:12px;color:var(--ink);background:#fff;box-shadow:0 22px 70px rgba(8,24,38,.48)}.requiredPhotoDialog::backdrop{background:rgba(3,18,29,.82);backdrop-filter:blur(4px)}
 .requiredPhotoSheet{display:grid;justify-items:center;gap:12px;padding:26px;text-align:center}.requiredPhotoSheet .h1{margin:0}.requiredPhotoSheet p{margin:0;color:var(--ink-2);font-size:14px;line-height:1.55}.requiredPhotoIcon{display:grid;place-items:center;width:82px;height:82px;border:4px solid #fff;border-radius:50%;color:#fff;background:linear-gradient(145deg,#147bad,#092d43);box-shadow:0 0 0 5px rgba(114,215,250,.28);font:950 30px/1 Arial,sans-serif}.requiredPhotoChoose{width:100%;margin-top:4px}.requiredPhotoSheet>.small{min-height:2.8em}.requiredPhotoLogout{padding:5px;border:0;color:var(--ink-2);background:transparent;font:inherit;font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}.requiredPhotoLogout:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.requiredPhoneIcon{display:grid;place-items:center;width:82px;height:82px;border:4px solid #fff;border-radius:50%;color:#fff;background:linear-gradient(145deg,#25d366,#087f3d);box-shadow:0 0 0 5px rgba(37,211,102,.22);font:900 34px/1 Arial,sans-serif}.requiredPhotoSheet>.input,.requiredPhotoSheet>.phoneField{width:100%}
 @media(max-width:600px){.requiredPhotoSheet{padding:22px 18px}.requiredPhotoDialog{max-height:calc(100dvh - 16px)}}
 .photoCropDialog{width:min(440px,calc(100% - 20px));max-height:calc(100dvh - 20px);padding:0;border:0;border-radius:12px;color:var(--ink);background:#fff;box-shadow:0 22px 70px rgba(8,24,38,.45)}
 .photoCropDialog::backdrop{background:rgba(3,18,29,.78);backdrop-filter:blur(3px)}

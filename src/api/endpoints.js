@@ -25,6 +25,7 @@ export const API = {
   publicMatchesMeta: (seasonId) => apiGet({ action: "public_matches_meta", seasonId }),
 
   // players / public match
+  registerPlayer: (name, phone) => apiPost({ action: "register_player", name, phone }),
   players: () => apiGet({ action: "players" }),
   getPublicMatch: (code) => apiGet({ action: "public_match", code }),
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
@@ -66,6 +67,7 @@ export const API = {
 
   // user self-service
   userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
+  userSetPhone: (phone) => apiPost({ action: "user_set_phone", phone }),
   userSetPhoto: (blob) => {
     const form = new FormData();
     form.set("action", "user_set_photo");
