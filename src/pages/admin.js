@@ -2109,11 +2109,11 @@ function bindListButtons(root, view) {
 
 /* =======================
    Manage UI (FULL)
-   - Opponent: set captain, show link only AFTER save + share button
+   - Opponent: set captain, publish from Manage, and share separately
    - Internal: compact table (player + Blue/Orange), remove enables buttons again,
               captains chosen via checkbox in team lists,
-              Save setup + Share teams buttons AFTER lists,
-              Captain links section only AFTER save
+              Publish teams + Share team sheet buttons after the field,
+              Captain links remain available from the Manage screen
    - No close availability anywhere
    ======================= */
 
@@ -2522,7 +2522,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
-        onSave:() => manageBody.querySelector("#saveOpponent").click(),
         onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
         onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); fieldPositions=randomGoalkeeperPositions(squad); updateOpponentDraft(); renderSquadLists(); },
         onChange:updateOpponentDraft,
@@ -2541,7 +2540,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         <div id="opponentTeamPreview"></div>
 
         <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="saveOpponent" ${isEditLocked ? "disabled" : ""}>Save setup</button>
+          <button class="btn primary" id="publishOpponent" ${isEditLocked ? "disabled" : ""}>Publish team</button>
           <button class="btn whatsappBtn" id="shareSquad" ${squad.length ? "" : "disabled"}>Share team sheet</button>
           ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
         </div>
@@ -2581,31 +2580,30 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       setDisabled(button, true, "Preparing…");
       try {
         const mode = await shareTeamSheet(m, when, homeTeamName || "MLFC", squad, "", [], fieldPositions, [opponentCaptain], playerPhotos);
-        const published = await API.adminShareTeams(m.matchId);
-        if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
         toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
       } catch (error) {
         if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
       } finally { setDisabled(button, false); }
     };
 
-    manageBody.querySelector("#saveOpponent").onclick = async () => {
-      const btn = manageBody.querySelector("#saveOpponent");
+    manageBody.querySelector("#publishOpponent").onclick = async () => {
+      const btn = manageBody.querySelector("#publishOpponent");
       const msg = manageBody.querySelector("#msg");
       const selCaptain = opponentCaptain;
 
-      if (!squad.length) return toastWarn("Select at least one MLFC player before saving.");
-      if (!selCaptain) return toastWarn("Select one MLFC captain before saving.");
+      if (!squad.length) return toastWarn("Select at least one MLFC player before publishing.");
+      if (!selCaptain) return toastWarn("Select one MLFC captain before publishing.");
 
-      setDisabled(btn, true, "Saving…");
-      msg.textContent = "Saving…";
+      setDisabled(btn, true, "Publishing…");
+      msg.textContent = "Saving team before publishing…";
 
       const out = await API.adminSetupOpponent({ matchId: m.matchId, captain: selCaptain, mlfcPlayers: squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
+      if (!out.ok) { setDisabled(btn, false); msg.textContent = out.error || "Failed"; return toastError(out.error || "Failed"); }
+      const published = await API.adminShareTeams(m.matchId);
       setDisabled(btn, false);
-
-      if (!out.ok) { msg.textContent = out.error || "Failed"; return toastError(out.error || "Failed"); }
-      msg.textContent = "Saved ✅";
-      toastSuccess("Opponent match setup saved.");
+      if (!published?.ok) { msg.textContent = published?.error || "Publishing failed"; return toastError(published?.error || "Team notification could not be sent"); }
+      msg.textContent = "Published ✅";
+      toastSuccess("Team published and players notified.");
       lsDel(setupDraftKey(m.matchId));
       clearPublicMatchDetailCache(m.publicCode);
       clearManageCache(m.publicCode);
@@ -2694,7 +2692,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     else lsDel(setupDraftKey(m.matchId));
   }
 
-  // Links can be generated as soon as we know the captain names (no need to wait for Save setup).
+  // Links can be generated as soon as we know the captain names.
   const blueUrl = captainBlue ? captainLink(m.publicCode) : "";
   const orangeUrl = captainOrange ? captainLink(m.publicCode) : "";
   // Sharing teams should NOT depend on captain selection.
@@ -2773,9 +2771,9 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
       <div id="digitalTeamPreview"></div>
 
-      <!-- Requested: Save + Share after lists -->
+      <!-- Publishing sends notifications; sharing only creates the image. -->
       <div class="row fieldSaveBar" style="margin-top:14px; gap:10px; flex-wrap:wrap">
-        <button class="btn primary" id="saveSetup" ${isEditLocked ? "disabled" : ""}>Save setup</button>
+        <button class="btn primary" id="publishSetup" ${isEditLocked || !hasAnyTeams ? "disabled" : ""}>Publish teams</button>
         <button class="btn whatsappBtn" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share team sheet</button>
          ${!isEditLocked ? (availabilityLocked ? `<button class="btn gray" id="openAvailability">Re-open availability</button>` : `<button class="btn warn" id="closeAvailability">Close availability</button>`) : ""}
       </div>
@@ -2867,7 +2865,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     if (preview) mountTeamField(preview, {
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
       positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,
-      onSave:() => manageBody.querySelector("#saveSetup").click(),
       onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
       onClear:() => manageBody.querySelector("#clearTeamSelections").click(),
       onChange:updateInternalDraft,
@@ -2878,9 +2875,11 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     });
 
     const shareBtn = manageBody.querySelector("#shareTeams");
+    const publishBtn = manageBody.querySelector("#publishSetup");
     if (shareBtn) {
       const ok = (blue.length + orange.length) > 0;
       shareBtn.disabled = !ok;
+      if (publishBtn) publishBtn.disabled = isEditLocked || !ok;
     }
   }
 
@@ -2906,7 +2905,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       autoBalanceReport = out.balance || null;
       updateInternalDraft();
       renderAll();
-      toastSuccess(`Balanced ${blue.length + orange.length} players. Review and save the draft.`);
+      toastSuccess(`Balanced ${blue.length + orange.length} players. Review, then publish the teams.`);
     } catch (error) {
       toastError(String(error?.message || error));
     } finally {
@@ -2917,7 +2916,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const clearTeamSelections = manageBody.querySelector("#clearTeamSelections");
   if (clearTeamSelections) clearTeamSelections.onclick = () => {
     if (!(blue.length || orange.length)) return;
-    if (!window.confirm("Reset both team selections? The saved setup will not change until you select Save setup.")) return;
+    if (!window.confirm("Reset both team selections? The published setup will not change until you select Publish teams.")) return;
     blue = [];
     orange = [];
     captainBlue = "";
@@ -2928,8 +2927,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     renderAll();
   };
 
-  // Save setup
-  manageBody.querySelector("#saveSetup").onclick = async () => {
+  // Publish teams: save the current draft first, then send notifications.
+  manageBody.querySelector("#publishSetup").onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
     if (isEditLocked) return toastWarn("Match is locked. Unlock to edit.");
 
@@ -2937,12 +2936,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     // Requested: allow saving setup even if captains aren't selected yet.
     // Captains can be assigned later without blocking team setup.
     if (!captainBlue || !captainOrange) {
-      msg.textContent = "Saving setup (captains can be selected later)…";
+      msg.textContent = "Publishing setup without captains…";
     }
 
-    const btn = manageBody.querySelector("#saveSetup");
-    setDisabled(btn, true, "Saving…");
-    msg.textContent = "Saving…";
+    const btn = manageBody.querySelector("#publishSetup");
+    setDisabled(btn, true, "Publishing…");
+    msg.textContent = "Saving teams before publishing…";
 
     const out = await API.adminSetupInternal({
       matchId: m.matchId,
@@ -2953,15 +2952,21 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       positions: positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
     });
 
-    setDisabled(btn, false);
-
     if (!out.ok) {
+      setDisabled(btn, false);
       msg.textContent = out.error || "Failed";
-      return toastError(out.error || "Failed to save setup");
+      return toastError(out.error || "Failed to publish teams");
     }
 
-    msg.textContent = "Saved ✅";
-    toastSuccess("Setup saved.");
+    const published = await API.adminShareTeams(m.matchId);
+    setDisabled(btn, false);
+    if (!published?.ok) {
+      msg.textContent = published?.error || "Publishing failed";
+      return toastError(published?.error || "Team notification could not be sent");
+    }
+
+    msg.textContent = "Published ✅";
+    toastSuccess("Teams published and players notified.");
     lsDel(setupDraftKey(m.matchId));
     savedInternal.blue = [...blue];
     savedInternal.orange = [...orange];
@@ -2974,7 +2979,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     if (state) { state.textContent = "All setup changes saved"; state.classList.remove("isDirty"); }
   };
 
-  // Share teams (after saved)
+  // Sharing creates the WhatsApp image only. Publishing is the sole action
+  // that sends team notifications.
   const shareTeamsBtn = manageBody.querySelector("#shareTeams");
   shareTeamsBtn.onclick = async () => {
     const ok = (blue.length + orange.length) > 0;
@@ -2986,8 +2992,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     const fresh = await API.getPublicMatch(m.publicCode).catch(() => null);
     const shareBalance = autoBalanceReport || fresh?.teamBalance || null;
     const mode = await shareTeamSheet(m, when, homeTeamName, blue, awayTeamName, orange, fieldPositions, [captainBlue,captainOrange], playerPhotos, shareBalance);
-    const published = await API.adminShareTeams(m.matchId);
-    if (!published?.ok) throw new Error(published?.error || "Team notification could not be sent");
     toastInfo(mode === "image" ? "Choose WhatsApp to share the team-sheet image." : "Field image downloaded. Attach it in WhatsApp to share.");
   } catch (error) {
     if (error?.name !== "AbortError") toastError("Team sheet could not be shared.");
