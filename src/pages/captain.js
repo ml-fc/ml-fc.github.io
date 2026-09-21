@@ -8,10 +8,12 @@ import { getCachedUser, refreshMe } from "../auth.js";
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
 const LS_CAPTAIN_RATINGS_DRAFT_PREFIX = "mlfc_captain_ratings_draft_v1:";
+const LS_CAPTAIN_FIELD_DRAFT_PREFIX = "mlfc_captain_field_draft_v1:";
 
 function rosterKey(code, captain){ return `${LS_CAPTAIN_ROSTER_PREFIX}${code}:${captain.toLowerCase()}`; }
 function teamsKey(code){ return `${LS_CAPTAIN_TEAMS_PREFIX}${code}`; }
 function ratingsDraftKey(code, actor){ return `${LS_CAPTAIN_RATINGS_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
+function fieldDraftKey(code, actor){ return `${LS_CAPTAIN_FIELD_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
 
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
@@ -525,7 +527,17 @@ export async function renderCaptainPage(root, query) {
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));
   const fieldPositions = positionMap(data.teams);
   const fieldPhotos = Object.fromEntries((data.teams || []).filter(row => row.photoUrl).map(row => [row.playerName, row.photoUrl]));
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:false,onSave:() => root.querySelector("#saveField").click(),onChange:() => fieldEditor.status("Unsaved positions")});
+  const restoredFieldDraft = lsGet(fieldDraftKey(code, captain));
+  if (Array.isArray(restoredFieldDraft?.positions)) {
+    const ownPlayers = new Set(fieldGroups.filter(group => ownTeams.includes(group.team)).flatMap(group => group.players));
+    Object.assign(fieldPositions, positionMap(restoredFieldDraft.positions.filter(row => ownPlayers.has(row.playerName))));
+  }
+  const persistFieldDraft = () => lsSet(fieldDraftKey(code, captain), {
+    ts:Date.now(),
+    positions:positionRows(fieldGroups.filter(group => ownTeams.includes(group.team)), fieldPositions)
+  });
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:false,onSave:() => root.querySelector("#saveField").click(),onDraft:persistFieldDraft,onChange:() => { persistFieldDraft(); fieldEditor.status("Unsaved positions"); }});
+  if (Array.isArray(restoredFieldDraft?.positions)) fieldEditor.status("Local draft restored");
   root.querySelector("#shareCaptainTeam")?.addEventListener("click", async () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
     if (!team || !team.players.length) return toastWarn("No players are assigned to your team yet.");
@@ -558,6 +570,7 @@ export async function renderCaptainPage(root, query) {
       }
       localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
       localStorage.removeItem(`mlfc_next_match_cache_v1:${captain.toLowerCase()}`);
+      localStorage.removeItem(fieldDraftKey(code, captain));
       fieldEditor.status("Positions saved"); toastSuccess("Team positions saved.");
     } catch(e) { fieldEditor.status(e.message); toastError(e.message); }
     finally { button.disabled = false; }

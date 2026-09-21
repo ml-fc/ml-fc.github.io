@@ -2519,12 +2519,29 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       else lsDel(setupDraftKey(m.matchId));
     }
 
+    async function saveOpponentField() {
+      if (!squad.length) return toastWarn("Select at least one MLFC player before saving.");
+      if (!opponentCaptain) return toastWarn("Select one MLFC captain before saving.");
+      const out = await API.adminSetupOpponent({ matchId:m.matchId, captain:opponentCaptain, mlfcPlayers:squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
+      if (!out?.ok) return toastError(out?.error || "Team changes could not be saved.");
+      savedOpponent.squad = [...squad];
+      savedOpponent.captain = opponentCaptain;
+      savedPositions = JSON.stringify(fieldPositions);
+      lsDel(setupDraftKey(m.matchId));
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+      updateOpponentDraft();
+      toastSuccess("Team-field changes saved.");
+    }
+
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
         onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
         onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); fieldPositions=randomGoalkeeperPositions(squad); updateOpponentDraft(); renderSquadLists(); },
         onChange:updateOpponentDraft,
+        onDraft:updateOpponentDraft,
+        onSave:saveOpponentField,
         onAssign:p => { squad=uniqueSorted([...squad,p]); updateOpponentDraft(); renderSquadLists(); },
         onCaptain:p => { opponentCaptain=p; updateOpponentDraft(); renderSquadLists(); },
         onRemove:p => { squad=squad.filter(n => n !== p); if(opponentCaptain === p) opponentCaptain=""; delete fieldPositions[p]; updateOpponentDraft(); renderSquadLists(); }
@@ -2689,6 +2706,26 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     }
     if (dirty) lsSet(setupDraftKey(m.matchId), { type: "INTERNAL", blue, orange, captainBlue, captainOrange, positions: fieldPositions, ts: now() });
     else lsDel(setupDraftKey(m.matchId));
+  }
+
+  async function saveInternalField() {
+    if (!(blue.length + orange.length)) return toastWarn("Assign at least one player before saving.");
+    const out = await API.adminSetupInternal({
+      matchId:m.matchId, bluePlayers:blue, orangePlayers:orange,
+      captainBlue, captainOrange,
+      positions:positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
+    });
+    if (!out?.ok) return toastError(out?.error || "Team changes could not be saved.");
+    savedInternal.blue = [...blue];
+    savedInternal.orange = [...orange];
+    savedInternal.captainBlue = captainBlue;
+    savedInternal.captainOrange = captainOrange;
+    savedPositions = JSON.stringify(fieldPositions);
+    lsDel(setupDraftKey(m.matchId));
+    clearManageCache(m.publicCode);
+    clearPublicMatchDetailCache(m.publicCode);
+    updateInternalDraft();
+    toastSuccess("Team-field changes saved.");
   }
 
   // Links can be generated as soon as we know the captain names.
@@ -2866,6 +2903,8 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
       onClear:() => manageBody.querySelector("#clearTeamSelections").click(),
       onChange:updateInternalDraft,
+      onDraft:updateInternalDraft,
+      onSave:saveInternalField,
       onAssign:(p,t) => { setTeam(p,t); renderAll(); },
       onCaptain:(p,t) => { if(t === "BLUE") captainBlue=p; else captainOrange=p; updateInternalDraft(); renderAll(); },
       onRemove:p => { delete fieldPositions[p]; removeFromTeam(p); renderAll(); },

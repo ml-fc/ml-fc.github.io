@@ -1,4 +1,5 @@
 import { playerPhotoHtml } from "./player_photo.js";
+import { toastWarn } from "./toast.js";
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const FIELD_POSITIONS = Object.freeze([
@@ -127,6 +128,7 @@ export function mountTeamField(root, options) {
   let selected = root.dataset.selected || '';
   let pending = '';
   let suppressClick = false;
+  let dirty = false;
   const editable = !options.disabled;
   const owner = name => groups.find(g => g.players.includes(name));
   const canMove = name => editable && (!owner(name) || !options.editableTeams || options.editableTeams.includes(owner(name).team));
@@ -176,6 +178,7 @@ export function mountTeamField(root, options) {
     const previous = positions[name] || defaults()[name];
     positions[name] = {positionX:slot.positionX, positionY:slot.positionY};
     if (occupying && old === target && previous) positions[occupying] = {positionX:previous.positionX, positionY:previous.positionY};
+    dirty = true;
     selected = name;
     root.dataset.selected = name;
     if (old !== target) options.onAssign(name, target.team);
@@ -186,6 +189,21 @@ export function mountTeamField(root, options) {
     root.dataset.fieldOpen = '';
     root.querySelector('dialog')?.close();
     root.querySelector('[data-open]')?.focus();
+  }
+
+  function saveDraftAndClose() {
+    if (dirty) {
+      options.onDraft?.();
+      toastWarn('Your team-field changes are saved on this device.', 'Draft saved');
+    }
+    dirty = false;
+    close();
+  }
+
+  function saveAndClose() {
+    dirty = false;
+    close();
+    options.onSave?.();
   }
 
   function draw() {
@@ -205,7 +223,7 @@ export function mountTeamField(root, options) {
         <span class="fieldPreview__hint">Tap field to edit</span>
       </button>
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
-        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Select or drag a player, then move them to change their named position.' : 'Saved positions'}</span><button class="btn gray tiny" data-close>Done</button></header>
+        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Select or drag a player, then move them to change their named position.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button><button class="btn good tiny" data-done>Done</button></header>
         <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onClear && editable ? '<button class="btn gray tiny" data-clear>Clear teams</button>' : ''}<span class="small">${unassigned.length} unassigned</span></div>
         <div class="fieldWorkspace__body">
           <aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned</strong><span>Drop here</span></div><table><tbody>${unassigned.map(name => `<tr class="${selected===name?'isSelected':''}"><td><button type="button" data-name="${esc(name)}" ${canMove(name)?'':'disabled'}>${esc(name)}</button></td></tr>`).join('')}</tbody></table>${!unassigned.length?'<p class="fieldRoster__empty">Everyone is on the field.<br>Drop a player here to unassign.</p>':''}</aside>
@@ -221,14 +239,16 @@ export function mountTeamField(root, options) {
     roster.onscroll = () => { root.dataset.rosterScroll = String(roster.scrollTop); };
     const bind = (selector, action) => root.querySelectorAll(selector).forEach(button => { button.onclick = action; });
     bind('[data-open]', () => { root.dataset.fieldOpen='1'; dialog.showModal(); });
-    bind('[data-close]', close);
-    dialog.oncancel = event => { event.preventDefault(); close(); };
+    bind('[data-back]', saveDraftAndClose);
+    bind('[data-done]', saveAndClose);
+    dialog.oncancel = event => { event.preventDefault(); saveDraftAndClose(); };
     bind('[data-auto]', options.onAuto);
     bind('[data-clear]', options.onClear);
-    bind('[data-save]', () => { close(); options.onSave(); });
+    bind('[data-save]', saveAndClose);
     bind('[data-captain]', () => options.onCaptain(selected, owner(selected).team));
     bind('[data-remove]', () => options.onRemove(selected));
     bind('[data-reset]', () => {
+      dirty = true;
       for (const group of groups) {
         const randomized = randomGoalkeeperPositions(group.players);
         for (const name of group.players) if (canMove(name)) positions[name] = randomized[name];
