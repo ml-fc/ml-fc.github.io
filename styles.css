@@ -2473,6 +2473,30 @@ body.hasCompactMatchCommand .appbar {
 @media(min-width:900px){.appbarProfile{display:none}.appbarProfile[hidden]{display:none}}
 @media(max-width:600px){.profileIdentity{align-items:flex-start}.playerPhoto--profile{width:72px;height:72px}.playerPhoto--field{width:38px;height:38px;font-size:11px}.potmWinner{gap:9px}.playerPhoto--potm{width:54px;height:54px}}
 
+/* Keep every pitch identity as one compact, collision-resistant unit. */
+.fieldPlayer>span:not(.playerPhoto),
+.fieldPlayer--preview>span:not(.playerPhoto),
+.digitalPlayer>span:last-child,
+.potmFieldPlayer>span:last-child {
+  display:block;
+  width:max-content;
+  max-width:72px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  overflow-wrap:normal;
+  white-space:nowrap;
+  line-height:1.2;
+}
+.fieldPlayer,.fieldPlayer--preview,.digitalPlayer--positioned,.potmFieldPlayer{gap:4px}
+.digitalTeam__pitch--positioned .digitalPlayer{width:72px}
+.digitalTeam__pitch--positioned .digitalPlayer>span:last-child{font-size:10px}
+.digitalTeam__pitch--shared{min-height:760px}
+@media(max-width:700px){
+  .fieldPlayer>span:not(.playerPhoto),.fieldPlayer--preview>span:not(.playerPhoto),.digitalPlayer>span:last-child,.potmFieldPlayer>span:last-child{max-width:60px;font-size:9px}
+  .digitalTeam__pitch--positioned .digitalPlayer{width:60px}
+  .digitalTeam__pitch--shared{min-height:680px}
+}
+
 /* Compact notification inbox with touch-safe swipe dismissal. */
 .notificationHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
 .notificationHeader .h1 { margin:0; }

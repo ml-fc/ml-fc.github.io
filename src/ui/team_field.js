@@ -24,6 +24,38 @@ export function randomGoalkeeperPositions(players, random = Math.random) {
   return defaultPositions([goalkeeper, ...players.filter((_, index) => index !== goalkeeperIndex)]);
 }
 
+// Read-only field views favour a legible formation over pixel-perfect editing
+// coordinates. Players keep their front-to-back and left-to-right order, but
+// each line gets an even amount of room for its portrait and name plate.
+export function presentationPositions(players, positions = {}) {
+  const list = [...players].filter(Boolean);
+  const defaults = defaultPositions(list);
+  const coordinate = (name, axis) => {
+    const value = Number(positions[name]?.[axis]);
+    return Number.isFinite(value) ? value : defaults[name]?.[axis] ?? 50;
+  };
+  const ordered = list.sort((a, b) => coordinate(b, "positionY") - coordinate(a, "positionY"));
+  const total = ordered.length;
+  const counts = total <= 5 ? [1, total - 1]
+    : total <= 7 ? [1, 2, total - 3]
+      : total <= 9 ? [1, 3, total - 4]
+        : [1, 3, 3, total - 7];
+  const rows = [];
+  let offset = 0;
+  counts.filter(Boolean).forEach(count => {
+    rows.push(ordered.slice(offset, offset + count).sort((a, b) => coordinate(a, "positionX") - coordinate(b, "positionX")));
+    offset += count;
+  });
+  const result = Object.create(null);
+  rows.forEach((row, rowIndex) => row.forEach((name, playerIndex) => {
+    result[name] = {
+      positionX: 100 * (playerIndex + 1) / (row.length + 1),
+      positionY: rows.length === 1 ? 50 : 86 - rowIndex * 74 / (rows.length - 1),
+    };
+  }));
+  return result;
+}
+
 export function positionMap(rows = []) {
   return Object.fromEntries(rows.filter(r => Number.isFinite(r.positionX) && Number.isFinite(r.positionY)).map(r => [r.playerName, {positionX:r.positionX, positionY:r.positionY}]));
 }

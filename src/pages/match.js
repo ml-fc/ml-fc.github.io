@@ -3,7 +3,7 @@ import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
-import { defaultPositions } from "../ui/team_field.js";
+import { defaultPositions, presentationPositions } from "../ui/team_field.js";
 import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
@@ -232,6 +232,8 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const rows = [...(teamRows || [])].sort((a, b) => String(a.playerName || "").localeCompare(String(b.playerName || "")));
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
   const defaults = defaultPositions(players);
+  const savedPositions = Object.fromEntries(rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
+  const displayPositions = presentationPositions(players, savedPositions);
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
     <div class="digitalTeam__pitch digitalTeam__pitch--positioned"><span class="digitalTeam__centre" aria-hidden="true"></span>
@@ -239,8 +241,8 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const player = String(row.playerName || "").trim();
         if (!player) return "";
         const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-        const rawX = typeof row.positionX === "number" ? row.positionX : Number.NaN;
-        const rawY = typeof row.positionY === "number" ? row.positionY : Number.NaN;
+        const rawX = displayPositions[player]?.positionX;
+        const rawY = displayPositions[player]?.positionY;
         const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
         const y = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
         return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span></div>`;
@@ -265,12 +267,14 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
       ${teams.flatMap((team) => {
         const players = team.rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
         const defaults = defaultPositions(players);
+        const savedPositions = Object.fromEntries(team.rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
+        const displayPositions = presentationPositions(players, savedPositions);
         return team.rows.map((row) => {
           const player = String(row.playerName || "").trim();
           if (!player) return "";
           const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-          const rawX = typeof row.positionX === "number" ? row.positionX : Number.NaN;
-          const rawY = typeof row.positionY === "number" ? row.positionY : Number.NaN;
+          const rawX = displayPositions[player]?.positionX;
+          const rawY = displayPositions[player]?.positionY;
           const positionX = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
           const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
           const x = team.upper ? 100 - positionX : positionX;
@@ -917,6 +921,13 @@ async function openPotmFieldDialog(code, onSaved = null) {
   const teams = [...grouped.keys()];
   const positions = {};
   for (const team of teams) Object.assign(positions, defaultPositions(grouped.get(team).map((item) => item.playerName)));
+  const displayPositions = {};
+  for (const team of teams) {
+    const teamCandidates = grouped.get(team);
+    const names = teamCandidates.map(item => item.playerName);
+    const saved = Object.fromEntries(teamCandidates.map(item => [item.playerName, { positionX: Number(item.positionX), positionY: Number(item.positionY) }]));
+    Object.assign(displayPositions, presentationPositions(names, saved));
+  }
   let selected = String(potm.myVote || "");
   modal.innerHTML = `<form method="dialog" class="potmFieldDialog__panel">
     <header><div><div class="stepEyebrow">Player of the Match</div><h2>Pick a player from the field</h2><p>Tap a player, then confirm your vote.</p></div><button class="potmFieldDialog__close" value="cancel" aria-label="Close">×</button></header>
@@ -924,8 +935,8 @@ async function openPotmFieldDialog(code, onSaved = null) {
       <span class="potmFieldDialog__halfway" aria-hidden="true"></span>
       ${candidates.map((candidate) => {
         const fallback = positions[candidate.playerName] || { positionX: 50, positionY: 50 };
-        const rawX = typeof candidate.positionX === "number" ? candidate.positionX : Number.NaN;
-        const rawY = typeof candidate.positionY === "number" ? candidate.positionY : Number.NaN;
+        const rawX = displayPositions[candidate.playerName]?.positionX;
+        const rawY = displayPositions[candidate.playerName]?.positionY;
         const teamIndex = Math.max(0, teams.indexOf(String(candidate.team || "TEAM").toUpperCase()));
         const x = Math.max(9, Math.min(91, Number.isFinite(rawX) ? rawX : fallback.positionX));
         const localY = Math.max(10, Math.min(90, Number.isFinite(rawY) ? rawY : fallback.positionY));

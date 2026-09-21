@@ -281,7 +281,7 @@ function drawTeamSheetPitch(context, team, x, y, width, height) {
 async function teamSheetImageFile(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = [], photos = {}, balance = null) {
   const canvas = document.createElement("canvas");
   canvas.width = 2160;
-  canvas.height = balance ? 3000 : 2700;
+  canvas.height = balance ? 3420 : 3120;
   const context = canvas.getContext("2d");
   if (!context) return null;
 
@@ -290,7 +290,7 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   gradient.addColorStop(0, "#061724");
   gradient.addColorStop(1, "#0e3a52");
   context.fillStyle = gradient;
-  context.fillRect(0, 0, 1080, balance ? 1500 : 1350);
+  context.fillRect(0, 0, 1080, balance ? 1710 : 1560);
   context.strokeStyle = "rgba(114,215,250,.25)";
   context.lineWidth = 3;
   context.beginPath(); context.arc(940, 250, 280, 0, Math.PI * 2); context.stroke();
@@ -314,7 +314,7 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
       await loadCanvasImage(photos[name] || photos[String(name).trim().toLowerCase()]),
     ])
   ));
-  const left=70, top=390, width=940, height=800;
+  const left=70, top=370, width=940, height=1050;
   context.fillStyle="#26713b";
   context.fillRect(left,top,width,height);
   context.fillStyle="#226936";
@@ -328,53 +328,62 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.textAlign="center";
   for(const team of teams) {
     context.fillStyle=team.color;context.font="900 24px Arial";
-    context.fillText(`${team.name} · ${team.players.length} · ${team.upper?'↓':'↑'} attacks`,540,team.upper?365:1230);
+    context.fillText(`${team.name} · ${team.players.length} · ${team.upper?'↓':'↑'} attacks`,540,team.upper?345:1460);
     const defaults=defaultPositions(team.players);
-    for(const name of team.players) {
-      const pos=positions[name] || defaults[name];
-      const x=left+width*(team.upper?100-pos.positionX:pos.positionX)/100;
-      const y=top+height*(team.upper?50-pos.positionY/2:50+pos.positionY/2)/100;
-      const portrait=portraits.get(name);
-      const markerRadius=30;
-      context.save();
-      context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.clip();
-      if (portrait) {
-        const size=markerRadius*2;
-        const scale=Math.max(size/portrait.width,size/portrait.height);
-        const drawWidth=portrait.width*scale,drawHeight=portrait.height*scale;
-        context.drawImage(portrait,x-drawWidth/2,y-drawHeight/2,drawWidth,drawHeight);
-      } else {
-        context.fillStyle=team.color;context.fillRect(x-markerRadius,y-markerRadius,markerRadius*2,markerRadius*2);
-      }
-      context.restore();
-      context.strokeStyle="#fff";context.lineWidth=3;context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.stroke();
-      if(name===team.captain) {
-        context.fillStyle="#ffe16a";context.beginPath();context.arc(x+20,y-17,12,0,Math.PI*2);context.fill();
-        context.fillStyle="#132c3b";context.font="900 16px Arial";context.fillText("C",x+20,y-11);
-      }
-      context.font="800 36px Arial";
-      const lines=wrapCanvasText(context,name,200).slice(0,2).map(line => fitCanvasLabel(context,line,200));
-      const labelWidth=Math.max(...lines.map(line => context.measureText(line).width))+16;
-      const labelX=Math.max(left+labelWidth/2+4,Math.min(left+width-labelWidth/2-4,x));
-      const labelY=Math.min(y+25,top+height-lines.length*40-12);
-      context.fillStyle="#061e2d";context.fillRect(labelX-labelWidth/2,labelY,labelWidth,lines.length*40+8);
-      context.fillStyle="#fff";
-      lines.forEach((line,index) => context.fillText(line,labelX,labelY+35+index*40));
-    }
+    const orderedPlayers=[...team.players].sort((a,b)=>(positions[b]||defaults[b]).positionY-(positions[a]||defaults[a]).positionY);
+    const rowCounts=formationRows(orderedPlayers).map(row=>row.length);
+    let rowOffset=0;
+    const halfHeight=height/2;
+    const rowGap=(halfHeight-105)/Math.max(1,rowCounts.length-1);
+    rowCounts.forEach((rowCount,rowIndex)=>{
+      const row=orderedPlayers.slice(rowOffset,rowOffset+rowCount).sort((a,b)=>(positions[a]||defaults[a]).positionX-(positions[b]||defaults[b]).positionX);
+      rowOffset+=rowCount;
+      const y=team.upper ? top+55+rowIndex*rowGap : top+height-55-rowIndex*rowGap;
+      const playerGap=width/(row.length+1);
+      row.forEach((name,playerIndex)=>{
+        const x=left+playerGap*(playerIndex+1);
+        const portrait=portraits.get(name);
+        const markerRadius=29;
+        context.save();
+        context.shadowColor="rgba(0,0,0,.36)";context.shadowBlur=10;
+        context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.clip();
+        if (portrait) {
+          const size=markerRadius*2;
+          const scale=Math.max(size/portrait.width,size/portrait.height);
+          const drawWidth=portrait.width*scale,drawHeight=portrait.height*scale;
+          context.drawImage(portrait,x-drawWidth/2,y-drawHeight/2,drawWidth,drawHeight);
+        } else {
+          context.fillStyle=team.color;context.fillRect(x-markerRadius,y-markerRadius,markerRadius*2,markerRadius*2);
+        }
+        context.restore();
+        context.strokeStyle="#fff";context.lineWidth=3;context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.stroke();
+        if(name===team.captain) {
+          context.fillStyle="#ffe16a";context.beginPath();context.arc(x+21,y-19,12,0,Math.PI*2);context.fill();
+          context.fillStyle="#132c3b";context.font="900 15px Arial";context.fillText("C",x+21,y-14);
+        }
+        context.font="900 20px Arial";
+        const maxLabelWidth=Math.min(170,playerGap-14);
+        const label=fitCanvasLabel(context,name,maxLabelWidth-18);
+        const labelWidth=context.measureText(label).width+18;
+        const labelY=y+markerRadius+7;
+        context.fillStyle="rgba(2,19,30,.9)";context.fillRect(x-labelWidth/2,labelY,labelWidth,29);
+        context.fillStyle="#fff";context.fillText(label,x,labelY+21);
+      });
+    });
   }
   context.textAlign="left";
   if (balance) {
-    context.fillStyle="#dff7ff"; context.fillRect(70,1248,940,154);
+    context.fillStyle="#dff7ff"; context.fillRect(70,1490,940,154);
     context.fillStyle="#0e3a52"; context.font="900 42px Arial";
-    context.fillText(`${Number(balance.balancePercent || 0)}% TEAM BALANCE`,94,1300);
+    context.fillText(`${Number(balance.balancePercent || 0)}% TEAM BALANCE`,94,1542);
     context.font="800 23px Arial";
-    context.fillText(`${homeName} ${Number(balance.blueStrength || 0).toFixed(1)} · ${awayName} ${Number(balance.orangeStrength || 0).toFixed(1)}`,94,1340);
+    context.fillText(`${homeName} ${Number(balance.blueStrength || 0).toFixed(1)} · ${awayName} ${Number(balance.orangeStrength || 0).toFixed(1)}`,94,1582);
     context.font="700 19px Arial";
-    context.fillText(`Considerations: recent ratings · goals and assists · past team combinations`,94,1375);
+    context.fillText(`Considerations: recent ratings · goals and assists · past team combinations`,94,1617);
   }
   context.fillStyle = "#bed2dc";
   context.font = "700 22px Arial";
-  context.fillText("Shared by the Manor Lakes FC club desk", 70, balance ? 1460 : 1305);
+  context.fillText("Shared by the Manor Lakes FC club desk", 70, balance ? 1680 : 1515);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
@@ -675,9 +684,12 @@ function sameNames(a, b) {
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
   btn.disabled = disabled;
-  if (busyText) {
+  if (disabled && busyText) {
     if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
-    btn.textContent = disabled ? busyText : btn.dataset.origText;
+    btn.textContent = busyText;
+  } else if (!disabled && btn.dataset.origText) {
+    btn.textContent = btn.dataset.origText;
+    delete btn.dataset.origText;
   }
 }
 
