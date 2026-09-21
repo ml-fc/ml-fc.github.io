@@ -36,6 +36,7 @@ let ADMIN_LAST_REFRESH_TS = 0;
 let ADMIN_REFRESH_INFLIGHT = false;
 let ACTIVE_ADMIN = { root: null, routeToken: "", view: "", refreshList: null };
 let MANAGE_COMMAND_SCROLL_HANDLER = null;
+let PENDING_LEADERS_SHARE = null;
 
 function now() { return Date.now(); }
 
@@ -52,10 +53,63 @@ async function leadersBoardFile(payload){
 }
 
 async function shareLeaders(root,button){
-  const seasonId=MEM.selectedSeasonId;if(!seasonId)return toastWarn("Select a season first.");setDisabled(button,true,"Building HD image…");
-  try{const payload=await API.adminFcCardLeaders(seasonId);if(!payload?.ok)throw new Error(payload?.error||"Could not load leaders");if(!payload.cards?.length)throw new Error("No rated players in this season yet.");const file=await leadersBoardFile(payload);if(!file)throw new Error("Could not create the image");const text=`⚽ MLFC ${payload.season.name} · Top ${payload.cards.length} rated players`;
-    if(navigator.canShare?.({files:[file]}))await navigator.share({title:"MLFC season leaders",text,files:[file]});else{const link=document.createElement("a");link.href=URL.createObjectURL(file);link.download=file.name;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);toastInfo("HD leaders image downloaded.");}
-  }catch(error){if(error?.name!=="AbortError")toastError(error?.message||"Could not share leaders");}finally{setDisabled(button,false);}
+  const seasonId=MEM.selectedSeasonId;
+  if(!seasonId)return toastWarn("Select a season first.");
+
+  // Calling share immediately on the second tap preserves the transient user
+  // activation that mobile browsers require. Building 20 cards can take long
+  // enough for that activation to expire if sharing is attempted on the first tap.
+  if(PENDING_LEADERS_SHARE?.seasonId===seasonId){
+    const shareData=PENDING_LEADERS_SHARE.shareData;
+    if(navigator.share&&navigator.canShare?.(shareData)){
+      try{
+        await navigator.share(shareData);
+        PENDING_LEADERS_SHARE=null;
+        button.textContent="Share top 20 FC Cards";
+      }catch(error){
+        if(error?.name!=="AbortError"){
+          downloadLeadersFile(shareData.files[0]);
+          PENDING_LEADERS_SHARE=null;
+          button.textContent="Share top 20 FC Cards";
+        }
+      }
+    }else{
+      downloadLeadersFile(shareData.files[0]);
+      PENDING_LEADERS_SHARE=null;
+      button.textContent="Share top 20 FC Cards";
+    }
+    return;
+  }
+
+  setDisabled(button,true,"Building HD image…");
+  try{
+    const payload=await API.adminFcCardLeaders(seasonId);
+    if(!payload?.ok)throw new Error(payload?.error||"Could not load leaders");
+    if(!payload.cards?.length)throw new Error("No rated players in this season yet.");
+    const file=await leadersBoardFile(payload);
+    if(!file)throw new Error("Could not create the image");
+    const text=`⚽ MLFC ${payload.season.name} · Top ${payload.cards.length} rated players`;
+    const shareData={title:"MLFC season leaders",text,files:[file]};
+    if(navigator.share&&navigator.canShare?.(shareData)){
+      PENDING_LEADERS_SHARE={seasonId,shareData};
+      toastInfo("Image ready — tap Share again.");
+    }else{
+      downloadLeadersFile(file);
+    }
+  }catch(error){
+    toastError(error?.message||"Could not prepare leaders");
+  }finally{
+    setDisabled(button,false);
+    if(PENDING_LEADERS_SHARE?.seasonId===seasonId)button.textContent="Share image — tap again";
+  }
+}
+
+function downloadLeadersFile(file){
+  const url=URL.createObjectURL(file);
+  const link=document.createElement("a");
+  link.href=url;link.download=file.name;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  toastInfo("HD leaders image downloaded.");
 }
 function currentHashPath() { return (location.hash || "#/match").split("?")[0]; }
 function currentHashQuery() { return new URLSearchParams(location.hash.split("?")[1] || ""); }
@@ -1380,7 +1434,7 @@ function bindSeasonMgmt(root, routeToken) {
                   <span style="margin-left:8px">${s.startDate} → ${s.endDate}</span>
                 </div>
               </div>
-              <div class="row" style="gap:8px; flex-wrap:wrap">
+              <div class="row" style="gap:8px; flex-wrap:nowrap; flex-shrink:0">
                 <button class="btn gray" data-season-edit="${s.seasonId}">Edit</button>
                 <button class="btn gray" data-season-del="${s.seasonId}">Delete</button>
               </div>
