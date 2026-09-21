@@ -152,21 +152,9 @@ export function mountTeamField(root, options) {
     return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(role)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span><small>${role}</small></button>`;
   }
 
-  function slotMarkers(preview) {
-    if (preview || !selected || !canMove(selected)) return '';
-    return groups.flatMap(group => FIELD_POSITIONS.map(slot => {
-      const occupied = group.players.some(player => player !== selected && fieldPositionCode(positions[player] || defaults()[player]) === slot.code);
-      if (occupied) return '';
-      const x = upper(group) ? 100-slot.positionX : slot.positionX;
-      const y = upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2;
-      return `<span class="fieldSlot ${upper(group)?'fieldSlot--upper':''}" style="left:${x}%;top:${y}%" aria-hidden="true">${slot.code}</span>`;
-    })).join('');
-  }
-
   function pitchMarkup(preview = false) {
-    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}${!preview && selected ? ' isChoosingPosition' : ''}" aria-label="${preview?'Team field preview':'Shared team field'}">
+    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}" aria-label="${preview?'Team field preview':'Shared team field'}">
       <div class="teamField__circle" aria-hidden="true"></div>
-      ${slotMarkers(preview)}
       ${groups.flatMap(group => group.players.map(name => playerMarker(name, group, preview))).join('')}
       ${!groups.some(group => group.players.length) ? '<span class="teamField__empty">No players assigned</span>' : ''}
     </div>`;
@@ -206,6 +194,7 @@ export function mountTeamField(root, options) {
     const unassigned = unassignedNames();
     const upperGroup = groups.find(upper);
     const lowerGroup = groups.find(group => !upper(group));
+    const selectedRole = selected && owner(selected) ? fieldPositionCode(positions[selected] || defaults()[selected]) : '';
     root.querySelector('dialog')?.close();
     root.innerHTML = `<div class="fieldPreviewHeader">
         <button type="button" class="btn primary" data-open>Open team field</button>
@@ -216,13 +205,13 @@ export function mountTeamField(root, options) {
         <span class="fieldPreview__hint">Tap field to edit</span>
       </button>
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
-        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Scroll the list vertically; drag a name sideways onto the pitch. Drop players back to unassign.' : 'Saved positions'}</span><button class="btn gray tiny" data-close>Done</button></header>
+        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Select or drag a player, then move them to change their named position.' : 'Saved positions'}</span><button class="btn gray tiny" data-close>Done</button></header>
         <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onClear && editable ? '<button class="btn gray tiny" data-clear>Clear teams</button>' : ''}<span class="small">${unassigned.length} unassigned</span></div>
         <div class="fieldWorkspace__body">
           <aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned</strong><span>Drop here</span></div><table><tbody>${unassigned.map(name => `<tr class="${selected===name?'isSelected':''}"><td><button type="button" data-name="${esc(name)}" ${canMove(name)?'':'disabled'}>${esc(name)}</button></td></tr>`).join('')}</tbody></table>${!unassigned.length?'<p class="fieldRoster__empty">Everyone is on the field.<br>Drop a player here to unassign.</p>':''}</aside>
           <div class="pitchStage">${attackLabel(upperGroup)}${pitchMarkup(false)}${attackLabel(lowerGroup)}</div>
         </div>
-        <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Select a player')}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(group=>`<button class="btn gray tiny" data-assign="${esc(group.team)}">${esc(group.label)}</button>`).join(''):''}</div><span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary" data-save>Save changes</button>':''}</footer>
+        <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Select a player')}${selectedRole ? ` · ${esc(selectedRole)}` : ''}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(group=>`<button class="btn gray tiny" data-assign="${esc(group.team)}">${esc(group.label)}</button>`).join(''):''}</div><span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary" data-save>Save changes</button>':''}</footer>
       </div></dialog>`;
 
     const dialog = root.querySelector('dialog');
