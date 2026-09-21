@@ -11,25 +11,15 @@ import { API } from "./api/endpoints.js";
 import { lsGet, lsSet } from "./storage.js";
 import { isBrowserReload } from "./nav_state.js";
 
-const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1"; // {ts,data}
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
 
 // Match page cache keys (must match src/pages/match.js)
 const LS_OPEN_CACHE_PREFIX = "mlfc_open_matches_cache_v2:";   // seasonId -> {ts,matches}
-const LS_PAST_CACHE_PREFIX = "mlfc_past_matches_cache_v2:";   // seasonId -> {ts,page,pageSize,total,hasMore,matches}
 const LS_MATCH_META_PREFIX = "mlfc_matches_meta_v2:";         // seasonId -> {ts,fingerprint,latestCode}
-const LS_PLAYERS_CACHE = "mlfc_players_cache_v2";             // {ts,players:[name...]}
-
-// Leaderboard page cache keys (must match src/pages/leaderboard.js)
-const LS_LB_PREFIX = "mlfc_leaderboard_v2:"; // + seasonId => {ts,data}
 
 const TTL = {
-  seasons: 10 * 60 * 1000,      // 10 min
-  players: 6 * 60 * 60 * 1000,  // 6h
-  open: 60 * 1000,             // 1 min
-  meta: 60 * 1000,             // 1 min
-  past: 10 * 60 * 1000,        // 10 min
-  leaderboard: 5 * 60 * 1000,  // 5 min
+  open: 60 * 1000, // 1 min
+  meta: 60 * 1000, // 1 min
 };
 
 function now() { return Date.now(); }
@@ -39,29 +29,10 @@ function isFresh(obj, ttlMs) {
 }
 
 function openKey(seasonId) { return `${LS_OPEN_CACHE_PREFIX}${seasonId}`; }
-function pastKey(seasonId) { return `${LS_PAST_CACHE_PREFIX}${seasonId}`; }
 function metaKey(seasonId) { return `${LS_MATCH_META_PREFIX}${seasonId}`; }
-function lbKey(seasonId) { return `${LS_LB_PREFIX}${seasonId}`; }
 
 function pickSeasonIdFromLocalStorage() {
   return localStorage.getItem(LS_SELECTED_SEASON) || "";
-}
-
-function uniqueSorted(arr) {
-  return [...new Set(arr)].filter(Boolean).sort((a, b) => a.localeCompare(b));
-}
-
-function prefetchPlayers() {
-  const cached = lsGet(LS_PLAYERS_CACHE);
-  if (cached?.players?.length && isFresh(cached, TTL.players)) return;
-
-  API.players()
-    .then(res => {
-      if (!res?.ok) return;
-      const list = uniqueSorted((res.players || []).map(p => p.name));
-      lsSet(LS_PLAYERS_CACHE, { ts: now(), players: list });
-    })
-    .catch(() => {});
 }
 
 function prefetchMatchTab(seasonId) {
@@ -90,17 +61,6 @@ function prefetchMatchTab(seasonId) {
   // They should only be loaded via the explicit "Refresh Past" button.
 }
 
-function prefetchLeaderboard(seasonId) {
-  const cached = lsGet(lbKey(seasonId));
-  if (cached?.data?.ok && isFresh(cached, TTL.leaderboard)) return;
-
-  API.leaderboardSeason(seasonId)
-    .then(res => {
-      if (res?.ok) lsSet(lbKey(seasonId), { ts: now(), data: res });
-    })
-    .catch(() => {});
-}
-
 // Prefetch ONCE at app load; does not block UI.
 export async function warmAppData() {
   // Per product requirement:
@@ -119,10 +79,9 @@ export async function warmAppData() {
 
     if (path === "#/match") {
       prefetchMatchTab(seasonId);
-    } else if (path === "#/leaderboard") {
-      prefetchLeaderboard(seasonId);
     }
-    // Admin: page logic handles reload-fetch itself.
+    // Ladder and Admin own their reload requests. A second ladder prefetch
+    // duplicates work and can overwrite the FC-card result with card-less rows.
   } catch {
     // ignore
   }
