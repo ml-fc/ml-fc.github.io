@@ -201,11 +201,13 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   let minimumMatches = savedMinimumMatches();
   let searchQuery = "";
 
-  let sortMode = "rating";
+  // Start in rating order, but do not present Rating as a chosen filter.
+  // Rating is already a permanent column in the ladder.
+  let sortMode = "";
 
   root.innerHTML = `
     <div class="card ladderControls">
-      <div class="ladderControls__head"><div><div class="stepEyebrow">Season competition</div><div class="h1">Ladder</div></div><button class="btn gray ladderRefresh" id="refresh" aria-label="Refresh ladder">↻ <span>Refresh</span></button></div>
+      <div class="ladderControls__head"><div><div class="stepEyebrow">Season competition</div><div class="h1">Ladder</div></div><button class="btn gray ladderRefresh" id="refresh" aria-label="Refresh ladder"><span class="ladderRefresh__icon" aria-hidden="true">↻</span><span class="ladderRefresh__label">Refresh</span></button></div>
       <div class="ladderControls__season" id="seasonBlock"></div>
       <div class="ladderFilterBar">
         <div class="ladderSearch"><label class="visuallyHidden" for="playerSearch">Search players</label><span aria-hidden="true">⌕</span><input class="input" id="playerSearch" type="search" placeholder="Search players" autocomplete="off" /></div>
@@ -268,7 +270,11 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
   }
   const renderCurrentTable = () => {
     renderTable(root, rows, sortMode, minimumMatches, searchQuery);
-    root.querySelectorAll(".ladderSort .btn").forEach(button => button.classList.toggle("primary", button.id === ({goals:"sortGoals",assists:"sortAssists",potm:"sortPotm",rating:"sortRating",fc:"sortFcCard"})[sortMode]));
+    root.querySelectorAll(".ladderSort .btn").forEach(button => {
+      const selected = button.id === ({goals:"sortGoals",assists:"sortAssists",potm:"sortPotm",rating:"sortRating",fc:"sortFcCard"})[sortMode];
+      button.classList.toggle("primary", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
   };
   renderCurrentTable();
 
@@ -298,7 +304,10 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
     const btn = root.querySelector("#refresh");
     if (!silent && btn) {
       btn.disabled = true;
-      btn.textContent = "Refreshing…";
+      btn.classList.add("isRefreshing");
+      btn.setAttribute("aria-label", "Refreshing ladder");
+      const label = btn.querySelector(".ladderRefresh__label");
+      if (label) label.textContent = "Refreshing…";
       msg.textContent = "Loading…";
     }
 
@@ -326,7 +335,10 @@ export async function renderLeaderboardPage(root, query, tokenFromRouter) {
       LB_REFRESH_INFLIGHT = false;
       if (!silent && btn) {
         btn.disabled = false;
-        btn.textContent = "Refresh";
+        btn.classList.remove("isRefreshing");
+        btn.setAttribute("aria-label", "Refresh ladder");
+        const label = btn.querySelector(".ladderRefresh__label");
+        if (label) label.textContent = "Refresh";
       }
     }
   }

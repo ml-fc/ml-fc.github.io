@@ -2277,7 +2277,10 @@ body.hasCompactMatchCommand .appbar {
 .seasonMatchRow__stats { display:flex; gap:5px; }.seasonMatchRow__stats span{padding:5px 7px;background:#e5edf1;border-radius:3px;font-size:11px;font-weight:900}
 
 .ladderControls__head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-.ladderRefresh { min-height:38px; padding:8px 10px; }
+.ladderRefresh { display:inline-flex; width:auto; min-width:38px; min-height:38px; flex:0 0 auto; align-items:center; justify-content:center; gap:6px; padding:8px 10px; }
+.ladderRefresh__icon { font-size:16px; line-height:1; }
+.ladderRefresh.isRefreshing .ladderRefresh__icon { animation:ladderRefreshSpin .8s linear infinite; }
+@keyframes ladderRefreshSpin { to { transform:rotate(360deg); } }
 .ladderControls__season { margin-top:8px; }
 .ladderFilterBar { display:grid; grid-template-columns:minmax(180px,1fr) auto auto; align-items:center; gap:7px; margin-top:12px; padding:7px; background:#eaf1f4; border:1px solid #d2dfe5; border-radius:6px; }
 .ladderSearch { position:relative; flex:1 1 210px; }
@@ -2348,7 +2351,7 @@ body.hasCompactMatchCommand .appbar {
 @media(max-width:700px){
   .digitalTeamGrid{grid-template-columns:1fr}.digitalTeam__pitch{min-height:265px}.digitalTeam__pitch--shared{min-height:600px}.digitalPlayer{width:68px}.digitalPlayer>span:not(.playerPhoto){max-width:68px;font-size:8px}.digitalTeam__team{padding:10px 38px 10px 10px}.digitalTeam__team strong{font-size:12px}.digitalTeam__team>b{right:8px;width:26px;height:26px}
   .seasonNumbers{grid-template-columns:repeat(2,1fr)}.seasonNumbers>div:nth-child(2){border-right:0}.seasonNumbers>div:nth-child(-n+2){border-bottom:1px solid rgba(255,255,255,.14)}.seasonInsights{grid-template-columns:1fr}.seasonMatchRow{grid-template-columns:45px minmax(0,1fr)}.seasonMatchRow__stats{grid-column:2;flex-wrap:wrap}.seasonHero__head{display:grid}.seasonHero__share{width:100%}
-  .ladderControls{padding:12px}.ladderControls__season{margin-top:4px}.ladderControls__season .row{margin-top:4px!important}.ladderControls__season .field__label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ladderControls__season .input{min-height:36px;padding-block:6px}.ladderFilterBar{grid-template-columns:minmax(0,1fr) 92px;gap:5px;padding:5px;margin-top:8px}.ladderSearch{min-width:0}.ladderSearch .input{min-height:34px}.ladderMinimum{min-width:0}.ladderMinimum .input{width:100%;min-width:0}.ladderMetrics{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}.ladderSort{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:3px}.ladderSort .btn{min-width:0;min-height:30px;padding:4px 3px;font-size:10px}.ladderRefresh span{display:none}
+  .ladderControls{padding:12px}.ladderControls__season{margin-top:4px}.ladderControls__season .row{margin-top:4px!important}.ladderControls__season .field__label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ladderControls__season .input{min-height:36px;padding-block:6px}.ladderFilterBar{grid-template-columns:minmax(0,1fr) 92px;gap:5px;padding:5px;margin-top:8px}.ladderSearch{min-width:0}.ladderSearch .input{min-height:34px}.ladderMinimum{min-width:0}.ladderMinimum .input{width:100%;min-width:0}.ladderMetrics{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}.ladderSort{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:3px}.ladderSort .btn{min-width:0;min-height:30px;padding:4px 3px;font-size:10px}.ladderRefresh{width:38px;height:38px;padding:0}.ladderRefresh__label{display:none}
   .ladderBoard__head{align-items:flex-start;padding:15px 14px 12px}.ladderBoard__count{max-width:48%;font-size:10px}.ladderBoard .lb__table{min-width:100%}.ladderBoard .lb__player{min-width:120px}.ladderBoard .lb__cell,.ladderBoard .lb__th{padding-inline:5px}.ladderBoard .lb__rank{width:32px}.ladderBoard .lb__num{width:44px;font-size:11px}.ladderBoard .lb__th{font-size:9px;letter-spacing:.04em}.playerAwards{flex-shrink:0;margin-left:3px}.playerAward{font-size:11px}
 }
 .announcementViewer { padding: 18px; background: #fff; }
@@ -2608,7 +2611,7 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .themeSettings__picker .field { margin:0; }
 .themeSettings__picker .btn { min-height:44px; }
 @media(max-width:600px){body[data-weekly-theme]::after{width:92vw;right:-30vw;top:20vh;opacity:.07}.themeSettings__body{align-items:flex-start;flex-direction:column}.themeSwitch{width:100%;justify-content:start}.themeSettings__picker{grid-template-columns:1fr}.themeSettings__picker .btn{width:100%}}
-@media(prefers-reduced-motion:reduce){.themeSwitch span,.themeSwitch span::after{transition:none}}
+@media(prefers-reduced-motion:reduce){.themeSwitch span,.themeSwitch span::after{transition:none}.ladderRefresh.isRefreshing .ladderRefresh__icon{animation:none}}
 
 /* Player status: four plain states, with the current state carrying all emphasis. */
 .profileStatus{display:grid;gap:10px;margin-top:18px;padding:14px;border:1px solid #d3e0e6;border-radius:10px;background:#f4f8f9}.profileStatus__choices{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.profileStatus__choice{min-height:44px;padding:8px;border:1px solid #bfd0d8;border-radius:7px;color:#355364;background:#fff;font:800 12px/1.1 inherit;cursor:pointer}.profileStatus__choice.is-active{border-color:#0b638e;color:#fff;background:#0b638e;box-shadow:inset 0 -3px rgba(0,0,0,.14)}.profileStatus__choice:focus-visible{outline:3px solid #f0c94b;outline-offset:2px}.profileStatus__choice:disabled{opacity:.55;cursor:wait}
