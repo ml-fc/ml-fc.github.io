@@ -139,7 +139,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
           <button class="requiredPhotoLogout" id="closePasswordDialog" type="button">Cancel</button>
         </div>
       </dialog>
-      ${me.photoUrl && (isSuperAdmin || (me.phone && me.email)) ? "" : `<dialog id="requiredProfileDialog" class="requiredPhotoDialog" aria-labelledby="requiredProfileTitle" aria-describedby="requiredProfileHelp">
+      ${me.photoUrl && (isSuperAdmin || (me.phone && me.email && me.emailVerifiedAt)) ? "" : `<dialog id="requiredProfileDialog" class="requiredPhotoDialog" aria-labelledby="requiredProfileTitle" aria-describedby="requiredProfileHelp">
         <div class="requiredPhotoSheet">
           <div class="requiredProfileIcon" aria-hidden="true">✓</div>
           <div class="stepEyebrow">Complete your profile</div>
@@ -148,7 +148,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
           <div class="requiredProfileFields">
             ${me.photoUrl ? "" : `<section><strong>Player photo</strong><span>Used on team sheets and POTM cards.</span><label class="btn primary" for="profilePhotoInput">Choose photo</label><small id="requiredPhotoStatus" role="status" aria-live="polite"></small></section>`}
             ${me.phone || isSuperAdmin ? "" : `<section><strong>WhatsApp number</strong><span>Choose the country code and enter the number without the leading zero.</span><div class="phoneField"><select id="requiredCountry" class="input" aria-label="Country code">${countryOptions("61")}</select><input id="requiredPhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" placeholder="412 345 678" aria-label="Phone number" /></div><button class="btn primary" id="requiredPhoneSave" type="button">Save number</button><small id="requiredPhoneStatus" role="status" aria-live="polite"></small></section>`}
-            ${me.email || isSuperAdmin ? "" : `<section><strong>Email address</strong><span>Used for secure password recovery.</span><input id="requiredEmail" class="input" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com" /><button class="btn primary" id="requiredEmailSave" type="button">Save email</button><small id="requiredEmailStatus" role="status" aria-live="polite"></small></section>`}
+            ${me.emailVerifiedAt || isSuperAdmin ? "" : `<section><strong>Verify email address</strong><span>We’ll send a six-digit code for secure password recovery.</span><input id="requiredEmail" class="input" type="email" maxlength="254" autocomplete="email" value="${esc(me.email || "")}" placeholder="you@example.com" /><button class="btn primary" id="requiredEmailSave" type="button">${me.email ? "Resend verification code" : "Send verification code"}</button>${me.email ? `<input id="requiredEmailOtp" class="input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="Six-digit code" /><button class="btn primary" id="requiredEmailVerify" type="button">Verify email</button>` : ""}<small id="requiredEmailStatus" role="status" aria-live="polite"></small></section>`}
           </div>
           <button class="requiredPhotoLogout" id="requiredProfileLogout" type="button">Sign out instead</button>
         </div>
@@ -201,7 +201,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       status.textContent = "Saving…";
       const result = await API.userSetEmail(email).catch(() => null);
       if (!result?.ok) { status.textContent = result?.error || "Could not save the email address."; return; }
-      me = { ...me, email: result.email };
+      me = { ...me, email: result.email, emailVerifiedAt: result.emailVerifiedAt || "" };
       setCachedUser(me); updateNavForUser(me);
       toastSuccess("Email address updated");
       await renderLoginPage(root, query);
@@ -258,6 +258,20 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
     cleanPhoneInput(requiredPhone);
     root.querySelector("#requiredPhoneSave")?.addEventListener("click", () => savePhone(root.querySelector("#requiredCountry"), requiredPhone, root.querySelector("#requiredPhoneStatus")));
     root.querySelector("#requiredEmailSave")?.addEventListener("click", () => saveEmail(root.querySelector("#requiredEmail"), root.querySelector("#requiredEmailStatus")));
+    const requiredEmailOtp = root.querySelector("#requiredEmailOtp");
+    requiredEmailOtp?.addEventListener("input", () => { requiredEmailOtp.value = requiredEmailOtp.value.replace(/\D+/g, ""); });
+    root.querySelector("#requiredEmailVerify")?.addEventListener("click", async () => {
+      const status = root.querySelector("#requiredEmailStatus");
+      const otp = String(requiredEmailOtp?.value || "").trim();
+      if (!/^\d{6}$/.test(otp)) { status.textContent = "Enter the six-digit code from the email."; requiredEmailOtp?.focus(); return; }
+      status.textContent = "Verifying…";
+      const result = await API.userVerifyEmail(otp).catch(() => null);
+      if (!result?.ok) { status.textContent = result?.error || "Could not verify the email address."; return; }
+      me = { ...me, email: result.email, emailVerifiedAt: result.emailVerifiedAt };
+      setCachedUser(me); updateNavForUser(me);
+      toastSuccess("Email address verified");
+      await renderLoginPage(root, query);
+    });
     const requiredProfileDialog = root.querySelector("#requiredProfileDialog");
     if (requiredProfileDialog) {
       requiredProfileDialog.addEventListener("cancel", event => event.preventDefault());
