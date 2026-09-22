@@ -4,7 +4,7 @@ import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
-import { showPushEnableReminder } from "../ui/push_reminder.js";
+import { showInitialPushEnableReminder } from "../ui/push_reminder.js";
 import { choosePhotoCrop, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
 import { showEmailSentPrompt } from "../ui/email_sent_prompt.js";
 
@@ -723,7 +723,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
     updateNavForUser(res.user);
     toastSuccess("Logged in");
     if (res.user?.photoUrl) {
-      await showPushEnableReminder(root);
+      await showInitialPushEnableReminder(root);
       location.hash = "#/match";
     } else {
       location.hash = "#/login?photo=required";
@@ -780,7 +780,7 @@ const rmsg = root.querySelector("#rmsg");
     updateNavForUser(res.user);
     toastSuccess("Registered & logged in");
     if (res.user?.photoUrl) {
-      await showPushEnableReminder(root);
+      await showInitialPushEnableReminder(root);
       location.hash = "#/match";
     } else {
       location.hash = "#/login?photo=required";

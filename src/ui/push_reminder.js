@@ -1,22 +1,34 @@
 import { ensurePushSubscribed, pushSupport } from "../push.js";
+import { isInstalledApp } from "./install_prompt.js";
 import { toastSuccess } from "./toast.js";
 
+const LS_INITIAL_PUSH_REMINDER_SHOWN = "mlfc_initial_push_reminder_shown_v1";
 let activeReminder = null;
+let initialReminderShownThisSession = false;
 
-export async function showPushEnableReminder(container = document.body, { required = false } = {}) {
+export async function showInitialPushEnableReminder(container = document.body) {
+  if (!isInstalledApp() || initialReminderShownThisSession) return;
+
+  try {
+    if (localStorage.getItem(LS_INITIAL_PUSH_REMINDER_SHOWN)) return;
+    localStorage.setItem(LS_INITIAL_PUSH_REMINDER_SHOWN, "1");
+  } catch {
+    // Still prevent repeat prompts during this session if storage is unavailable.
+  }
+  initialReminderShownThisSession = true;
+  return showPushEnableReminder(container);
+}
+
+export async function showPushEnableReminder(container = document.body) {
   const support = pushSupport();
   if (!support.supported) return;
-  if (Notification.permission === "granted") {
-    if (!required) return;
-    const subscribed = await ensurePushSubscribed().catch(() => null);
-    if (subscribed?.ok) return;
-  }
+  if (Notification.permission === "granted") return;
   if (activeReminder) return activeReminder;
 
   activeReminder = new Promise((resolve) => {
     const blocked = Notification.permission === "denied";
     const dialog = document.createElement("dialog");
-    dialog.className = `playerDialog${required ? " pushReminder--required" : ""}`;
+    dialog.className = "playerDialog";
     dialog.setAttribute("aria-labelledby", "pushReminderTitle");
     dialog.innerHTML = `
       <div class="playerSheet">
@@ -25,10 +37,9 @@ export async function showPushEnableReminder(container = document.body, { requir
         <p id="pushReminderMessage" class="small">${blocked
           ? "Notifications are blocked. Enable them for MLFC in your phone settings, return to the app, then tap Check again."
           : "Turn on notifications so you receive availability, team and match updates even when the app is closed."}</p>
-        ${required ? `<p class="pushReminder__required">Notifications are required to use the installed app.</p>` : ""}
         <div class="row" style="margin-top:16px; gap:10px; flex-wrap:wrap">
           <button class="btn primary" type="button" data-enable-push>${blocked ? "Check again" : "Enable notifications"}</button>
-          ${required ? "" : `<button class="btn gray" type="button" data-continue>Continue</button>`}
+          <button class="btn gray" type="button" data-continue>Later</button>
         </div>
       </div>`;
 
@@ -40,7 +51,7 @@ export async function showPushEnableReminder(container = document.body, { requir
     };
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
-      if (!required) finish();
+      finish();
     });
     const continueButton = dialog.querySelector("[data-continue]");
     if (continueButton) continueButton.onclick = finish;

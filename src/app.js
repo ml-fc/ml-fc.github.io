@@ -4,8 +4,8 @@ import { initReloadContext } from "./nav_state.js";
 import { getCachedUser, refreshMe, updateNavForUser } from "./auth.js";
 import { API } from "./api/endpoints.js";
 import { ensurePushSubscribed } from "./push.js";
-import { showPushEnableReminder } from "./ui/push_reminder.js";
-import { initInstallPrompt, isInstalledApp } from "./ui/install_prompt.js";
+import { showInitialPushEnableReminder } from "./ui/push_reminder.js";
+import { initInstallPrompt } from "./ui/install_prompt.js";
 import { applyWeeklyTheme, initWeeklyTheme } from "./themes.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
@@ -206,7 +206,7 @@ function boot() {
   refreshIdentity()
     .then((u) => {
       updateNavForUser(u);
-      if (u) showPushEnableReminder(document.body, { required: isInstalledApp() }).catch(() => {});
+      if (u) showInitialPushEnableReminder(document.body).catch(() => {});
       checkNotificationsOnce().catch(() => {});
       if (u) requestPendingPhoneDismissals();
     })
