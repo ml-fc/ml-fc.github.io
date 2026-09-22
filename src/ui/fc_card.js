@@ -22,14 +22,14 @@ export function fcCardSvg(card, name, photo = card.photoUrl) {
       <linearGradient id="${id}-gold" x2=".85" y2="1"><stop stop-color="#fff5b7"/><stop offset=".28" stop-color="#f6d86d"/><stop offset=".52" stop-color="#cf961e"/><stop offset=".73" stop-color="#ffe68d"/><stop offset="1" stop-color="#bb821c"/></linearGradient>
       <linearGradient id="${id}-panel" x2=".8" y2="1"><stop stop-color="#ffe99a"/><stop offset=".48" stop-color="#edc85d"/><stop offset="1" stop-color="#d4a039"/></linearGradient>
       <linearGradient id="${id}-edge" x2="1" y2="1"><stop stop-color="#fffad1"/><stop offset=".48" stop-color="#fff0a5"/><stop offset=".75" stop-color="#967023"/><stop offset="1" stop-color="#322809"/></linearGradient>
-      <clipPath id="${id}-portrait"><circle cx="350" cy="258" r="180"/></clipPath>
+      <clipPath id="${id}-portrait"><circle cx="300" cy="258" r="180"/></clipPath>
       <clipPath id="${id}-clip"><path d="${SHAPE}"/></clipPath>
     </defs>
     <g clip-path="url(#${id}-clip)">
       <path d="${SHAPE}" fill="url(#${id}-gold)"/>
       <g stroke="#fff3b2" stroke-width="2" opacity=".42">${lines}</g>
       <g fill="none"><path d="M-40 386 Q250 340 655 104" stroke="#986218" stroke-width="23" opacity=".35"/><path d="M-40 374 Q250 328 655 92" stroke="#fff1a6" stroke-width="15"/><path d="M-60 404 Q274 420 648 243" stroke="#fff5be" stroke-width="5"/><path d="M-50 428 Q325 547 635 338" stroke="#b57818" stroke-width="24" opacity=".45"/><path d="M-50 416 Q325 535 635 326" stroke="#ffe995" stroke-width="19"/></g>
-      ${photo ? `<g><circle cx="350" cy="258" r="184" fill="#f8dc79" opacity=".72"/><image href="${escape(photo)}" x="170" y="78" width="360" height="360" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id}-portrait)"/><circle cx="350" cy="258" r="180" fill="none" stroke="#fff0a2" stroke-width="4" opacity=".9"/></g>` : `<g fill="#8b681f" opacity=".32"><circle cx="335" cy="223" r="90"/><path d="M156 490 Q155 322 335 322 Q515 322 514 490Z"/></g>`}
+      ${photo ? `<g><circle cx="300" cy="258" r="184" fill="#f8dc79" opacity=".72"/><image href="${escape(photo)}" x="120" y="78" width="360" height="360" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id}-portrait)"/><circle cx="300" cy="258" r="180" fill="none" stroke="#fff0a2" stroke-width="4" opacity=".9"/></g>` : `<g fill="#8b681f" opacity=".32"><circle cx="335" cy="223" r="90"/><path d="M156 490 Q155 322 335 322 Q515 322 514 490Z"/></g>`}
       <path d="M24 480 H576 V750 H24Z" fill="url(#${id}-panel)"/>
       <path d="M24 480 H576" stroke="#fff3b7" stroke-width="4"/>
       <g fill="#302609" text-anchor="middle" font-family="'Arial Narrow',Arial,sans-serif">
