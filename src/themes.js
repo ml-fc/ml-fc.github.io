@@ -45,15 +45,8 @@ function clearWeeklyTheme() {
   delete document.body.dataset.weeklyTheme;
   delete document.body.dataset.weeklyTeam;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#07111e");
-  const winner = document.querySelector("#weeklyWinner");
-  const crest = document.querySelector("#weeklyWinnerCrest");
-  const name = document.querySelector("#weeklyWinnerName");
-  if (winner) winner.hidden = true;
-  if (crest) {
-    crest.removeAttribute("src");
-    crest.alt = "";
-  }
-  if (name) name.textContent = "";
+  document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = ""; });
+  document.querySelectorAll(".nextMatch__themeMark").forEach((element) => { element.removeAttribute("aria-label"); });
 }
 
 export function applyWeeklyTheme(payload) {
@@ -74,18 +67,10 @@ export function applyWeeklyTheme(payload) {
   document.body.dataset.weeklyTheme = theme.slug;
   document.body.dataset.weeklyTeam = theme.name;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.background);
-  const winner = document.querySelector("#weeklyWinner");
-  const crest = document.querySelector("#weeklyWinnerCrest");
-  const name = document.querySelector("#weeklyWinnerName");
-  if (crest) {
-    crest.src = theme.crest;
-    crest.alt = `${theme.name} crest`;
-  }
-  if (name) name.textContent = theme.name;
-  if (winner) {
-    winner.hidden = false;
-    winner.setAttribute("aria-label", `Team of the Week: ${theme.name}`);
-  }
+  document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = theme.name; });
+  document.querySelectorAll(".nextMatch__themeMark").forEach((element) => {
+    element.setAttribute("aria-label", `Team of the Week: ${theme.name}`);
+  });
   return theme;
 }
 

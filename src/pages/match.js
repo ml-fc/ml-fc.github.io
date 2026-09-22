@@ -1040,6 +1040,7 @@ function renderNextMatchDashboard(host, data) {
   const statusBlocksAvailability = ["INJURED", "INACTIVE"].includes(playerStatus);
   const showResponse = canRespond && !hasAvailabilityResponse && (!action || action.type === "RESPOND");
   const result = data?.latestResult;
+  const weeklyTeam = String(document.body.dataset.weeklyTeam || "");
 
   host.innerHTML = `
     ${potmVoteBannerHtml(data?.potmVote)}
@@ -1051,7 +1052,13 @@ function renderNextMatchDashboard(host, data) {
           <h1 id="nextMatchTitle">${escapeHtml(match.title)}</h1>
           <p>${escapeHtml(formatHumanDateTime(match.date, match.time))} <span aria-hidden="true">·</span> ${escapeHtml(match.type)}</p>
         </div>
-        <div class="nextMatch__countdown" data-next-countdown aria-live="off">${escapeHtml(countdownLabel(match))}</div>
+        <div class="nextMatch__aside">
+          <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `Team of the Week: ${weeklyTeam}` : "Team of the Week")}">
+            <span class="nextMatch__themeCrest" aria-hidden="true"></span>
+            <span><small>Team of the Week</small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
+          </div>
+          <div class="nextMatch__countdown" data-next-countdown aria-live="off">${escapeHtml(countdownLabel(match))}</div>
+        </div>
       </header>
 
       <div class="nextMatch__stateGrid">
