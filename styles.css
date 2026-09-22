@@ -2549,6 +2549,48 @@ body.hasCompactMatchCommand .appbar {
 .potmFieldDialog__panel>footer{display:flex;align-items:center;justify-content:space-between;gap:12px}.potmFieldDialog__panel>footer span{font-size:12px;font-weight:850}.potmFieldDialog__panel>footer .btn{min-width:150px}
 @media(max-width:600px){.potmFieldDialog__panel{padding:12px;gap:10px}.potmFieldDialog h2{font-size:24px}.potmFieldDialog__pitch{height:62vh;min-height:430px}.potmFieldPlayer{width:60px}.potmFieldPlayer>.playerPhoto{width:36px;height:36px}.potmFieldPlayer>span:last-child{max-width:60px;font-size:8px}.potmFieldDialog__panel>footer{align-items:stretch;flex-direction:column}.potmFieldDialog__panel>footer .btn{width:100%}}
 
+/* Weekly EPL identity: club colour throughout, one deliberately quiet crest watermark. */
+body[data-weekly-theme] { position:relative; isolation:isolate; background:linear-gradient(180deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 88%,var(--accent)) 52%,var(--bg) 100%); }
+body[data-weekly-theme]::after { content:""; position:fixed; z-index:1; top:clamp(90px,15vh,180px); right:clamp(-90px,-5vw,-28px); width:min(54vw,620px); aspect-ratio:1; pointer-events:none; background-image:var(--weekly-crest); background-repeat:no-repeat; background-position:center; background-size:contain; opacity:.045; filter:grayscale(.12) saturate(.8); }
+body[data-weekly-theme] .appbar { background:color-mix(in srgb,var(--bg) 91%,transparent); border-bottom-color:color-mix(in srgb,var(--accent) 34%,transparent); }
+body[data-weekly-theme] .card { background:var(--theme-card-tint); border-color:var(--theme-card-line); }
+body[data-weekly-theme] .card::before { background:linear-gradient(90deg,var(--accent),var(--accent-2),transparent 75%); }
+body[data-weekly-theme] .btn.primary { color:#fff; background:var(--primary); border-color:var(--primary); }
+body[data-weekly-theme] .btn.primary:hover:not(:disabled) { background:var(--primary-2); border-color:var(--primary-2); }
+body[data-weekly-theme] .btn.gray,
+body[data-weekly-theme] .btn.ghost { background:color-mix(in srgb,var(--theme-card-tint) 91%,var(--accent)); border-color:color-mix(in srgb,var(--theme-card-line) 72%,var(--accent)); }
+body[data-weekly-theme] .input:focus { border-color:var(--accent); box-shadow:var(--focus); }
+body[data-weekly-theme] .tab--active,
+body[data-weekly-theme] .bottomnav__item--active { color:#fff; background:color-mix(in srgb,var(--primary) 84%,#000); box-shadow:inset 0 -3px 0 var(--accent); }
+body[data-weekly-theme] .matchdayStrip { border-color:color-mix(in srgb,var(--accent) 38%,transparent); }
+body[data-weekly-theme] .matchdayStrip span:nth-child(2) { color:var(--accent); }
+body[data-weekly-theme] a:not(.btn):not(.tab):not(.bottomnav__item):focus-visible,
+body[data-weekly-theme] button:focus-visible,
+body[data-weekly-theme] input:focus-visible,
+body[data-weekly-theme] select:focus-visible,
+body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--focus); }
+
+.themeSettings__body { display:flex; align-items:center; justify-content:space-between; gap:22px; margin-top:14px; }
+.themeSettings__body .h1 { margin:0; }
+.themeSettings__body p { max-width:620px; margin:5px 0 12px; }
+.themeSettings__current { display:flex; align-items:center; gap:10px; min-height:48px; color:var(--ink); }
+.themeSettings__current i { width:10px; height:44px; border-radius:999px; background:linear-gradient(var(--accent),var(--primary)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent); }
+.themeSettings__current span { display:grid; gap:2px; }
+.themeSettings__current small { color:var(--ink-2); }
+.themeSwitch { display:grid; grid-template-columns:54px auto; align-items:center; gap:10px; min-width:max-content; cursor:pointer; color:var(--ink); }
+.themeSwitch input { position:absolute; opacity:0; pointer-events:none; }
+.themeSwitch span { position:relative; width:54px; height:30px; border:1px solid #aebdc5; border-radius:999px; background:#cbd5da; transition:background .18s ease,border-color .18s ease; }
+.themeSwitch span::after { content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 2px 7px rgba(0,0,0,.25); transition:transform .18s ease; }
+.themeSwitch input:checked + span { background:var(--primary); border-color:var(--primary); }
+.themeSwitch input:checked + span::after { transform:translateX(24px); }
+.themeSwitch input:focus-visible + span { box-shadow:var(--focus); }
+.themeSwitch input:disabled + span { opacity:.55; cursor:wait; }
+.themeSettings__picker { display:grid; grid-template-columns:minmax(220px,1fr) auto; align-items:end; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid #d6e0e5; }
+.themeSettings__picker .field { margin:0; }
+.themeSettings__picker .btn { min-height:44px; }
+@media(max-width:600px){body[data-weekly-theme]::after{width:92vw;right:-30vw;top:20vh;opacity:.035}.themeSettings__body{align-items:flex-start;flex-direction:column}.themeSwitch{width:100%;justify-content:start}.themeSettings__picker{grid-template-columns:1fr}.themeSettings__picker .btn{width:100%}}
+@media(prefers-reduced-motion:reduce){.themeSwitch span,.themeSwitch span::after{transition:none}}
+
 /* Player status: four plain states, with the current state carrying all emphasis. */
 .profileStatus{display:grid;gap:10px;margin-top:18px;padding:14px;border:1px solid #d3e0e6;border-radius:10px;background:#f4f8f9}.profileStatus__choices{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.profileStatus__choice{min-height:44px;padding:8px;border:1px solid #bfd0d8;border-radius:7px;color:#355364;background:#fff;font:800 12px/1.1 inherit;cursor:pointer}.profileStatus__choice.is-active{border-color:#0b638e;color:#fff;background:#0b638e;box-shadow:inset 0 -3px rgba(0,0,0,.14)}.profileStatus__choice:focus-visible{outline:3px solid #f0c94b;outline-offset:2px}.profileStatus__choice:disabled{opacity:.55;cursor:wait}
 .profileStatusIcon{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:7px;border:2px solid currentColor;border-radius:50%;background:#fff;font:900 13px/1 Arial;vertical-align:middle}.profileStatusIcon--active{color:#118a57}.profileStatusIcon--injured{color:#d71920;font-size:15px}.profileStatusIcon--unavailable{color:#c86f00;font-size:20px}.profileStatusIcon--inactive{color:#52616b;font-size:12px}.profileStatus__choice{display:flex;align-items:center;justify-content:center}.profileStatus__choice.is-active .profileStatusIcon{border-color:#fff}.profileStatusCard strong{display:flex;align-items:center}

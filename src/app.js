@@ -6,6 +6,7 @@ import { API } from "./api/endpoints.js";
 import { ensurePushSubscribed } from "./push.js";
 import { showPushEnableReminder } from "./ui/push_reminder.js";
 import { initInstallPrompt, isInstalledApp } from "./ui/install_prompt.js";
+import { applyWeeklyTheme, initWeeklyTheme } from "./themes.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
@@ -190,6 +191,8 @@ function boot() {
 
   initReloadContext();
   initInstallPrompt();
+  initWeeklyTheme(API.themeCurrent).catch(() => {});
+  window.addEventListener("mlfc:theme-setting-changed", (event) => applyWeeklyTheme(event.detail));
   warmAppData().catch(() => {});
 
   // Render any cached badge immediately (keeps badge on mobile too)

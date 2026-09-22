@@ -7,6 +7,7 @@ import { cleanupCaches } from "../cache_cleanup.js";
 import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
 import { initials, loadCanvasImage } from "../ui/player_photo.js";
+import { EPL_THEMES } from "../themes.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -1204,6 +1205,33 @@ function renderAdminShell(root, view) {
       <div id="seasonList" class="small" style="margin-top:8px"></div>
     </details>
 
+    <details class="card themeSettings" id="themeSettingsCard">
+      <summary style="font-weight:950">Weekly EPL themes</summary>
+      <div class="themeSettings__body">
+        <div>
+          <div class="h1">Match the week</div>
+          <p class="small">Automatically colour the app around the best Premier League performance from the previous week.</p>
+          <div class="themeSettings__current" id="themeSettingsCurrent">Loading theme status…</div>
+        </div>
+        <label class="themeSwitch" for="weeklyThemesEnabled">
+          <input id="weeklyThemesEnabled" type="checkbox" role="switch" />
+          <span aria-hidden="true"></span>
+          <b id="weeklyThemesLabel">Themes off</b>
+        </label>
+      </div>
+      <div class="themeSettings__picker">
+        <div class="field">
+          <label class="field__label" for="weeklyThemeTeam">Choose an EPL team</label>
+          <select class="input" id="weeklyThemeTeam">
+            ${EPL_THEMES.map((theme) => `<option value="${theme.teamId}">${escapeHtml(theme.name)}</option>`).join("")}
+          </select>
+        </div>
+        <button class="btn primary" id="applyWeeklyTheme" type="button">Apply to everyone</button>
+      </div>
+      <p class="field__help">A manual choice takes effect immediately and stays active until you change it or the next Monday theme is selected.</p>
+      <div class="field__message" id="themeSettingsMessage" role="status" aria-live="polite"></div>
+    </details>
+
     <details class="card" id="createMatchCard" >
       <summary style="font-weight:950">Create match</summary>
 
@@ -1262,11 +1290,78 @@ function setAdminChromeVisible(root, visible) {
   const header = root.querySelector("#adminHeaderCard");
   const seasonMgmt = root.querySelector("#seasonMgmt");
   const createMatch = root.querySelector("#createMatchCard");
+  const themeSettings = root.querySelector("#themeSettingsCard");
   const announcement = root.querySelector("#announcementCard");
   if (header) header.style.display = display;
   if (seasonMgmt) seasonMgmt.style.display = display;
   if (createMatch) createMatch.style.display = display;
+  if (themeSettings) themeSettings.style.display = display;
   if (announcement) announcement.style.display = display;
+}
+
+async function bindThemeSettings(root) {
+  const card = root.querySelector("#themeSettingsCard");
+  const toggle = root.querySelector("#weeklyThemesEnabled");
+  const label = root.querySelector("#weeklyThemesLabel");
+  const current = root.querySelector("#themeSettingsCurrent");
+  const message = root.querySelector("#themeSettingsMessage");
+  const teamSelect = root.querySelector("#weeklyThemeTeam");
+  const applyButton = root.querySelector("#applyWeeklyTheme");
+  if (!card || !toggle || !label || !current || !message || !teamSelect || !applyButton) return;
+
+  const paint = (settings) => {
+    toggle.checked = Boolean(settings?.enabled);
+    label.textContent = toggle.checked ? "Themes on" : "Themes off";
+    const theme = settings?.theme;
+    if (theme?.teamId && EPL_THEMES.some((item) => item.teamId === Number(theme.teamId))) teamSelect.value = String(theme.teamId);
+    current.innerHTML = theme
+      ? `<i aria-hidden="true"></i><span><b>${escapeHtml(theme.teamName)}</b><small>${escapeHtml(theme.matchLabel || "Current weekly theme")}</small></span>`
+      : `<span><b>Manor Lakes theme</b><small>${settings?.apiConfigured ? "Waiting for the next completed EPL week." : "Add the API-Football secret to start automatic selection."}</small></span>`;
+  };
+
+  const loaded = await API.adminThemeSettings().catch(() => null);
+  if (!loaded?.ok) {
+    current.textContent = loaded?.error || "Theme settings could not be loaded.";
+    toggle.disabled = true;
+    return;
+  }
+  paint(loaded);
+
+  toggle.onchange = async () => {
+    toggle.disabled = true;
+    message.textContent = "Saving…";
+    const result = await API.adminSetThemeEnabled(toggle.checked).catch(() => null);
+    if (!result?.ok) {
+      toggle.checked = !toggle.checked;
+      message.textContent = result?.error || "Theme setting could not be saved.";
+      toastError(message.textContent);
+    } else {
+      paint(result);
+      message.textContent = toggle.checked ? "Weekly EPL themes are on." : "Weekly EPL themes are off.";
+      toastSuccess(message.textContent);
+      window.dispatchEvent(new CustomEvent("mlfc:theme-setting-changed", { detail: result }));
+    }
+    toggle.disabled = false;
+  };
+
+  applyButton.onclick = async () => {
+    applyButton.disabled = true;
+    const previous = applyButton.textContent;
+    applyButton.textContent = "Applying…";
+    message.textContent = "Updating the theme for everyone…";
+    const result = await API.adminSetWeeklyTheme(Number(teamSelect.value)).catch(() => null);
+    if (!result?.ok) {
+      message.textContent = result?.error || "The selected theme could not be applied.";
+      toastError(message.textContent);
+    } else {
+      paint(result);
+      message.textContent = `${result.theme?.teamName || "Selected"} theme is now active for everyone.`;
+      toastSuccess(message.textContent);
+      window.dispatchEvent(new CustomEvent("mlfc:theme-setting-changed", { detail: result }));
+    }
+    applyButton.textContent = previous;
+    applyButton.disabled = false;
+  };
 }
 
 function renderListView(root, view) {
@@ -3211,6 +3306,7 @@ export async function renderAdminPage(root, query) {
   bindTopNav(root, routeToken);
   bindSeasonSelector(root, routeToken);
   bindSeasonMgmt(root, routeToken);
+  bindThemeSettings(root).catch(() => {});
   bindCreateMatch(root, routeToken);
   bindAnnouncement(root, routeToken);
   bindHeaderButtons(root, routeToken);

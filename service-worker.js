@@ -81,6 +81,7 @@ const STATIC_ASSETS = [
   "/src/nav_state.js",
   "/src/cache_cleanup.js",
   "/src/config.js",
+  "/src/themes.js",
   "/src/prefetch.js",
   "/src/push.js",
   "/src/ui/toast.js",
@@ -110,6 +111,12 @@ const STATIC_ASSETS = [
   "/assets/icons/maskable-512.png",
   "/assets/icons/notification-badge.png"
 ];
+
+for (const slug of [
+  "arsenal", "aston-villa", "bournemouth", "brentford", "brighton", "chelsea", "crystal-palace",
+  "coventry-city", "everton", "fulham", "hull-city", "ipswich-town", "leeds-united", "liverpool",
+  "manchester-city", "manchester-united", "newcastle-united", "nottingham-forest", "sunderland", "tottenham-hotspur",
+]) STATIC_ASSETS.push(`/assets/epl-2026-27/${slug}.png`);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

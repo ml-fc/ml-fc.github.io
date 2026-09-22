@@ -2,6 +2,7 @@
 import { apiGet, apiPost, apiUpload } from "./client.js";
 
 export const API = {
+  themeCurrent: () => apiGet({ action: "theme_current" }),
   // auth
   me: () => apiGet({ action: "me" }),
   login: (name, password) => apiPost({ action: "login", name, password }),
@@ -65,6 +66,9 @@ export const API = {
   adminDeleteUser: (name) => apiPost({ action: "admin_delete_user", name }),
   adminBroadcastNotification: (payload) => apiPost({ action: "admin_broadcast_notification", ...payload }),
   adminAuditLog: (filters = {}) => apiGet({ action: "admin_audit_log", ...filters }),
+  adminThemeSettings: () => apiGet({ action: "admin_theme_settings" }),
+  adminSetThemeEnabled: (enabled) => apiPost({ action: "admin_set_theme_enabled", enabled: enabled ? 1 : 0 }),
+  adminSetWeeklyTheme: (teamId) => apiPost({ action: "admin_set_weekly_theme", teamId }),
 
   // admin: match availability management (for adding players who may not have the app)
   adminSetAvailabilityFor: (matchId, playerName, availability, note = "") =>
