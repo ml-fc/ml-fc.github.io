@@ -594,9 +594,24 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
         <div class="passwordField"><input id="password" type="password" class="input" autocomplete="current-password" /><button class="passwordField__toggle" id="togglePassword" type="button" aria-pressed="false">Show</button></div>
       </div>
       <button id="loginBtn" class="btn primary authForm__submit" type="submit">Sign in</button>
+      <button id="showReset" class="authForm__register" type="button">Forgot password?</button>
       <button id="showReg" class="authForm__register" type="button">New player? Create an account</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </form>
+
+    <div class="card" id="resetCard" style="display:none">
+      <div class="h1">Reset password</div>
+      <div class="small">Enter the email address saved on your player profile. We’ll send a six-digit code.</div>
+      <div class="field"><label class="field__label" for="resetEmail">Email address</label><input id="resetEmail" class="input" type="email" maxlength="254" autocomplete="email" /></div>
+      <button id="sendResetCode" class="btn primary" type="button">Send reset code</button>
+      <div id="resetCodeFields" hidden>
+        <div class="field"><label class="field__label" for="resetOtp">Six-digit code</label><input id="resetOtp" class="input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" /></div>
+        <div class="field"><label class="field__label" for="resetNewPassword">New password</label><input id="resetNewPassword" class="input" type="password" autocomplete="new-password" /></div>
+        <button id="completeReset" class="btn primary" type="button">Update password</button>
+      </div>
+      <button id="hideReset" class="btn gray" type="button" style="margin-top:10px">Back to sign in</button>
+      <div id="resetMsg" class="field__message" role="status" aria-live="polite"></div>
+    </div>
 
     <div class="card" id="regCard" style="display:none">
       <div class="h1">Register</div>
@@ -624,7 +639,43 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
   };
 
   const regCard = root.querySelector("#regCard");
+  const resetCard = root.querySelector("#resetCard");
+  root.querySelector("#showReset").onclick = () => {
+    regCard.style.display = "none";
+    resetCard.style.display = "block";
+    root.querySelector("#resetEmail")?.focus();
+  };
+  root.querySelector("#hideReset").onclick = () => { resetCard.style.display = "none"; nameEl.focus(); };
+  root.querySelector("#sendResetCode").onclick = async () => {
+    const emailInput = root.querySelector("#resetEmail");
+    const resetMsg = root.querySelector("#resetMsg");
+    const email = String(emailInput.value || "").trim().toLowerCase();
+    emailInput.removeAttribute("aria-invalid");
+    if (!emailInput.checkValidity() || !email) { emailInput.setAttribute("aria-invalid", "true"); resetMsg.textContent = "Enter a valid email address."; emailInput.focus(); return; }
+    resetMsg.textContent = "Sending code…";
+    const result = await API.requestPasswordReset(email).catch(() => null);
+    if (!result?.ok) { resetMsg.textContent = result?.error || "Could not request a reset code."; return; }
+    root.querySelector("#resetCodeFields").hidden = false;
+    resetMsg.textContent = result.message || "If that email is registered, a reset code has been sent.";
+    root.querySelector("#resetOtp").focus();
+  };
+  root.querySelector("#resetOtp").addEventListener("input", event => { event.currentTarget.value = event.currentTarget.value.replace(/\D+/g, ""); });
+  root.querySelector("#completeReset").onclick = async () => {
+    const email = String(root.querySelector("#resetEmail").value || "").trim().toLowerCase();
+    const otp = String(root.querySelector("#resetOtp").value || "").trim();
+    const password = String(root.querySelector("#resetNewPassword").value || "").trim();
+    const resetMsg = root.querySelector("#resetMsg");
+    if (!/^\d{6}$/.test(otp)) { resetMsg.textContent = "Enter the six-digit code from the email."; root.querySelector("#resetOtp").focus(); return; }
+    if (!password) { resetMsg.textContent = "Enter a new password."; root.querySelector("#resetNewPassword").focus(); return; }
+    resetMsg.textContent = "Updating password…";
+    const result = await API.resetPassword(email, otp, password).catch(() => null);
+    if (!result?.ok) { resetMsg.textContent = result?.error || "Could not reset the password."; return; }
+    toastSuccess("Password updated. Sign in with your new password.");
+    resetCard.style.display = "none";
+    nameEl.focus();
+  };
   root.querySelector("#showReg").onclick = () => {
+    resetCard.style.display = "none";
     regCard.style.display = "block";
     root.querySelector("#rname")?.focus();
   };

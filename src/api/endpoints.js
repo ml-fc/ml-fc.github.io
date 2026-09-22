@@ -5,6 +5,8 @@ export const API = {
   // auth
   me: () => apiGet({ action: "me" }),
   login: (name, password) => apiPost({ action: "login", name, password }),
+  requestPasswordReset: (email) => apiPost({ action: "request_password_reset", email }),
+  resetPassword: (email, otp, newPassword) => apiPost({ action: "reset_password", email, otp, newPassword }),
   registerUser: (name, password, phone = "") => apiPost({ action: "register_user", name, password, phone }),
   logout: () => apiPost({ action: "logout" }),
 
