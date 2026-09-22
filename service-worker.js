@@ -89,6 +89,7 @@ const STATIC_ASSETS = [
   "/src/ui/fc_card.js",
   "/src/ui/face_detection.js",
   "/src/ui/push_reminder.js",
+  "/src/ui/install_prompt.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
   "/src/pages/match.js",

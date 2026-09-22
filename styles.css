@@ -2560,6 +2560,21 @@ body.hasCompactMatchCommand .appbar {
 @media(max-width:480px){.profileStatus__choices{grid-template-columns:repeat(2,1fr)}.fcCard{width:310px;padding:24px 30px}.fcCard__photo{width:137px;height:157px}.fcCard__rating{left:31px}.fcCard__rating strong{font-size:46px}.fcCard__stats{width:215px;gap:4px 24px}.fcCard__foot{left:42px;right:42px}.ratingBoost{grid-template-columns:auto 1fr 64px}}
 @media(prefers-reduced-motion:reduce){.fcCard__shine{display:none}}
 
+/* Mobile PWA install prompt. The native browser prompt is launched only from
+   the Install button because browsers require an explicit user gesture. */
+.installPrompt{width:min(430px,calc(100% - 20px));padding:0;border:0;border-radius:16px;color:#102c40;background:#fff;box-shadow:0 26px 80px rgba(2,17,28,.58)}
+.installPrompt::backdrop{background:rgba(2,17,28,.76);backdrop-filter:blur(4px)}
+.installPrompt__sheet{position:relative;display:grid;grid-template-columns:68px minmax(0,1fr);align-items:center;gap:16px;padding:24px}
+.installPrompt__close{position:absolute;right:10px;top:9px;display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;color:#48616f;background:transparent;font:300 27px/1 Arial;cursor:pointer}
+.installPrompt__close:focus-visible{outline:3px solid #f0c94b;outline-offset:2px}
+.installPrompt__icon{width:68px;height:68px;border-radius:15px;box-shadow:0 8px 22px rgba(7,38,58,.2)}
+.installPrompt__eyebrow{margin:0 40px 3px 0;color:#147bad;font-size:10px;font-weight:950;letter-spacing:.1em;text-transform:uppercase}
+.installPrompt h2{margin:0;font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif;font-size:30px;font-weight:400;letter-spacing:.02em;text-transform:uppercase}
+.installPrompt__help{grid-column:1/-1;margin:2px 0 0;color:#526976;font-size:14px;line-height:1.5}
+.installPrompt__actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:3px}
+.installPrompt__actions .btn{min-height:46px}
+@media(max-width:380px){.installPrompt__sheet{grid-template-columns:56px minmax(0,1fr);gap:12px;padding:20px 16px}.installPrompt__icon{width:56px;height:56px}.installPrompt h2{font-size:26px}}
+
 /* Player status is one clear action; choices live in the focused sheet. */
 .profileStatusCard{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%;margin-top:18px;padding:15px 17px;border:1px solid #cbd9df;border-radius:12px;color:#15384b;background:linear-gradient(135deg,#fff,#edf5f7);font:inherit;text-align:left;cursor:pointer;box-shadow:0 5px 16px rgba(15,53,72,.07)}.profileStatusCard>span{display:grid;min-width:0;gap:3px}.profileStatusCard strong{font-size:20px}.profileStatusCard small{color:#58717d}.profileStatusCard>b{flex:0 0 auto;color:#0b638e;font-size:13px;white-space:nowrap}.profileStatusCard:hover{border-color:#0b638e}.profileStatusCard:focus-visible{outline:3px solid #f0c94b;outline-offset:2px}
 
