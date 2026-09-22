@@ -71,6 +71,7 @@ export const API = {
   // user self-service
   userSetPassword: (oldPassword, newPassword) => apiPost({ action: "user_set_password", oldPassword, newPassword }),
   userSetPhone: (phone) => apiPost({ action: "user_set_phone", phone }),
+  userSetEmail: (email) => apiPost({ action: "user_set_email", email }),
   userSetStatus: (playerStatus) => apiPost({ action: "user_set_status", playerStatus }),
   userSetPhoto: (blob) => {
     const form = new FormData();

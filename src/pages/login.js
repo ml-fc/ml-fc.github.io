@@ -62,12 +62,13 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       <div class="card">
         <div class="profileIdentity">
           ${playerPhotoHtml(me.name, me.photoUrl, "playerPhoto playerPhoto--profile")}
-          <div><div class="stepEyebrow">Player profile</div><div class="h1">${esc(me.name)}</div>${me.phone ? `<div class="profilePhone">${esc(phoneDisplay(savedPhone))}</div>` : ""}<div class="small">${me.isAdmin ? "<span class=\"badge\">ADMIN</span> · " : ""}Your photo appears on team sheets and POTM cards.</div></div>
+          <div><div class="stepEyebrow">Player profile</div><div class="h1">${esc(me.name)}</div>${me.phone ? `<div class="profilePhone">${esc(phoneDisplay(savedPhone))}</div>` : ""}${me.email ? `<div class="profilePhone">${esc(me.email)}</div>` : ""}<div class="small">${me.isAdmin ? "<span class=\"badge\">ADMIN</span> · " : ""}Your photo appears on team sheets and POTM cards.</div></div>
         </div>
         <div class="profilePhotoActions">
           <label class="btn primary" for="profilePhotoInput">${me.photoUrl ? "Change photo" : "Add photo"}</label>
           <input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           <button class="btn gray" id="changePhone" type="button">${me.phone ? "Change number" : "Add number"}</button>
+          <button class="btn gray" id="changeEmail" type="button">${me.email ? "Change email" : "Add email"}</button>
           <button class="btn gray" id="openPasswordDialog" type="button">Password</button>
           <span class="small profileActionStatus" id="profilePhotoStatus" role="status" aria-live="polite">Choose a clear face photo for team sheets and POTM cards.</span>
         </div>
@@ -93,6 +94,17 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       </div>
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
         <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
+      </dialog>
+      <dialog id="profileEmailDialog" class="requiredPhotoDialog" aria-labelledby="profileEmailTitle">
+        <div class="requiredPhotoSheet">
+          <div class="requiredEmailIcon" aria-hidden="true">@</div>
+          <div class="h1" id="profileEmailTitle">Change email address</div>
+          <p>This address will be used only for account recovery and important club account messages.</p>
+          <input id="profileEmail" class="input" type="email" maxlength="254" autocomplete="email" value="${esc(me.email || "")}" placeholder="you@example.com" />
+          <button class="btn primary requiredPhotoChoose" id="saveEmail" type="button">Save email</button>
+          <div class="small" id="emailStatus" role="status" aria-live="polite"></div>
+          <button class="requiredPhotoLogout" id="closeEmailDialog" type="button">Cancel</button>
+        </div>
       </dialog>
       <dialog id="statusDialog" class="requiredPhotoDialog" aria-labelledby="statusDialogTitle"><div class="requiredPhotoSheet"><div class="stepEyebrow">Availability</div><div class="h1" id="statusDialogTitle">Set player status</div><p>Choose the status that best reflects whether you can play.</p><div class="profileStatus__choices" role="radiogroup" aria-label="Player status">${["ACTIVE","INJURED","UNAVAILABLE","INACTIVE"].map(status=>`<button class="profileStatus__choice${String(me.playerStatus||"ACTIVE")===status?" is-active":""}" type="button" role="radio" aria-checked="${String(me.playerStatus||"ACTIVE")===status}" data-player-status="${status}"><span class="profileStatusIcon profileStatusIcon--${status.toLowerCase()}" aria-hidden="true">${playerStatusIcon(status)}</span>${status[0]+status.slice(1).toLowerCase()}</button>`).join("")}</div><div class="small">Active lets you answer match availability. After 10 consecutive missed club matches, Active changes automatically to Inactive.</div><button class="requiredPhotoLogout" id="closeStatusDialog" type="button">Cancel</button></div></dialog>
       <dialog id="profilePhoneDialog" class="requiredPhotoDialog" aria-labelledby="profilePhoneTitle">
@@ -127,27 +139,18 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
           <button class="requiredPhotoLogout" id="closePasswordDialog" type="button">Cancel</button>
         </div>
       </dialog>
-      ${me.photoUrl ? "" : `<dialog id="requiredPhotoDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhotoTitle" aria-describedby="requiredPhotoHelp">
+      ${me.photoUrl && (isSuperAdmin || (me.phone && me.email)) ? "" : `<dialog id="requiredProfileDialog" class="requiredPhotoDialog" aria-labelledby="requiredProfileTitle" aria-describedby="requiredProfileHelp">
         <div class="requiredPhotoSheet">
-          <div class="requiredPhotoIcon" aria-hidden="true">${esc(String(me.name || "?").trim().slice(0, 1).toUpperCase() || "?")}</div>
-          <div class="stepEyebrow">One last step</div>
-          <div class="h1" id="requiredPhotoTitle">Add your player photo</div>
-          <p id="requiredPhotoHelp">A clear face photo is required before continuing. It helps teammates identify you on team sheets and POTM cards.</p>
-          <label class="btn primary requiredPhotoChoose" for="profilePhotoInput">Choose a photo</label>
-          <div class="small" id="requiredPhotoStatus" role="status" aria-live="polite">You’ll be able to move, zoom and check the crop before uploading.</div>
-          <button class="requiredPhotoLogout" id="requiredPhotoLogout" type="button">Sign out instead</button>
-        </div>
-      </dialog>`}
-      ${me.phone || isSuperAdmin ? "" : `<dialog id="requiredPhoneDialog" class="requiredPhotoDialog" aria-labelledby="requiredPhoneTitle" aria-describedby="requiredPhoneHelp">
-        <div class="requiredPhotoSheet">
-          <div class="requiredPhoneIcon" aria-hidden="true">☎</div>
-          <div class="stepEyebrow">One last step</div>
-          <div class="h1" id="requiredPhoneTitle">Add your WhatsApp number</div>
-          <p id="requiredPhoneHelp">A WhatsApp number is now required so your account is ready for future WhatsApp login.</p>
-          <div class="phoneField"><select id="requiredCountry" class="input" aria-label="Country code">${countryOptions("61")}</select><input id="requiredPhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" placeholder="412 345 678" aria-label="Phone number" /></div>
-          <button class="btn primary requiredPhotoChoose" id="requiredPhoneSave" type="button">Save and continue</button>
-          <div class="small" id="requiredPhoneStatus" role="status" aria-live="polite">Include the country code if this is not an Australian number.</div>
-          <button class="requiredPhotoLogout" id="requiredPhoneLogout" type="button">Sign out instead</button>
+          <div class="requiredProfileIcon" aria-hidden="true">✓</div>
+          <div class="stepEyebrow">Complete your profile</div>
+          <div class="h1" id="requiredProfileTitle">Update your account details</div>
+          <p id="requiredProfileHelp">Complete every item below before continuing.</p>
+          <div class="requiredProfileFields">
+            ${me.photoUrl ? "" : `<section><strong>Player photo</strong><span>Used on team sheets and POTM cards.</span><label class="btn primary" for="profilePhotoInput">Choose photo</label><small id="requiredPhotoStatus" role="status" aria-live="polite"></small></section>`}
+            ${me.phone || isSuperAdmin ? "" : `<section><strong>WhatsApp number</strong><span>Choose the country code and enter the number without the leading zero.</span><div class="phoneField"><select id="requiredCountry" class="input" aria-label="Country code">${countryOptions("61")}</select><input id="requiredPhone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" placeholder="412 345 678" aria-label="Phone number" /></div><button class="btn primary" id="requiredPhoneSave" type="button">Save number</button><small id="requiredPhoneStatus" role="status" aria-live="polite"></small></section>`}
+            ${me.email || isSuperAdmin ? "" : `<section><strong>Email address</strong><span>Used for secure password recovery.</span><input id="requiredEmail" class="input" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com" /><button class="btn primary" id="requiredEmailSave" type="button">Save email</button><small id="requiredEmailStatus" role="status" aria-live="polite"></small></section>`}
+          </div>
+          <button class="requiredPhotoLogout" id="requiredProfileLogout" type="button">Sign out instead</button>
         </div>
       </dialog>`}
     `;
@@ -191,6 +194,22 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
     const profilePhoneDialog = root.querySelector("#profilePhoneDialog");
     root.querySelector("#changePhone").onclick = () => profilePhoneDialog.showModal();
     root.querySelector("#closePhoneDialog").onclick = () => profilePhoneDialog.close();
+    const saveEmail = async (input, status) => {
+      const email = String(input?.value || "").trim().toLowerCase();
+      input.removeAttribute("aria-invalid");
+      if (!input.checkValidity() || !email) { input.setAttribute("aria-invalid", "true"); status.textContent = "Enter a valid email address."; input.focus(); return; }
+      status.textContent = "Saving…";
+      const result = await API.userSetEmail(email).catch(() => null);
+      if (!result?.ok) { status.textContent = result?.error || "Could not save the email address."; return; }
+      me = { ...me, email: result.email };
+      setCachedUser(me); updateNavForUser(me);
+      toastSuccess("Email address updated");
+      await renderLoginPage(root, query);
+    };
+    const profileEmailDialog = root.querySelector("#profileEmailDialog");
+    root.querySelector("#changeEmail").onclick = () => profileEmailDialog.showModal();
+    root.querySelector("#closeEmailDialog").onclick = () => profileEmailDialog.close();
+    root.querySelector("#saveEmail").onclick = () => saveEmail(root.querySelector("#profileEmail"), root.querySelector("#emailStatus"));
     const passwordDialog = root.querySelector("#passwordDialog");
     root.querySelector("#openPasswordDialog").onclick = () => passwordDialog.showModal();
     root.querySelector("#closePasswordDialog").onclick = () => passwordDialog.close();
@@ -234,20 +253,15 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       location.hash = `#/login?logout=${Date.now()}`;
     };
     root.querySelector("#logout").onclick = logout;
-    root.querySelector("#requiredPhotoLogout")?.addEventListener("click", logout);
-    root.querySelector("#requiredPhoneLogout")?.addEventListener("click", logout);
+    root.querySelector("#requiredProfileLogout")?.addEventListener("click", logout);
     const requiredPhone = root.querySelector("#requiredPhone");
     cleanPhoneInput(requiredPhone);
     root.querySelector("#requiredPhoneSave")?.addEventListener("click", () => savePhone(root.querySelector("#requiredCountry"), requiredPhone, root.querySelector("#requiredPhoneStatus")));
-    const requiredPhoneDialog = root.querySelector("#requiredPhoneDialog");
-    if (requiredPhoneDialog) {
-      requiredPhoneDialog.addEventListener("cancel", event => event.preventDefault());
-      if (typeof requiredPhoneDialog.showModal === "function") requiredPhoneDialog.showModal();
-    }
-    const requiredPhotoDialog = root.querySelector("#requiredPhotoDialog");
-    if (requiredPhotoDialog && !requiredPhoneDialog) {
-      requiredPhotoDialog.addEventListener("cancel", event => event.preventDefault());
-      if (typeof requiredPhotoDialog.showModal === "function") requiredPhotoDialog.showModal();
+    root.querySelector("#requiredEmailSave")?.addEventListener("click", () => saveEmail(root.querySelector("#requiredEmail"), root.querySelector("#requiredEmailStatus")));
+    const requiredProfileDialog = root.querySelector("#requiredProfileDialog");
+    if (requiredProfileDialog) {
+      requiredProfileDialog.addEventListener("cancel", event => event.preventDefault());
+      if (typeof requiredProfileDialog.showModal === "function") requiredProfileDialog.showModal();
     }
 
     // Force update: clear SW + browser Cache Storage + most local caches, then reload.

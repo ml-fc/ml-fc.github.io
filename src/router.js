@@ -84,16 +84,13 @@ async function renderRoute() {
   // Refresh older cached user records that predate profile photos so an existing
   // server-side photo is not mistaken for a missing one.
   let user = getCachedUser();
-  if (hasToken && (!user || !Object.prototype.hasOwnProperty.call(user, "photoUrl") || !Object.prototype.hasOwnProperty.call(user, "phone"))) {
+  if (hasToken && (!user || !Object.prototype.hasOwnProperty.call(user, "photoUrl") || !Object.prototype.hasOwnProperty.call(user, "phone") || !Object.prototype.hasOwnProperty.call(user, "email"))) {
     user = await refreshMe(true).catch(() => null);
   }
   const isSuperAdmin = String(user?.name || "").trim().toLowerCase() === "admin";
-  if (hasToken && user && !isSuperAdmin && !String(user.phone || "").trim() && route !== "#/login") {
-    window.location.hash = "#/login?phone=required";
-    return;
-  }
-  if (hasToken && user && !String(user.photoUrl || "").trim() && route !== "#/login") {
-    window.location.hash = "#/login?photo=required";
+  const profileIncomplete = user && (!String(user.photoUrl || "").trim() || (!isSuperAdmin && (!String(user.phone || "").trim() || !String(user.email || "").trim())));
+  if (hasToken && profileIncomplete && route !== "#/login") {
+    window.location.hash = "#/login?profile=required";
     return;
   }
 
