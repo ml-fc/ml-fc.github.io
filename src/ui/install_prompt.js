@@ -14,13 +14,21 @@ function isAppleMobile() {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function appleBrowserName() {
+  const agent = navigator.userAgent;
+  if (/CriOS/i.test(agent)) return "Chrome";
+  if (/EdgiOS/i.test(agent)) return "Edge";
+  if (/FxiOS/i.test(agent)) return "Firefox";
+  return "Safari";
+}
+
 function buildDialog(mode) {
   const dialog = document.createElement("dialog");
   dialog.className = "installPrompt";
   dialog.setAttribute("aria-labelledby", "installPromptTitle");
 
   const appleHelp = mode === "apple"
-    ? `<p class="installPrompt__help">Tap the <strong>Share</strong> button in Safari, then choose <strong>Add to Home Screen</strong>.</p>`
+    ? `<p class="installPrompt__help">In ${appleBrowserName()}, open the <strong>Share</strong> menu, then choose <strong>Add to Home Screen</strong>. If it is not visible, scroll down in the Share menu.</p>`
     : `<p class="installPrompt__help">Install the club app for quick access from your home screen.</p>`;
 
   dialog.innerHTML = `
