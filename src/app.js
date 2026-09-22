@@ -5,7 +5,7 @@ import { getCachedUser, refreshMe, updateNavForUser } from "./auth.js";
 import { API } from "./api/endpoints.js";
 import { ensurePushSubscribed } from "./push.js";
 import { showPushEnableReminder } from "./ui/push_reminder.js";
-import { initInstallPrompt } from "./ui/install_prompt.js";
+import { initInstallPrompt, isInstalledApp } from "./ui/install_prompt.js";
 
 const LS_NOTIFIED = "mlfc_notified_ids_v1";
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
@@ -203,7 +203,7 @@ function boot() {
   refreshIdentity()
     .then((u) => {
       updateNavForUser(u);
-      if (u) showPushEnableReminder().catch(() => {});
+      if (u) showPushEnableReminder(document.body, { required: isInstalledApp() }).catch(() => {});
       checkNotificationsOnce().catch(() => {});
       if (u) requestPendingPhoneDismissals();
     })

@@ -6,6 +6,7 @@ import { isReloadFor } from "../nav_state.js";
 import { ensurePushSubscribed, pushSupport } from "../push.js";
 import { showPushEnableReminder } from "../ui/push_reminder.js";
 import { choosePhotoCrop, invalidatePlayerPhotoCaches, playerPhotoHtml } from "../ui/player_photo.js";
+import { showEmailSentPrompt } from "../ui/email_sent_prompt.js";
 
 const LS_NOTI_CACHE = "mlfc_notifications_cache_v1";
 const PHONE_COUNTRIES = [
@@ -204,6 +205,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       me = { ...me, email: result.email, emailVerifiedAt: result.emailVerifiedAt || "" };
       setCachedUser(me); updateNavForUser(me);
       toastSuccess("Email address updated");
+      if (!result.emailVerifiedAt) await showEmailSentPrompt("verification");
       await renderLoginPage(root, query);
     };
     const profileEmailDialog = root.querySelector("#profileEmailDialog");
@@ -671,6 +673,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
     if (!result?.ok) { resetMsg.textContent = result?.error || "Could not request a reset code."; return; }
     root.querySelector("#resetCodeFields").hidden = false;
     resetMsg.textContent = result.message || "If that email is registered, a reset code has been sent.";
+    await showEmailSentPrompt("reset");
     root.querySelector("#resetOtp").focus();
   };
   root.querySelector("#resetOtp").addEventListener("input", event => { event.currentTarget.value = event.currentTarget.value.replace(/\D+/g, ""); });

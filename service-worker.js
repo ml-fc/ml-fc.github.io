@@ -90,6 +90,7 @@ const STATIC_ASSETS = [
   "/src/ui/face_detection.js",
   "/src/ui/push_reminder.js",
   "/src/ui/install_prompt.js",
+  "/src/ui/email_sent_prompt.js",
   "/src/api/client.js",
   "/src/api/endpoints.js",
   "/src/pages/match.js",

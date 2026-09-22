@@ -1,6 +1,6 @@
 let deferredInstallPrompt = null;
 
-function isStandalone() {
+export function isInstalledApp() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
@@ -69,7 +69,7 @@ function buildDialog(mode) {
 }
 
 export function initInstallPrompt() {
-  if (!isMobileDevice() || isStandalone()) return;
+  if (!isMobileDevice() || isInstalledApp()) return;
 
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
@@ -85,7 +85,7 @@ export function initInstallPrompt() {
   // iOS does not expose beforeinstallprompt, so explain its manual install flow.
   if (isAppleMobile()) {
     window.setTimeout(() => {
-      if (!isStandalone() && !document.querySelector(".installPrompt")) buildDialog("apple");
+      if (!isInstalledApp() && !document.querySelector(".installPrompt")) buildDialog("apple");
     }, 700);
   }
 }
