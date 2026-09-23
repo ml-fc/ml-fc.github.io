@@ -2659,3 +2659,57 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .fcPlayerCard{width:min(100%,390px);margin:0;filter:drop-shadow(0 14px 18px rgba(0,0,0,.3))}
 .fcPlayerCard svg{display:block;width:100%;height:auto;overflow:visible}
 .leaderCardWrap .fcPlayerCard{width:min(100%,360px)}
+
+/* Team-field editor: readable bench tags and a persistent editing tray. */
+.fieldWorkspace__head{flex-shrink:0;background:#f3f6f6}
+.fieldWorkspace__head [data-back]{margin-left:auto;min-height:44px}
+.fieldWorkspace__tools{flex-shrink:0}
+.fieldWorkspace__body{overflow:auto;align-items:start;padding-bottom:12px}
+.fieldRoster{min-height:140px;max-height:100%;border-radius:12px;border:1px solid #adc3cb}
+.fieldRoster__head{position:static;gap:6px;padding:12px;background:#e4edf1}
+.fieldRoster__head strong{display:flex;align-items:center;gap:8px;font-size:14px}
+.fieldRoster__head span{font-size:12px;line-height:1.4}
+.fieldRoster__count{display:inline-grid;place-items:center;min-width:24px;height:24px;border-radius:50%;background:#fff;color:#102c40}
+.fieldRoster__tags{display:flex;flex-wrap:wrap;gap:8px;padding:12px}
+.fieldRoster .fieldRoster__tag{display:inline-flex;align-items:center;gap:7px;width:auto;max-width:100%;min-height:44px;padding:10px 14px;border:1px solid #91b2bf;border-radius:24px;background:#fff;color:#102c40;font-size:14px;line-height:1.35;box-shadow:0 2px 0 #d8e4e9;white-space:normal;text-align:left;cursor:pointer}
+.fieldRoster__tag span:last-child{overflow-wrap:anywhere;min-width:0}
+.fieldRoster .fieldRoster__tag.isSelected{background:#fff0b5;border-color:#9b7300;box-shadow:0 0 0 2px #e7bf46}
+.fieldRoster__tag:focus-visible,.fieldPositionPicker select:focus-visible{outline:3px solid #136c9c;outline-offset:3px}
+.fieldRoster__empty{display:block;margin:0;padding:0 12px 14px}
+.pitchStage{min-height:1060px;grid-template-rows:30px 1000px 30px}
+.sharedPitch .playerPhoto--field{width:30px;height:30px;font-size:10px}
+.sharedPitch .fieldPlayer>small{position:absolute;top:23px;left:calc(50% + 5px);font-size:8px;padding:2px 3px}
+.sharedPitch .fieldPlayer{width:76px;min-height:48px}
+.sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:76px;font-size:11px;line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip;border:1px solid #ffffff80;border-radius:7px;padding:3px 5px;background:#102c40}
+.sharedPitch .fieldPlayer.isSelected{z-index:5}
+.sharedPitch .fieldPlayer.isSelected>span:not(.playerPhoto){background:#fff0b5;color:#102c40;border-color:#e7bf46}
+.fieldWorkspace__foot{flex-shrink:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:#fff;margin-top:0;padding:12px 16px;box-shadow:0 -4px 16px #102c4012}
+.fieldWorkspace__foot .fieldActions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;min-height:0}
+.fieldWorkspace__foot .fieldActions strong{font-size:14px;overflow-wrap:anywhere}
+.fieldPositionPicker{display:grid;gap:4px;min-width:0;font-size:11px;font-weight:700}
+.fieldPositionPicker select{width:100%;min-height:44px;border:1px solid #adc3cb;border-radius:8px;padding:8px;background:#f3f6f6;color:#102c40;font:inherit;font-size:13px}
+.fieldWorkspace__foot [data-save]{grid-column:2;grid-row:2;align-self:end;min-height:44px;margin:0;white-space:nowrap}
+.fieldWorkspace__foot [data-field-status]:empty{display:none}
+.fieldWorkspace__foot [data-field-status]:not(:empty){grid-column:1/-1;max-width:none}
+@media(max-width:600px){
+  .fieldDialog{width:100vw;height:100dvh;max-width:none;border:0;border-radius:0}
+  .fieldWorkspace__head{padding:12px;gap:8px}
+  .fieldWorkspace__head strong{font-size:19px}
+  .fieldWorkspace__head .small{display:block;order:3;width:100%;font-size:12px;line-height:1.4}
+  .fieldWorkspace__head [data-back]{padding:8px 10px;font-size:12px}
+  .fieldWorkspace__tools{padding:0 12px 10px;gap:6px}
+  .fieldWorkspace__tools .btn{min-height:44px;font-size:12px}
+  .fieldWorkspace__tools .small{display:none}
+  .fieldWorkspace__body{display:flex;flex-direction:column;gap:12px;padding:0 10px 12px;overflow:auto;min-height:0}
+  .fieldRoster{width:100%;flex-shrink:0;min-height:120px;max-height:240px}
+  .fieldRoster__head{display:grid;grid-template-columns:1fr;padding:10px 12px}
+  .fieldRoster__tags{padding:10px 12px}
+  .pitchStage{width:100%;flex-shrink:0}
+  .sharedPitch .fieldPlayer{width:64px;min-height:48px;gap:2px}
+  .sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:64px;font-size:10px;line-height:1.2;white-space:normal;padding:3px 4px}
+  .sharedPitch .playerPhoto--field{width:30px;height:30px}
+  .sharedPitch .fieldPlayer>small{top:23px;font-size:8px}
+  .fieldWorkspace__foot{padding:10px 12px max(10px,env(safe-area-inset-bottom));gap:8px}
+  .fieldWorkspace__foot .fieldActions{min-width:0;gap:6px}
+  .fieldWorkspace__foot .btn{min-height:44px;padding:8px 10px}
+}

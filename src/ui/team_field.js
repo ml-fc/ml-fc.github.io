@@ -151,7 +151,7 @@ export function mountTeamField(root, options) {
     const portrait = playerPhotoHtml(name, options.photos?.[name], 'playerPhoto playerPhoto--field');
     const role = fieldPositionCode(positions[name] || defaults()[name]);
     if (preview) return `<span class="fieldPlayer fieldPlayer--preview ${upper(group)?'fieldPlayer--orange':''}" style="left:${p.x}%;top:${p.y}%">${portrait}${captain?'<em aria-label="Captain">C</em>':''}<span>${esc(name)}</span><small>${role}</small></span>`;
-    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:${p.x}%;top:${p.y}%" aria-label="${esc(name)}, ${esc(role)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span><small>${role}</small></button>`;
+    return `<button type="button" class="fieldPlayer ${upper(group)?'fieldPlayer--orange':''} ${selected===name?'isSelected':''}" data-name="${esc(name)}" style="left:clamp(36px, ${p.x}%, calc(100% - 36px));top:clamp(36px, ${p.y}%, calc(100% - 36px))" aria-label="${esc(name)}, ${esc(role)}, ${esc(group.label)}${captain?', captain':''}" ${canMove(name)?'':'disabled'}>${portrait}${captain?'<em aria-hidden="true">C</em>':''}<span>${esc(name)}</span><small>${role}</small></button>`;
   }
 
   function pitchMarkup(preview = false) {
@@ -208,6 +208,7 @@ export function mountTeamField(root, options) {
 
   function draw() {
     const isOpen = root.dataset.fieldOpen === '1';
+    const bodyScroll = root.querySelector('.fieldWorkspace__body')?.scrollTop || Number(root.dataset.fieldScroll || 0);
     const scrollTop = root.querySelector('.fieldRoster')?.scrollTop || Number(root.dataset.rosterScroll || 0);
     const unassigned = unassignedNames();
     const upperGroup = groups.find(upper);
@@ -223,24 +224,35 @@ export function mountTeamField(root, options) {
         <span class="fieldPreview__hint">Tap field to edit</span>
       </button>
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
-        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Select or drag a player, then move them to change their named position.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button><button class="btn good tiny" data-done>Done</button></header>
+        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Tap a player, then tap the pitch to move them. You can also drag.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>${editable ? "Keep draft & close" : "Close"}</button></header>
         <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onClear && editable ? '<button class="btn gray tiny" data-clear>Clear teams</button>' : ''}<span class="small">${unassigned.length} unassigned</span></div>
         <div class="fieldWorkspace__body">
-          <aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned</strong><span>Drop here</span></div><table><tbody>${unassigned.map(name => `<tr class="${selected===name?'isSelected':''}"><td><button type="button" data-name="${esc(name)}" ${canMove(name)?'':'disabled'}>${esc(name)}</button></td></tr>`).join('')}</tbody></table>${!unassigned.length?'<p class="fieldRoster__empty">Everyone is on the field.<br>Drop a player here to unassign.</p>':''}</aside>
+          <aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned <span class="fieldRoster__count">${unassigned.length}</span></strong><span>Tap a name to assign · Drop here to unassign</span></div><div class="fieldRoster__tags">${unassigned.map(name => `<button type="button" class="fieldRoster__tag ${selected===name?'isSelected':''}" data-name="${esc(name)}" aria-pressed="${selected===name}" ${canMove(name)?'':'disabled'}><span aria-hidden="true">＋</span><span>${esc(name)}</span></button>`).join('')}</div>${!unassigned.length?'<p class="fieldRoster__empty">Everyone is on the field. Drop a player here to unassign.</p>':''}</aside>
           <div class="pitchStage">${attackLabel(upperGroup)}${pitchMarkup(false)}${attackLabel(lowerGroup)}</div>
         </div>
-        <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Select a player')}${selectedRole ? ` · ${esc(selectedRole)}` : ''}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(group=>`<button class="btn gray tiny" data-assign="${esc(group.team)}">${esc(group.label)}</button>`).join(''):''}</div><span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary" data-save>Save changes</button>':''}</footer>
+        <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Tap a player to edit')}${selectedRole ? ` · ${esc(selectedRole)}` : ''}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(group=>`<button class="btn gray tiny" data-assign="${esc(group.team)}">${esc(group.label)}</button>`).join(''):''}</div>${selected && owner(selected) && canMove(selected) ? `<label class="fieldPositionPicker">Position<select data-position aria-label="Position for ${esc(selected)}">${FIELD_POSITIONS.map(slot => `<option value="${slot.code}" ${slot.code===selectedRole?'selected':''}>${slot.code} · ${slot.name}</option>`).join('')}</select></label>` : ''}<span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary" data-save>Save & close</button>':''}</footer>
       </div></dialog>`;
 
     const dialog = root.querySelector('dialog');
     if (isOpen) dialog.showModal();
+    const body = root.querySelector('.fieldWorkspace__body');
+    body.scrollTop = bodyScroll;
+    body.onscroll = () => { root.dataset.fieldScroll = String(body.scrollTop); };
     const roster = root.querySelector('.fieldRoster');
     roster.scrollTop = scrollTop;
     roster.onscroll = () => { root.dataset.rosterScroll = String(roster.scrollTop); };
     const bind = (selector, action) => root.querySelectorAll(selector).forEach(button => { button.onclick = action; });
     bind('[data-open]', () => { root.dataset.fieldOpen='1'; dialog.showModal(); });
     bind('[data-back]', saveDraftAndClose);
-    bind('[data-done]', saveAndClose);
+    const positionPicker = root.querySelector('[data-position]');
+    if (positionPicker) positionPicker.onchange = () => {
+      const slot = FIELD_POSITIONS.find(item => item.code === positionPicker.value);
+      const group = owner(selected);
+      if (!slot || !group) return;
+      place(selected, upper(group) ? 100-slot.positionX : slot.positionX,
+        upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2);
+      root.querySelector('[data-position]')?.focus({preventScroll:true});
+    };
     dialog.oncancel = event => { event.preventDefault(); saveDraftAndClose(); };
     bind('[data-auto]', options.onAuto);
     bind('[data-clear]', options.onClear);
@@ -267,13 +279,13 @@ export function mountTeamField(root, options) {
       button.onclick = () => {
         if (suppressClick || !canMove(name)) return;
         selected=name; root.dataset.selected=name; draw();
-        root.querySelectorAll('.fieldPlayer').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });
+        root.querySelectorAll('[data-name]').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });
       };
       button.onkeydown = event => {
         const delta={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[event.key];
         if (!delta || !owner(name) || !canMove(name)) return;
         event.preventDefault(); const p=point(name); place(name,p.x+delta[0],p.y+delta[1]);
-        root.querySelectorAll('.fieldPlayer').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });
+        root.querySelectorAll('[data-name]').forEach(element => { if (element.dataset.name===name) element.focus({preventScroll:true}); });
       };
       let drag;
       button.onpointerdown = event => { if (!canMove(name) || event.button!==0) return; drag={x:event.clientX,y:event.clientY,moved:false,scrolling:false,touchList:event.pointerType==='touch' && !owner(name)}; button.setPointerCapture(event.pointerId); };
