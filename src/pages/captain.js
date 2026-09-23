@@ -478,8 +478,8 @@ export async function renderCaptainPage(root, query) {
     if (!players.length) return `<div class="captainAvailability__empty">No players assigned.</div>`;
     return players.map(player => {
       const availability = availabilityByPlayer.get(player.toLowerCase()) || "";
-      const status = availability === "YES" ? "Available" : availability === "WAITING" ? "Waiting" : availability === "NO" ? "Unavailable" : "No response";
-      const tone = availability === "YES" ? "yes" : availability === "NO" ? "no" : availability === "WAITING" ? "waiting" : "none";
+      const status = availability === "YES" ? "Available" : availability === "WAITING" ? "Waiting" : availability === "NO" ? "Unavailable" : adminMode ? "Admin added" : "Added";
+      const tone = availability === "YES" ? "yes" : availability === "NO" ? "no" : availability === "WAITING" ? "waiting" : "added";
       return `<div class="captainAvailability__player"><span>${escapeHtml(player)}</span><small class="is-${tone}">${status}</small></div>`;
     }).join("");
   };
@@ -601,7 +601,7 @@ export async function renderCaptainPage(root, query) {
       .captainAvailability__player small.is-yes { color:#12603d; background:#dcfce7; }
       .captainAvailability__player small.is-no { color:#991b1b; background:#fee2e2; }
       .captainAvailability__player small.is-waiting { color:#854d0e; background:#fef3c7; }
-      .captainAvailability__player small.is-none { color:#526976; background:#e4edf1; }
+      .captainAvailability__player small.is-added { color:#63308d; background:#f0e3ff; }
       .captainAvailability__empty { color:#607783; font-size:11px; }
     </style>
 
