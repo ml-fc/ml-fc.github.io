@@ -1188,6 +1188,27 @@ export async function renderCaptainPage(root, query) {
     });
   };
 
+  const openMovePositionStep = (playerName, destinationTeam) => {
+    if (!playerActionButtons) return;
+    const team = safeUpper(destinationTeam);
+    if (playerActionTitle) playerActionTitle.textContent = "Choose position";
+    if (playerActionTeam) playerActionTeam.innerHTML = `Move <b>${escapeHtml(playerName)}</b> to <b>${escapeHtml(visibleTeamName(team))}</b>`;
+    playerActionButtons.innerHTML = `
+      <div class="playerActionDialog__positionStep">${movePositionPicker(playerName, team)}</div>
+      <div class="playerActionDialog__stepButtons">
+        <button class="btn gray" type="button" data-move-cancel>Cancel</button>
+        <button class="btn primary" type="button" data-move-confirm disabled>Move player</button>
+      </div>
+    `;
+    const picker = playerActionButtons.querySelector(`[data-move-position="${team}"]`);
+    const confirmButton = playerActionButtons.querySelector("[data-move-confirm]");
+    if (picker && confirmButton) picker.addEventListener("change", () => { confirmButton.disabled = !picker.value; });
+    playerActionButtons.querySelector("[data-move-cancel]")?.addEventListener("click", () => openPlayerActions(playerName));
+    confirmButton?.addEventListener("click", async () => {
+      if (await assignPlayerTeam(playerName, team, confirmButton, picker?.value || "")) playerActionDialog.close();
+    });
+  };
+
   function openPlayerActions(playerName) {
     if (!playerActionDialog || !playerActionButtons) return;
     const team = safeUpper(teamMap[playerName] || "BLUE");
@@ -1199,32 +1220,27 @@ export async function renderCaptainPage(root, query) {
       const destination = onMyTeam ? opponentTeam : captainTeam;
       const canMoveToDestination = availableMovePositions(playerName, destination).length > 0;
       playerActionButtons.innerHTML = `
-        ${movePositionPicker(playerName, destination)}
-        <button class="btn gray" type="button" data-action-move="${onMyTeam ? "OPP" : "MY"}" ${canMoveToDestination ? "" : "disabled"}>${onMyTeam ? "Move to opponent" : "Move to my team"}</button>
-        ${isOpponentPlayer(playerName) ? `<button class="btn bad" type="button" data-action-no-show>Didn't play</button>` : ""}
+        <button class="btn gray playerActionDialog__fullAction" type="button" data-action-move="${onMyTeam ? "OPP" : "MY"}" ${canMoveToDestination ? "" : "disabled"}>${onMyTeam ? "Move to opponent" : "Move to my team"}</button>
+        ${isOpponentPlayer(playerName) ? `<button class="btn bad playerActionDialog__fullAction" type="button" data-action-no-show>Didn't play</button>` : ""}
       `;
     } else if (!isOpponentMatch) {
       const blueAvailable = availableMovePositions(playerName, "BLUE").length > 0;
       const orangeAvailable = availableMovePositions(playerName, "ORANGE").length > 0;
       playerActionButtons.innerHTML = `
-        ${team !== "BLUE" ? movePositionPicker(playerName, "BLUE") : ""}
-        <button class="btn good" type="button" data-action-team="BLUE" ${team === "BLUE" || !blueAvailable ? "disabled" : ""}>Move to ${homeTeamName}</button>
-        ${team !== "ORANGE" ? movePositionPicker(playerName, "ORANGE") : ""}
-        <button class="btn warn" type="button" data-action-team="ORANGE" ${team === "ORANGE" || !orangeAvailable ? "disabled" : ""}>Move to ${awayTeamName}</button>
+        ${team !== "BLUE" ? `<button class="btn good playerActionDialog__fullAction" type="button" data-action-team="BLUE" ${blueAvailable ? "" : "disabled"}>Move to ${homeTeamName}</button>` : ""}
+        ${team !== "ORANGE" ? `<button class="btn warn playerActionDialog__fullAction" type="button" data-action-team="ORANGE" ${orangeAvailable ? "" : "disabled"}>Move to ${awayTeamName}</button>` : ""}
         <button class="btn gray playerActionDialog__remove" type="button" data-action-remove>Remove from match</button>
       `;
     } else {
       playerActionButtons.innerHTML = `<div class="small muted">This player’s team is managed from match setup.</div>`;
     }
 
-    playerActionButtons.querySelector("[data-action-move]")?.addEventListener("click", async event => {
+    playerActionButtons.querySelector("[data-action-move]")?.addEventListener("click", event => {
       const destination = event.currentTarget.dataset.actionMove === "MY" ? captainTeam : opponentTeam;
-      const position = playerActionButtons.querySelector(`[data-move-position="${destination}"]`)?.value || "";
-      if (await movePlayer(playerName, event.currentTarget.dataset.actionMove, event.currentTarget, position)) playerActionDialog.close();
+      openMovePositionStep(playerName, destination);
     });
-    playerActionButtons.querySelectorAll("[data-action-team]").forEach(button => button.addEventListener("click", async () => {
-      const position = playerActionButtons.querySelector(`[data-move-position="${button.dataset.actionTeam}"]`)?.value || "";
-      if (await assignPlayerTeam(playerName, button.dataset.actionTeam, button, position)) playerActionDialog.close();
+    playerActionButtons.querySelectorAll("[data-action-team]").forEach(button => button.addEventListener("click", () => {
+      openMovePositionStep(playerName, button.dataset.actionTeam);
     }));
     playerActionButtons.querySelector("[data-action-remove]")?.addEventListener("click", () => {
       removePlayer(playerName);

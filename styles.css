@@ -1963,9 +1963,12 @@ body.hasCompactCaptainCommand .appbar { opacity:0; transform:translateY(-100%); 
 .playerActionDialog__body { padding:15px 18px 18px; }
 .playerActionDialog__team { color:#536b78; font-size:12px; }
 .playerActionDialog__team b { color:#173847; }
-.playerActionDialog__actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.playerActionDialog__actions { display:grid; gap:8px; margin-top:12px; }
 .playerActionDialog__actions .btn { min-width:0; min-height:44px; }
-.playerActionDialog__actions .playerActionDialog__remove { grid-column:1/-1; }
+.playerActionDialog__remove,.playerActionDialog__fullAction { width:100%; }
+.playerActionDialog__positionStep .field { margin:0; }
+.playerActionDialog__positionStep .input { width:100%; min-height:48px; }
+.playerActionDialog__stepButtons { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .playerActionDialog__confirmText { grid-column:1/-1; color:#173847; line-height:1.45; }
 .playerActionDialog__error { grid-column:1/-1; min-height:0; color:#b42318; font-weight:800; }
 .playerActionDialog__error:empty { display:none; }
