@@ -1070,8 +1070,9 @@ export async function renderCaptainPage(root, query) {
     renderRows();
   };
 
-  const removeNoShow = async (playerName, button) => {
-    if (!window.confirm(`Remove ${playerName} as a no-show? They will not count as playing in this match.`)) return false;
+  const removeNoShow = async (playerName, button, statusElement = null) => {
+    const originalLabel = String(button?.textContent || "Remove player");
+    if (statusElement) statusElement.textContent = "";
     setDisabled(button, true, "Removing…");
     try {
       const out = await API.captainRemoveNoShow(code, playerName);
@@ -1088,10 +1089,27 @@ export async function renderCaptainPage(root, query) {
       toastSuccess(`${playerName} removed as a no-show.`);
       return true;
     } catch (error) {
-      setDisabled(button, false, "Removing…");
-      toastError(error?.message || "Could not remove player");
+      const message = error?.message || "Could not remove player";
+      setDisabled(button, false, originalLabel);
+      if (statusElement) statusElement.textContent = message;
+      toastError(message);
       return false;
     }
+  };
+
+  const confirmNoShowInDialog = (playerName) => {
+    if (!playerActionButtons) return;
+    playerActionButtons.innerHTML = `
+      <div class="small playerActionDialog__confirmText">Remove <b>${escapeHtml(playerName)}</b> as a no-show? They will not count as playing in this match.</div>
+      <div class="small playerActionDialog__error" data-no-show-error role="status" aria-live="polite"></div>
+      <button class="btn gray" type="button" data-no-show-cancel>Cancel</button>
+      <button class="btn bad" type="button" data-no-show-confirm>Remove player</button>
+    `;
+    playerActionButtons.querySelector("[data-no-show-cancel]")?.addEventListener("click", () => openPlayerActions(playerName));
+    playerActionButtons.querySelector("[data-no-show-confirm]")?.addEventListener("click", async event => {
+      const statusElement = playerActionButtons.querySelector("[data-no-show-error]");
+      if (await removeNoShow(playerName, event.currentTarget, statusElement)) playerActionDialog.close();
+    });
   };
 
   function openPlayerActions(playerName) {
@@ -1128,9 +1146,7 @@ export async function renderCaptainPage(root, query) {
       removePlayer(playerName);
       playerActionDialog.close();
     });
-    playerActionButtons.querySelector("[data-action-no-show]")?.addEventListener("click", async event => {
-      if (await removeNoShow(playerName, event.currentTarget)) playerActionDialog.close();
-    });
+    playerActionButtons.querySelector("[data-action-no-show]")?.addEventListener("click", () => confirmNoShowInDialog(playerName));
 
     if (!playerActionDialog.open) playerActionDialog.showModal();
   }
@@ -1356,7 +1372,12 @@ export async function renderCaptainPage(root, query) {
     });
 
     root.querySelectorAll("[data-no-show]").forEach(btn => {
-      btn.onclick = () => removeNoShow(decodeURIComponent(btn.getAttribute("data-no-show")), btn);
+      btn.onclick = () => {
+        const playerName = decodeURIComponent(btn.getAttribute("data-no-show"));
+        if (window.confirm(`Remove ${playerName} as a no-show? They will not count as playing in this match.`)) {
+          removeNoShow(playerName, btn);
+        }
+      };
     });
 
     root.querySelectorAll("[data-rating]").forEach(inp => {

@@ -1966,6 +1966,9 @@ body.hasCompactCaptainCommand .appbar { opacity:0; transform:translateY(-100%); 
 .playerActionDialog__actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
 .playerActionDialog__actions .btn { min-width:0; min-height:44px; }
 .playerActionDialog__actions .playerActionDialog__remove { grid-column:1/-1; }
+.playerActionDialog__confirmText { grid-column:1/-1; color:#173847; line-height:1.45; }
+.playerActionDialog__error { grid-column:1/-1; min-height:0; color:#b42318; font-weight:800; }
+.playerActionDialog__error:empty { display:none; }
 @media(max-width:819px){.captainCommand{top:70px;margin-inline:-4px}.captainCommand.isCompact{margin-inline:0}}
 @media(max-width:560px){.captainWizard{width:100%;max-height:100dvh;border-radius:0}.captainWizard__sheet{max-height:100dvh}.captainWizard__head{padding:14px}.captainWizard__steps{padding:9px}.captainWizard__body{padding:9px}.captainWizard__body>.card{padding:16px}}
 @property --wizard-ring-angle { syntax:"<angle>"; initial-value:0deg; inherits:false; }
