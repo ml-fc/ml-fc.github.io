@@ -82,9 +82,12 @@ function installCaptainCommandScrollBehavior(root) {
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
   btn.disabled = disabled;
-  if (busyText) {
+  if (disabled && busyText) {
     if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
-    btn.textContent = disabled ? busyText : btn.dataset.origText;
+    btn.textContent = busyText;
+  } else if (!disabled && btn.dataset.origText) {
+    btn.textContent = btn.dataset.origText;
+    delete btn.dataset.origText;
   }
 }
 

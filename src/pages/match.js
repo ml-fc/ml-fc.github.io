@@ -768,10 +768,10 @@ function drawRecapPortrait(context, portrait, name, x, y, radius) {
 async function matchRecapImageFile(match, when, { scorers = [], assisters = [], potmWinners = [], topRatings = [] } = {}) {
   const winnerRows = Math.ceil(potmWinners.length / 2);
   const potmHeight = potmWinners.length ? 105 + winnerRows * 155 : 0;
-  const highlightRows = Math.max(1, scorers.length, assisters.length, topRatings.length);
+  const highlightRows = Math.max(1, topRatings.length);
   const highlightsHeight = 118 + highlightRows * 52;
   const logicalWidth = 1080;
-  const logicalHeight = Math.max(1350, 570 + potmHeight + highlightsHeight + 110);
+  const logicalHeight = Math.max(1350, 650 + potmHeight + highlightsHeight + 110);
   const renderScale = 2;
   const canvas = document.createElement("canvas");
   canvas.width = logicalWidth * renderScale; canvas.height = logicalHeight * renderScale;
@@ -795,7 +795,7 @@ async function matchRecapImageFile(match, when, { scorers = [], assisters = [], 
   context.fillText(`${when} · ${String(match.type || "MATCH").toUpperCase()}`, 170, 145, 850);
 
   const scoreTop = 185;
-  context.fillStyle = "rgba(3,20,32,.78)"; context.fillRect(50, scoreTop, 980, 330);
+  context.fillStyle = "rgba(3,20,32,.78)"; context.fillRect(50, scoreTop, 980, 410);
   context.fillStyle = "#45dc8a"; context.fillRect(50, scoreTop, 980, 8);
   context.fillStyle = "#45dc8a"; context.font = "900 20px Arial"; context.textAlign = "center";
   context.fillText("FINAL SCORE", 540, scoreTop + 48);
@@ -812,9 +812,28 @@ async function matchRecapImageFile(match, when, { scorers = [], assisters = [], 
   context.fillText(String(match.scoreAway ?? "–"), 660, scoreTop + 252);
   context.fillStyle = "#bed2dc"; context.font = "800 17px Arial";
   context.fillText("HOME", 245, scoreTop + 160); context.fillText("AWAY", 835, scoreTop + 160);
+
+  const internal = String(match.type || "").toUpperCase() === "INTERNAL";
+  const homeTeamKey = internal ? "BLUE" : "MLFC";
+  const awayTeamKey = internal ? "ORANGE" : "OPPONENT";
+  const teamContribution = (items, team, stat) => items
+    .filter(item => String(item.team || "").toUpperCase() === team)
+    .map(item => `${item.name}${Number(item[stat] || 0) > 1 ? ` ×${Number(item[stat])}` : ""}`)
+    .join(" · ");
+  const drawTeamContribution = (x, team, label, items, stat, color, y) => {
+    const names = teamContribution(items, team, stat);
+    context.fillStyle = color; context.font = "900 16px Arial"; context.textAlign = "center";
+    context.fillText(label, x, y);
+    context.fillStyle = names ? "#ffffff" : "#78949c"; context.font = `${names ? "800" : "700"} 17px Arial`;
+    context.fillText(fitRecapCanvasText(context, names || "None recorded", 410), x, y + 25);
+  };
+  drawTeamContribution(295, homeTeamKey, "SCORERS", scorers, "goals", "#45dc8a", scoreTop + 294);
+  drawTeamContribution(295, homeTeamKey, "ASSISTS", assisters, "assists", "#72d7fa", scoreTop + 348);
+  drawTeamContribution(785, awayTeamKey, "SCORERS", scorers, "goals", "#45dc8a", scoreTop + 294);
+  drawTeamContribution(785, awayTeamKey, "ASSISTS", assisters, "assists", "#72d7fa", scoreTop + 348);
   context.textAlign = "left";
 
-  let sectionTop = scoreTop + 365;
+  let sectionTop = scoreTop + 445;
   if (potmWinners.length) {
     context.fillStyle = "#ffe16a"; context.font = "900 24px Arial";
     context.fillText(potmWinners.length === 1 ? "PLAYER OF THE MATCH" : "PLAYERS OF THE MATCH", 60, sectionTop + 30);
@@ -839,32 +858,21 @@ async function matchRecapImageFile(match, when, { scorers = [], assisters = [], 
   }
 
   context.fillStyle = "#72d7fa"; context.font = "900 24px Arial";
-  context.fillText("MATCH HIGHLIGHTS", 60, sectionTop + 30);
-  const columns = [
-    { title: "GOALS", color: "#45dc8a", rows: scorers.map((item) => `${item.name}  ×${item.goals}`), empty: "No goals recorded" },
-    { title: "ASSISTS", color: "#72d7fa", rows: assisters.map((item) => `${item.name}  ×${item.assists}`), empty: "No assists recorded" },
-    { title: "TOP RATINGS", color: "#ffe16a", rows: topRatings.map((item) => `${item.name}  ${item.rating.toFixed(1)}`), empty: "No ratings recorded" },
-  ];
+  context.fillText("TOP RATINGS", 60, sectionTop + 30);
   const panelTop = sectionTop + 58;
-  const panelWidth = 306;
-  const panelGap = 22;
+  const panelWidth = 960;
   const panelHeight = highlightsHeight - 58;
-  columns.forEach((column, columnIndex) => {
-    const x = 60 + columnIndex * (panelWidth + panelGap);
-    context.fillStyle = "rgba(3,20,32,.70)"; context.fillRect(x, panelTop, panelWidth, panelHeight);
-    context.fillStyle = column.color; context.fillRect(x, panelTop, panelWidth, 6);
-    context.fillStyle = column.color; context.font = "900 20px Arial";
-    context.fillText(column.title, x + 20, panelTop + 42);
-    const rows = column.rows.length ? column.rows : [column.empty];
-    rows.forEach((row, index) => {
-      context.fillStyle = column.rows.length ? "#ffffff" : "#78949c";
-      context.font = `${column.rows.length ? "800" : "700"} 19px Arial`;
-      context.fillText(fitRecapCanvasText(context, row, panelWidth - 40), x + 20, panelTop + 88 + index * 52);
-      if (index < rows.length - 1) {
-        context.strokeStyle = "rgba(190,210,220,.12)"; context.lineWidth = 1;
-        context.beginPath(); context.moveTo(x + 20, panelTop + 105 + index * 52); context.lineTo(x + panelWidth - 20, panelTop + 105 + index * 52); context.stroke();
-      }
-    });
+  const ratingRows = topRatings.length ? topRatings.map((item) => `${item.name}  ${item.rating.toFixed(1)}`) : ["No ratings recorded"];
+  context.fillStyle = "rgba(3,20,32,.70)"; context.fillRect(60, panelTop, panelWidth, panelHeight);
+  context.fillStyle = "#ffe16a"; context.fillRect(60, panelTop, panelWidth, 6);
+  ratingRows.forEach((row, index) => {
+    context.fillStyle = topRatings.length ? "#ffffff" : "#78949c";
+    context.font = `${topRatings.length ? "800" : "700"} 19px Arial`;
+    context.fillText(fitRecapCanvasText(context, row, panelWidth - 40), 80, panelTop + 48 + index * 52);
+    if (index < ratingRows.length - 1) {
+      context.strokeStyle = "rgba(190,210,220,.12)"; context.lineWidth = 1;
+      context.beginPath(); context.moveTo(80, panelTop + 65 + index * 52); context.lineTo(1000, panelTop + 65 + index * 52); context.stroke();
+    }
   });
 
   context.fillStyle = "#bed2dc"; context.font = "700 20px Arial";
@@ -1785,7 +1793,7 @@ const cap = availabilityLimitForMatch(m);
   const assisters = Object.entries(scorerMap)
     .filter(([_, v]) => (v.assists || 0) > 0)
     .sort((a, b) => (b[1].assists - a[1].assists) || a[0].localeCompare(b[0]))
-    .map(([name, v]) => ({ name, assists: v.assists }));
+    .map(([name, v]) => ({ name, assists: v.assists, team: v.team || "" }));
 
   const ratingMap = new Map();
   for (const row of (Array.isArray(data.ratings) ? data.ratings : [])) {
