@@ -1,10 +1,11 @@
-import { mountTeamField, positionMap, positionRows } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/captain.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { getCachedUser, refreshMe } from "../auth.js";
 import { getActiveWeeklyTheme } from "../themes.js";
+import { loadCanvasImage } from "../ui/player_photo.js";
 
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
@@ -123,11 +124,19 @@ async function captainTeamImageFile(match, when, team, positions) {
   }
 
   const pitch = { x: 55, y: 270, width: 970, height: 1000 };
+  const weeklyCrest = await loadCanvasImage(weeklyTheme?.crest);
   const grass = context.createLinearGradient(0, pitch.y, 0, pitch.y + pitch.height);
   grass.addColorStop(0, "#126779");
   grass.addColorStop(1, "#084155");
   context.fillStyle = grass;
   context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height);
+  if (weeklyCrest) {
+    const crestSize = Math.min(pitch.width * .58, pitch.height * .58);
+    context.save();
+    context.globalAlpha = .1;
+    context.drawImage(weeklyCrest, pitch.x + (pitch.width - crestSize) / 2, pitch.y + (pitch.height - crestSize) / 2, crestSize, crestSize);
+    context.restore();
+  }
   context.strokeStyle = "rgba(255,255,255,.55)";
   context.lineWidth = 4;
   context.strokeRect(pitch.x + 18, pitch.y + 18, pitch.width - 36, pitch.height - 36);
@@ -149,6 +158,15 @@ async function captainTeamImageFile(match, when, team, positions) {
     context.beginPath();
     context.arc(x, y, 34, 0, Math.PI * 2);
     context.fill();
+    const role = fieldPositionCode(position);
+    if (role) {
+      context.fillStyle = "#fff";
+      context.beginPath(); context.arc(x - 25, y - 23, 14, 0, Math.PI * 2); context.fill();
+      context.fillStyle = "#08283b";
+      context.font = "900 11px Arial";
+      context.textAlign = "center";
+      context.fillText(role, x - 25, y - 19);
+    }
     context.fillStyle = "#08283b";
     context.font = "900 24px Arial";
     context.textAlign = "center";

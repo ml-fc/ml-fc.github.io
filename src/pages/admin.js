@@ -1,5 +1,5 @@
 import { drawFcCard } from "../ui/fc_card.js";
-import { mountTeamField, positionMap, positionRows, defaultPositions, randomGoalkeeperPositions } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, defaultPositions, randomGoalkeeperPositions, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -391,6 +391,7 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
 
   const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa", captain:captains[0], upper:false }];
   if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55", captain:captains[1], upper:true });
+  const weeklyCrest = await loadCanvasImage(weeklyTheme?.crest);
   const portraits = new Map(await Promise.all(
     [...new Set(teams.flatMap(team => team.players))].map(async name => [
       name,
@@ -402,6 +403,18 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.fillRect(left,top,width,height);
   context.fillStyle="#226936";
   for(let i=0;i<10;i+=2) context.fillRect(left,top+i*height/10,width,height/10);
+  if (teams.length > 1) {
+    context.save();context.globalAlpha=.13;
+    context.fillStyle=teams[1].color;context.fillRect(left,top,width,height/2);
+    context.fillStyle=teams[0].color;context.fillRect(left,top+height/2,width,height/2);
+    context.restore();
+  }
+  if (weeklyCrest) {
+    const crestSize=Math.min(width*.58,height*.52);
+    context.save();context.globalAlpha=.1;
+    context.drawImage(weeklyCrest,left+(width-crestSize)/2,top+(height-crestSize)/2,crestSize,crestSize);
+    context.restore();
+  }
   context.strokeStyle="#78949c"; context.lineWidth=3;
   context.strokeRect(left,top,width,height);
   context.beginPath();context.moveTo(left,top+height/2);context.lineTo(left+width,top+height/2);context.stroke();
@@ -435,7 +448,13 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
           context.fillStyle=team.color;context.fillRect(x-markerRadius,y-markerRadius,markerRadius*2,markerRadius*2);
         }
         context.restore();
-        context.strokeStyle="#fff";context.lineWidth=3;context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.stroke();
+        context.strokeStyle=team.color;context.lineWidth=7;context.beginPath();context.arc(x,y,markerRadius,0,Math.PI*2);context.stroke();
+        context.strokeStyle="#fff";context.lineWidth=2;context.beginPath();context.arc(x,y,markerRadius-4,0,Math.PI*2);context.stroke();
+        const role=fieldPositionCode({positionX,positionY});
+        if(role) {
+          context.fillStyle="#fff";context.beginPath();context.arc(x-22,y-20,13,0,Math.PI*2);context.fill();
+          context.fillStyle="#132c3b";context.font="900 10px Arial";context.fillText(role,x-22,y-16);
+        }
         if(name===team.captain) {
           context.fillStyle="#ffe16a";context.beginPath();context.arc(x+21,y-19,12,0,Math.PI*2);context.fill();
           context.fillStyle="#132c3b";context.font="900 15px Arial";context.fillText("C",x+21,y-14);

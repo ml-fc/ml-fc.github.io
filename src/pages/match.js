@@ -327,10 +327,18 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
   }
 
   const pitch = { x: 55, y: 180, width: 970, height: 1080 };
+  const weeklyCrest = await loadCanvasImage(theme?.crest);
   context.fillStyle = "#26713b";
   context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height);
   context.fillStyle = "#226936";
   for (let stripe = 0; stripe < 10; stripe += 2) context.fillRect(pitch.x, pitch.y + stripe * pitch.height / 10, pitch.width, pitch.height / 10);
+  if (weeklyCrest) {
+    const crestSize = Math.min(pitch.width * .58, pitch.height * .55);
+    context.save();
+    context.globalAlpha = .1;
+    context.drawImage(weeklyCrest, pitch.x + (pitch.width - crestSize) / 2, pitch.y + (pitch.height - crestSize) / 2, crestSize, crestSize);
+    context.restore();
+  }
   context.strokeStyle = "rgba(255,255,255,.55)";
   context.lineWidth = 3;
   context.strokeRect(pitch.x, pitch.y, pitch.width, pitch.height);
@@ -343,6 +351,12 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
     { name: homeName, rows: homeRows || [], captain: captains[0], upper: false, color: "#72d7fa" },
     { name: awayName, rows: awayRows || [], captain: captains[1], upper: true, color: "#ff9c55" },
   ].filter(team => team.rows.length);
+  if (teams.length > 1) {
+    context.save(); context.globalAlpha = .13;
+    context.fillStyle = teams[1].color; context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height / 2);
+    context.fillStyle = teams[0].color; context.fillRect(pitch.x, pitch.y + pitch.height / 2, pitch.width, pitch.height / 2);
+    context.restore();
+  }
   const portraits = new Map(await Promise.all(teams.flatMap(team => team.rows).map(async row => [row.playerName, await loadCanvasImage(row.photoUrl)])));
   for (const team of teams) {
     const players = team.rows.map(row => String(row.playerName || "").trim()).filter(Boolean);
@@ -368,7 +382,10 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
         context.drawImage(portrait, x - portrait.width * scale / 2, y - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
       } else { context.fillStyle = team.color; context.fillRect(x - 30, y - 30, 60, 60); }
       context.restore();
-      context.strokeStyle = "#fff"; context.lineWidth = 3; context.beginPath(); context.arc(x, y, 30, 0, Math.PI * 2); context.stroke();
+      context.strokeStyle = team.color; context.lineWidth = 7; context.beginPath(); context.arc(x, y, 30, 0, Math.PI * 2); context.stroke();
+      context.strokeStyle = "#fff"; context.lineWidth = 2; context.beginPath(); context.arc(x, y, 26, 0, Math.PI * 2); context.stroke();
+      const role = fieldPositionCode({ positionX: px, positionY: py });
+      if (role) { context.fillStyle = "#fff"; context.beginPath(); context.arc(x - 22, y - 21, 13, 0, Math.PI * 2); context.fill(); context.fillStyle = "#132c3b"; context.font = "900 10px Arial"; context.fillText(role, x - 22, y - 17); }
       if (name === team.captain) { context.fillStyle = "#ffe16a"; context.beginPath(); context.arc(x + 22, y - 21, 12, 0, Math.PI * 2); context.fill(); context.fillStyle = "#132c3b"; context.font = "900 14px Arial"; context.fillText("C", x + 22, y - 16); }
       context.font = "900 19px Arial";
       const labelWidth = Math.min(190, Math.max(90, context.measureText(name).width + 18));
