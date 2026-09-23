@@ -785,62 +785,6 @@ function setDisabled(btn, disabled, busyText) {
   }
 }
 
-function requestScoresForPotm(match) {
-  return new Promise((resolve) => {
-    const type = String(match?.type || "").toUpperCase();
-    const homeName = String(match?.teamHomeName || (type === "OPPONENT" ? "MLFC" : "Blue"));
-    const awayName = String(match?.teamAwayName || (type === "OPPONENT" ? "Opponent" : "Orange"));
-    const dialog = document.createElement("dialog");
-    dialog.className = "playerDialog";
-    dialog.setAttribute("aria-labelledby", "potmScoreTitle");
-    dialog.innerHTML = `
-      <form class="playerSheet" data-potm-score-form>
-        <div class="playerSheet__head">
-          <div><div class="stepEyebrow">Before voting opens</div><div class="h1" id="potmScoreTitle">Update the score</div></div>
-          <button class="btn gray potmScoreClose" type="button" data-cancel aria-label="Cancel score update">×</button>
-        </div>
-        <div class="small" style="margin-top:8px">Both scores are required before players can vote. Ratings can still be added later.</div>
-        <div class="formGrid formGrid--two" style="margin-top:16px">
-          <div class="field"><label class="field__label" for="potmScoreHome">${escapeHtml(homeName)} score</label><input class="input" id="potmScoreHome" type="number" min="0" max="99" inputmode="numeric" required /></div>
-          <div class="field"><label class="field__label" for="potmScoreAway">${escapeHtml(awayName)} score</label><input class="input" id="potmScoreAway" type="number" min="0" max="99" inputmode="numeric" required /></div>
-        </div>
-        <div class="small" data-score-error role="alert" style="min-height:18px; margin-top:8px"></div>
-        <div class="row" style="justify-content:flex-end; gap:10px; margin-top:12px">
-          <button class="btn good" type="submit">Save score & start voting</button>
-        </div>
-      </form>`;
-
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
-      if (dialog.open) dialog.close();
-      dialog.remove();
-      resolve(value);
-    };
-    dialog.querySelectorAll("[data-cancel]").forEach((button) => { button.onclick = () => finish(null); });
-    dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(null); });
-    dialog.querySelector("[data-potm-score-form]").onsubmit = (event) => {
-      event.preventDefault();
-      const home = Number(dialog.querySelector("#potmScoreHome").value);
-      const away = Number(dialog.querySelector("#potmScoreAway").value);
-      if (![home, away].every((score) => Number.isInteger(score) && score >= 0 && score <= 99)) {
-        dialog.querySelector("[data-score-error]").textContent = "Enter both scores as whole numbers from 0 to 99.";
-        return;
-      }
-      finish({ home, away });
-    };
-
-    document.body.appendChild(dialog);
-    if (typeof dialog.showModal === "function") {
-      dialog.showModal();
-      dialog.querySelector("#potmScoreHome")?.focus();
-    } else {
-      finish(null);
-    }
-  });
-}
-
 function installManageCommandScrollBehavior(manageArea) {
   if (MANAGE_COMMAND_SCROLL_HANDLER) {
     window.removeEventListener("scroll", MANAGE_COMMAND_SCROLL_HANDLER);
@@ -2075,6 +2019,8 @@ async function openVotingManager(root, view, match) {
   const closed = started && Boolean(potm.closed);
   const hasScores = String(detail.match?.scoreHome ?? "").trim() !== "" && String(detail.match?.scoreAway ?? "").trim() !== "";
   const results = Array.isArray(potm.results) ? potm.results : [];
+  const candidates = Array.isArray(potm.candidates) ? potm.candidates : [];
+  const voteCount = Number(potm.voteCount || 0);
   const topVotes = Math.max(0, ...results.map((row) => Number(row.voteCount || 0)));
   const leaders = results.filter((row) => topVotes > 0 && Number(row.voteCount || 0) === topVotes);
   const winners = leaders.map((leader) =>
@@ -2089,15 +2035,19 @@ async function openVotingManager(root, view, match) {
       : `${winnerNames.slice(0, -1).join(", ")}, and ${winnerNames[winnerNames.length - 1]}`;
   const matchStatus = String(detail.match?.status || "").toUpperCase();
   const resultLocked = isTrueFlag(detail.match?.ratingsLocked) || matchStatus === "CLOSED" || matchStatus === "COMPLETED";
+  const canAdminSelect = started && !resultLocked && voteCount === 0 && candidates.length > 0;
   dialog.innerHTML = `<div class="adminVotingDialog__panel">
     <header><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${escapeHtml(match.title || "Voting")}</div><div class="small">${started ? `${voted.length} of ${voted.length + pending.length} players voted` : hasScores ? "Ready to open voting" : "Add the final score when starting voting"}</div></div><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button></header>
     ${started ? `<div class="potmParticipation">
       <section><header><b>Voted</b><span>${voted.length}</span></header><div class="potmParticipation__players">${voted.length ? voted.map((row) => `<span class="potmParticipation__player potmParticipation__player--done"><i aria-hidden="true">✓</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">No votes yet.</span>`}</div></section>
       <section><header><b>Not voted</b><span>${pending.length}</span></header><div class="potmParticipation__players">${pending.length ? pending.map((row) => `<span class="potmParticipation__player"><i aria-hidden="true">!</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">Everyone has voted.</span>`}</div></section>
-    </div>` : `<div class="adminVotingDialog__empty"><b>Voting has not started</b><span>Opening voting notifies every player listed in this match.</span></div>`}
+    </div>` : `<div class="adminVotingDialog__empty"><b>Voting has not started</b><span>Opening this popup does not notify players. ${hasScores ? "Open voting, then use Send notification when you are ready." : "Enter both scores to open voting automatically and notify the match roster."}</span></div>`}
+    ${canAdminSelect ? `<div class="field"><label class="field__label" for="adminPotmPlayer">No votes received — select POTM</label><select class="input" id="adminPotmPlayer"><option value="">Choose a player</option>${candidates.map((candidate) => `<option value="${escapeHtml(candidate.playerName)}">${escapeHtml(candidate.playerName)}</option>`).join("")}</select></div>` : ""}
     <div class="adminVotingDialog__actions">
-      ${!started ? `<button class="btn good" type="button" data-vote-start>Start voting</button>` : ""}
-      ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Remind ${pending.length} ${pending.length === 1 ? "player" : "players"}</button>` : ""}
+      ${!started && hasScores ? `<button class="btn good" type="button" data-vote-start>Open voting</button>` : ""}
+      ${!started && !hasScores ? `<button class="btn good" type="button" data-vote-score>Enter scores</button>` : ""}
+      ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Send notification</button>` : ""}
+      ${canAdminSelect ? `<button class="btn primary" type="button" data-potm-select>Select POTM</button>` : ""}
       ${started && !closed ? `<button class="btn whatsappBtn" type="button" data-vote-share>Share voting link</button>` : ""}
       ${started && !closed ? `<button class="btn gray" type="button" data-vote-close>Close voting</button><button class="btn dangerGhost" type="button" data-vote-cancel>Cancel voting</button>` : ""}
       ${closed && winners.length ? `<button class="btn whatsappBtn" type="button" data-potm-share>Share POTM${winners.length > 1 ? " winners" : ""}</button>` : ""}
@@ -2120,31 +2070,38 @@ async function openVotingManager(root, view, match) {
   };
   dialog.querySelector("[data-vote-start]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
-    if (!hasScores) {
-      const scores = await requestScoresForPotm(match);
-      if (!scores) return;
-      setDisabled(button, true, "Saving score…");
-      const scoreResult = await API.adminSubmitScore(match.publicCode, String(match.type || "").toUpperCase() === "INTERNAL" ? "INTERNAL" : "OPPONENT", String(scores.home), String(scores.away));
-      if (!scoreResult?.ok) { setDisabled(button, false); return toastError(scoreResult?.error || "The score could not be saved."); }
-      match.scoreHome = String(scoreResult.scoreHome ?? scores.home);
-      match.scoreAway = String(scoreResult.scoreAway ?? scores.away);
-    }
-    setDisabled(button, true, "Notifying players…");
+    setDisabled(button, true, "Opening…");
     const out = await API.adminStartPotmVoting(match.matchId);
     if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "Voting could not be started."); }
     MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, scoreHome: match.scoreHome, scoreAway: match.scoreAway, potmOpenedAt: out.openedAt, potmClosedAt: "", potmVotingClosed: 0 } : item);
-    toastSuccess(`Voting started. ${Number(out.notified || 0)} players notified.`);
-    refreshList();
+    toastSuccess("Voting opened. No notifications sent yet.");
+    refreshList({ reopenVoting: true });
+  });
+  dialog.querySelector("[data-vote-score]")?.addEventListener("click", () => {
+    dialog.close();
+    location.hash = `#/captain?code=${encodeURIComponent(match.publicCode)}&src=admin`;
   });
   dialog.querySelector("[data-vote-remind]")?.addEventListener("click", async (event) => {
-    if (!confirm(`Remind ${pending.length} ${pending.length === 1 ? "player" : "players"} who have not voted?`)) return;
+    if (!confirm(`Send the voting notification to ${pending.length} ${pending.length === 1 ? "player" : "players"} who have not voted?`)) return;
     const button = event.currentTarget;
     setDisabled(button, true, "Sending…");
     const out = await API.adminRemindPotmPending(match.matchId);
     setDisabled(button, false);
     if (!out?.ok) return toastError(out?.error || "Reminders could not be sent.");
-    const message = `Reminder sent to ${Number(out.notified || 0)} ${Number(out.notified || 0) === 1 ? "player" : "players"}.`;
-    toastSuccess(message, "Reminder sent");
+    const message = `Notification sent to ${Number(out.notified || 0)} ${Number(out.notified || 0) === 1 ? "player" : "players"}.`;
+    toastSuccess(message, "Notification sent");
+  });
+  dialog.querySelector("[data-potm-select]")?.addEventListener("click", async (event) => {
+    const candidateName = String(dialog.querySelector("#adminPotmPlayer")?.value || "").trim();
+    if (!candidateName) return toastWarn("Choose a player for POTM.");
+    if (!confirm(`Select ${candidateName} as Player of the Match and close voting?`)) return;
+    const button = event.currentTarget;
+    setDisabled(button, true, "Selecting…");
+    const out = await API.adminSelectPotm(match.matchId, candidateName);
+    if (!out?.ok) { setDisabled(button, false); return toastError(out?.error || "POTM could not be selected."); }
+    MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, potmClosedAt: out.closedAt, potmVotingClosed: 1, potmVoteCount: 1 } : item);
+    toastSuccess(`${candidateName} selected as POTM.`);
+    refreshList({ reopenVoting: true });
   });
   dialog.querySelector("[data-vote-share]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -2242,6 +2199,12 @@ function bindListButtons(root, view) {
 
       const matchId = btn.getAttribute("data-lock");
       const match = (MEM.matches || []).find(item => String(item.matchId) === String(matchId));
+      const potmReady = String(match?.potmOpenedAt || "").trim() !== "" && Number(match?.potmVoteCount || 0) > 0;
+      if (!potmReady) {
+        toastError("Select Player of the Match before completing this match.");
+        if (match) openVotingManager(root, view, match).catch(() => {});
+        return;
+      }
       if (!confirm(`Complete “${match?.title || "this match"}”?\n\nThis will close POTM voting immediately. Teams, availability, scores and ratings will become read-only and the final result will be published.`)) return;
       setDisabled(btn, true, "Locking…");
 
@@ -2358,6 +2321,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const potmStarted = String(potm.openedAt || "").trim() !== "";
   const potmFinal = potmStarted && Boolean(potm.closed);
   const potmResults = Array.isArray(potm.results) ? potm.results : [];
+  const potmReady = potmStarted && Number(potm.voteCount || 0) > 0;
   const potmTopVotes = Math.max(0,...potmResults.map((row)=>Number(row.voteCount||0)));
   const potmLeaders = potmResults.filter((row)=>Number(row.voteCount||0)===potmTopVotes && potmTopVotes>0);
   const potmLead = potmLeaders[0];
@@ -2481,7 +2445,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
         ${hasBothScores && !locked ? `<button class="btn primary" id="lockRatingsTop">Complete & lock match</button>` : ""}
       </div>
-      <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : "Ready to complete once all ratings have been checked."}</div>
+      <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : !potmReady ? "Select Player of the Match before completing." : "Ready to complete once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
     <details class="card">
@@ -2563,6 +2527,12 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
   const lockRatingsTop = manageArea.querySelector("#lockRatingsTop");
   if (lockRatingsTop) lockRatingsTop.onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
+    if (!potmReady) {
+      toastError("Select Player of the Match before completing this match.");
+      const listMatch = (MEM.matches || []).find((item) => String(item.matchId) === String(m.matchId)) || m;
+      openVotingManager(root, prevView || "open", listMatch).catch(() => {});
+      return;
+    }
 
     const confirmed = confirm(
       `Complete “${m.title || "this match"}”?\n\nThis will:\n• close POTM voting immediately\n• lock team and availability changes\n• lock scores and ratings\n• publish the final result\n• mark the match completed\n\nAn admin can unlock the match later, but POTM voting will remain closed.`

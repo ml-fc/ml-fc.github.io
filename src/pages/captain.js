@@ -981,7 +981,9 @@ export async function renderCaptainPage(root, query) {
         m.scoreAway = String(out.scoreAway ?? m.scoreAway ?? "");
 
         msg.textContent = "Submitted ✅";
-        toastSuccess("Opponent score submitted.");
+        toastSuccess(Number(out.potmNotified || 0) > 0
+          ? `Score submitted. Voting opened and ${Number(out.potmNotified)} players notified.`
+          : "Opponent score submitted.");
 
         ratingsEnabled = true;
         updateStepAvailability();
@@ -1012,7 +1014,9 @@ export async function renderCaptainPage(root, query) {
         m.scoreAway = String(out.scoreAway ?? b);
 
         msg.textContent = "Submitted ✅";
-        toastSuccess("Score submitted.");
+        toastSuccess(Number(out.potmNotified || 0) > 0
+          ? `Score submitted. Voting opened and ${Number(out.potmNotified)} players notified.`
+          : "Score submitted.");
 
         ratingsEnabled = true;
         updateStepAvailability();

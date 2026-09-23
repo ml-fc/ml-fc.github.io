@@ -3,7 +3,7 @@ import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
-import { defaultPositions, fieldPositionCode } from "../ui/team_field.js";
+import { defaultPositions, fieldPositionCode, presentationPositions } from "../ui/team_field.js";
 import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 import { getActiveWeeklyTheme } from "../themes.js";
 
@@ -1010,7 +1010,16 @@ function potmVoteBannerHtml(vote) {
   </section>`;
 }
 
-async function openPotmFieldDialog(code, onSaved = null) {
+function showPotmFieldDialogError(modal, message) {
+  modal.innerHTML = `<div class="potmFieldDialog__panel">
+    <button class="potmFieldDialog__close" type="button" aria-label="Close">×</button>
+    <h2>Voting unavailable</h2>
+    <p>${escapeHtml(message || "The team sheet could not be loaded. Close this window and try again.")}</p>
+  </div>`;
+  modal.querySelector(".potmFieldDialog__close")?.addEventListener("click", () => modal.close());
+}
+
+async function openPotmFieldDialog(code, onSaved = null, initialPotm = null) {
   let modal = document.querySelector("#potmFieldDialog");
   if (modal) modal.remove();
   modal = document.createElement("dialog");
@@ -1019,18 +1028,31 @@ async function openPotmFieldDialog(code, onSaved = null) {
   modal.innerHTML = `<div class="potmFieldDialog__loading">Loading the team sheet…</div>`;
   document.body.appendChild(modal);
   modal.showModal();
+  modal.addEventListener("close", () => modal.remove(), { once: true });
 
-  const response = await API.getPublicMatch(code);
-  const potm = response?.potm;
-  if (!response?.ok || !potm?.canVote) {
-    modal.innerHTML = `<div class="potmFieldDialog__panel"><button class="potmFieldDialog__close" type="button" aria-label="Close">×</button><h2>Voting unavailable</h2><p>${escapeHtml(response?.error || "Voting is not open for this match.")}</p></div>`;
-    modal.querySelector(".potmFieldDialog__close").onclick = () => modal.close();
-    modal.addEventListener("close", () => modal.remove(), { once: true });
-    return;
-  }
+  try {
+    let potm = initialPotm;
+    if (!potm) {
+      const response = await API.getPublicMatch(code);
+      if (!response?.ok) {
+        showPotmFieldDialogError(modal, response?.error || "The team sheet could not be loaded.");
+        return;
+      }
+      potm = response.potm;
+    }
+    if (!potm?.canVote) {
+      showPotmFieldDialogError(modal, "Voting is not open for this match.");
+      return;
+    }
 
   const meName = String(getCachedUser()?.name || "").trim().toLowerCase();
-  const candidates = (potm.candidates || []).filter((candidate) => String(candidate.playerName || "").trim().toLowerCase() !== meName);
+  const candidates = (Array.isArray(potm.candidates) ? potm.candidates : [])
+    .filter((candidate) => candidate && String(candidate.playerName || "").trim())
+    .filter((candidate) => String(candidate.playerName).trim().toLowerCase() !== meName);
+  if (!candidates.length) {
+    showPotmFieldDialogError(modal, "There are no eligible players on this team sheet.");
+    return;
+  }
   const grouped = new Map();
   candidates.forEach((candidate) => {
     const team = String(candidate.team || "TEAM").toUpperCase();
@@ -1093,7 +1115,10 @@ async function openPotmFieldDialog(code, onSaved = null) {
     toastSuccess("POTM vote saved. You can change it until voting closes.");
     if (typeof onSaved === "function") await onSaved(saved.potm);
   };
-  modal.addEventListener("close", () => modal.remove(), { once: true });
+  } catch (error) {
+    console.error("Could not render POTM team sheet", error);
+    showPotmFieldDialogError(modal, "The team sheet could not be loaded. Close this window and try again.");
+  }
 }
 
 function wirePotmVoteBanner(host) {
@@ -1945,7 +1970,7 @@ const cap = availabilityLimitForMatch(m);
     await openPotmFieldDialog(code, async (updatedPotm) => {
       potm = updatedPotm;
       await renderMatchDetail(root, code);
-    });
+    }, potm);
   };
 
   if (!hideAvailability) {

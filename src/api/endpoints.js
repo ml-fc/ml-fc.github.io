@@ -45,6 +45,7 @@ export const API = {
   adminStartPotmVoting: (matchId) => apiPost({ action: "admin_start_potm_voting", matchId }),
   adminCancelPotmVoting: (matchId) => apiPost({ action: "admin_cancel_potm_voting", matchId }),
   adminClosePotmVoting: (matchId) => apiPost({ action: "admin_close_potm_voting", matchId }),
+  adminSelectPotm: (matchId, candidateName) => apiPost({ action: "admin_select_potm", matchId, candidateName }),
   adminReopenPotmVoting: (matchId) => apiPost({ action: "admin_reopen_potm_voting", matchId }),
   adminPotmStatus: (matchId) => apiGet({ action: "admin_potm_status", matchId }),
   adminRemindPotmPending: (matchId) => apiPost({ action: "admin_remind_potm_pending", matchId }),
