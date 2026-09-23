@@ -1,4 +1,4 @@
-import { fcCardHtml, drawFcCard } from "../ui/fc_card.js";
+import { fcCardHtml, fcCardUpdateHtml, drawFcCard } from "../ui/fc_card.js";
 import { API } from "../api/endpoints.js";
 import { getCachedUser } from "../auth.js";
 import { toastError, toastInfo } from "../ui/toast.js";
@@ -87,7 +87,7 @@ export async function renderSeasonPage(root) {
   const card=out.fcCard||{overall:50,position:"CM",attributes:Object.fromEntries(CARD_STATS.map(key=>[key,50])),status:"LIVE",appearances:0};
   const hasCardChanges=[card.latestChanges?.overall,...CARD_STATS.map(stat=>card.latestChanges?.attributes?.[stat])].some(value=>Number(value)!==0);
   const cardStage=root.querySelector("#fcCardStage");
-  cardStage.innerHTML=`<div class="fcCardStage__head"><span>${esc(out.season?.name||"Current season")}</span><button class="fcCardInfo" id="fcCardInfo" type="button" aria-label="How FC Card ratings work">i</button></div>${fcCardHtml(card,user?.name||"Player")}<div class="fcCardStage__note">${card.status==="FINAL"?"Season card locked":hasCardChanges?"Green/red badges show your latest match-week changes":"Updates after completed match weeks"}</div>`;
+  cardStage.innerHTML=`<div class="fcCardStage__head"><span>${esc(out.season?.name||"Current season")}</span><button class="fcCardInfo" id="fcCardInfo" type="button" aria-label="How FC Card ratings work">i</button></div>${fcCardHtml(card,user?.name||"Player")}<div class="fcCardStage__note">${card.status==="FINAL"?"Season card locked":hasCardChanges?"Green/red badges show your latest match-week changes":"Updates after completed match weeks"}</div>${fcCardUpdateHtml(card)}`;
   const logicDialog=root.querySelector("#fcLogicDialog");root.querySelector("#fcCardInfo").onclick=()=>logicDialog.showModal();logicDialog.querySelector(".fcLogicDialog__close").onclick=()=>logicDialog.close();logicDialog.addEventListener("click",event=>{if(event.target===logicDialog)logicDialog.close();});
 
   const summaryHost = root.querySelector("#seasonSummary");

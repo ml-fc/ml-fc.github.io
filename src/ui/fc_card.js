@@ -67,6 +67,58 @@ export function fcCardHtml(card, name) {
   return `<article class="fcPlayerCard">${fcCardSvg(card, name)}</article>`;
 }
 
+function cardDate(value) {
+  const match = String(value || "").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "Date not recorded";
+  return new Intl.DateTimeFormat(undefined,{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"})
+    .format(new Date(Date.UTC(Number(match[1]),Number(match[2])-1,Number(match[3]))));
+}
+
+function signed(value, digits = 2) {
+  const number = Number(value) || 0;
+  const amount = Math.abs(number).toFixed(digits).replace(/\.00$/,"").replace(/(\.\d)0$/,"$1");
+  return `${number >= 0 ? "+" : "−"}${amount}`;
+}
+
+function updateChips(change) {
+  const values = [["OVR",change?.overall],...STATS.map(stat=>[stat,change?.attributes?.[stat]])]
+    .map(([stat,value])=>[stat,Math.round(Number(value)||0)]).filter(([,value])=>value);
+  if (!values.length) return `<span class="fcUpdateSummary__noChange">Building progress—no whole-number change yet</span>`;
+  return values.map(([stat,value])=>`<span class="fcUpdateChip fcUpdateChip--${value>0?"up":"down"}">${stat} ${value>0?"+":"−"}${Math.abs(value)}</span>`).join("");
+}
+
+export function fcCardUpdateHtml(card) {
+  const update = card?.latestUpdate;
+  const injury = card?.injuryProtection;
+  if (!update && !injury) return "";
+  let latestHtml = "";
+  if (update) {
+    const reasons = [
+      `<li><b>${Number(update.averageRating||0).toFixed(1)} average rating</b><span>${signed(update.ratingChange)} development to every attribute</span></li>`,
+      `<li><b>${Number(update.appearances||0)} ${Number(update.appearances)===1?"appearance":"appearances"}</b><span>${signed(update.appearanceChange)} participation development to every attribute</span></li>`,
+    ];
+    if (Number(update.goals)>0) reasons.push(`<li><b>${Number(update.goals)} ${Number(update.goals)===1?"goal":"goals"}</b><span>${signed(update.shootingChange)} extra SHO development</span></li>`);
+    if (Number(update.assists)>0) reasons.push(`<li><b>${Number(update.assists)} ${Number(update.assists)===1?"assist":"assists"}</b><span>${signed(update.passingChange)} extra PAS development</span></li>`);
+    if (Number(update.captainAppearances)>0) reasons.push(`<li><b>Captain assignment</b><span>${signed(update.captainChange)} to every attribute</span></li>`);
+    for (const boost of update.boosts||[]) {
+      const authority=String(boost.authority||"").toUpperCase()==="ADMIN"?"Admin":"Captain";
+      reasons.push(`<li><b>${authority} boost · ${escape(boost.attribute)}</b><span>${signed(boost.change)} (${signed(boost.multiplier,0)}×) · added ${escape(cardDate(boost.addedAt||boost.date))}</span></li>`);
+    }
+    const matches=(update.matches||[]).map(match=>`<div><time datetime="${escape(String(match.date||"").slice(0,10))}">${escape(cardDate(match.date))}</time><b>${escape(match.title||"Match")}</b></div>`).join("");
+    latestHtml=`<section class="fcUpdateSummary__section" aria-labelledby="fcLatestUpdateTitle"><header><div><span>Last rating update</span><h3 id="fcLatestUpdateTitle">What changed</h3></div><small>Added ${escape(cardDate(update.addedAt||update.date))}</small></header><div class="fcUpdateSummary__matches">${matches}</div><div class="fcUpdateSummary__chips">${updateChips(card.latestChanges)}</div><ul class="fcUpdateSummary__reasons">${reasons.join("")}</ul></section>`;
+  }
+  let injuryHtml="";
+  if (injury) {
+    let explanation="";
+    if (injury.status==="APPLIED") explanation=`${Number(injury.protectedWeeks)} missed ${Number(injury.protectedWeeks)===1?"week was":"weeks were"} protected at 50% of the player’s ${Number(injury.averageRating||0).toFixed(1)} established rating. ${signed(injury.attributeChange)} was added to every attribute.`;
+    else if (injury.status==="NOT_ELIGIBLE") explanation=`Automatic protection starts after 10 appearances. This player currently has ${Number(injury.appearances||0)}.`;
+    else if (injury.status==="NO_GROWTH") explanation=`Protected weeks were checked, but the established ${Number(injury.averageRating||0).toFixed(1)} rating did not produce a positive automatic increase.`;
+    else explanation="The player is eligible, but no completed week after the injury date has needed automatic protection yet.";
+    injuryHtml=`<section class="fcUpdateSummary__section fcUpdateSummary__section--injury" aria-labelledby="fcInjuryUpdateTitle"><header><div><span>Automatic injury boost</span><h3 id="fcInjuryUpdateTitle">${injury.status==="APPLIED"?"Protection added":"Protection status"}</h3></div><small>Calculated ${escape(cardDate(injury.calculatedThrough))}</small></header><div class="fcUpdateSummary__source"><b>No match</b><span>Automatic protection while injured${injury.startedAt?` · injured since ${escape(cardDate(injury.startedAt))}`:""}</span></div>${injury.status==="APPLIED"?`<div class="fcUpdateSummary__chips">${updateChips(injury)}</div>`:""}<p>${escape(explanation)}</p></section>`;
+  }
+  return `<aside class="fcUpdateSummary">${latestHtml}${injuryHtml}</aside>`;
+}
+
 function imageFrom(url) {
   return new Promise((resolve, reject) => {
     const image = new Image(); image.crossOrigin = "anonymous";

@@ -1,4 +1,4 @@
-import { fcCardHtml } from "../ui/fc_card.js";
+import { fcCardHtml, fcCardUpdateHtml } from "../ui/fc_card.js";
 // src/pages/leaderboard.js
 import { API } from "../api/endpoints.js";
 import { toastError, toastSuccess } from "../ui/toast.js";
@@ -153,7 +153,7 @@ function renderPlayerHistory(dialog, data) {
 }
 
 function leaderboardCardHtml(card,name){
-  return `<div class="leaderCardWrap">${fcCardHtml(card,name)}</div>`;
+  return `<div class="leaderCardWrap">${fcCardHtml(card,name)}${fcCardUpdateHtml(card)}</div>`;
 }
 
 function isLeaderboardRouteActive() {

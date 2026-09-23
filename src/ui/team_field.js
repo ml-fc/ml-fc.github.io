@@ -125,6 +125,7 @@ export function positionRows(groups, positions) {
 export function mountTeamField(root, options) {
   const positions = options.positions;
   const groups = options.groups;
+  const halfField = Boolean(options.halfField && groups.length === 1);
   let selected = root.dataset.selected || '';
   let pending = '';
   let suppressClick = false;
@@ -139,6 +140,7 @@ export function mountTeamField(root, options) {
   function point(name) {
     const group = owner(name);
     const position = positions[name] || defaults()[name] || {positionX:50, positionY:50};
+    if (halfField) return {x:position.positionX, y:position.positionY};
     return {
       x: upper(group) ? 100 - position.positionX : position.positionX,
       y: upper(group) ? 50 - position.positionY / 2 : 50 + position.positionY / 2
@@ -155,24 +157,26 @@ export function mountTeamField(root, options) {
   }
 
   function pitchMarkup(preview = false) {
-    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}" aria-label="${preview?'Team field preview':'Shared team field'}">
+    return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}${halfField?' fieldPitch--half':''}" aria-label="${halfField?'Team half-field positions':preview?'Team field preview':'Shared team field'}">
       <div class="teamField__circle" aria-hidden="true"></div>
       ${groups.flatMap(group => group.players.map(name => playerMarker(name, group, preview))).join('')}
       ${!groups.some(group => group.players.length) ? '<span class="teamField__empty">No players assigned</span>' : ''}
     </div>`;
   }
 
-  function attackLabel(group) {
+  function attackLabel(group, local = false) {
     if (!group) return '<span></span>';
-    return `<span class="attackLane ${upper(group)?'attackLane--orange':'attackLane--blue'}"><b>${upper(group)?'↓':'↑'}</b> ${esc(group.label)} attacks</span>`;
+    return `<span class="attackLane ${upper(group)?'attackLane--orange':'attackLane--blue'}"><b>${local?'↑':upper(group)?'↓':'↑'}</b> ${esc(group.label)} attacks</span>`;
   }
 
   function place(name, x, y) {
     if (!canMove(name)) return;
     const old = owner(name);
-    const target = options.onAssign ? (groups.find(group => upper(group) === (y < 50)) || groups[0]) : old;
+    const target = options.onAssign && !halfField ? (groups.find(group => upper(group) === (y < 50)) || groups[0]) : old;
     if (!target) return;
-    const local = { positionX:upper(target) ? 100-x : x, positionY:upper(target) ? (50-y)*2 : (y-50)*2 };
+    const local = halfField
+      ? {positionX:x, positionY:y}
+      : { positionX:upper(target) ? 100-x : x, positionY:upper(target) ? (50-y)*2 : (y-50)*2 };
     const slot = fieldPosition(local);
     const occupying = target.players.find(player => player !== name && fieldPositionCode(positions[player] || defaults()[player]) === slot.code);
     const previous = positions[name] || defaults()[name];
@@ -224,11 +228,11 @@ export function mountTeamField(root, options) {
         <span class="fieldPreview__hint">Tap field to edit</span>
       </button>
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
-        <header class="fieldWorkspace__head"><strong>Team field</strong><span class="small">${editable ? 'Drag an unassigned player onto either half. Drag players on the pitch to update positions.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button></header>
+        <header class="fieldWorkspace__head"><strong>${halfField ? `${esc(groups[0].label)} positions` : 'Team field'}</strong><span class="small">${editable ? halfField ? 'Drag your players on the half-field to their match positions.' : 'Drag an unassigned player onto either half. Drag players on the pitch to update positions.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button></header>
         <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onResetDraft && editable ? '<button class="btn gray tiny" data-reset-draft>Clear draft</button>' : ''}<span class="small">${unassigned.length} unassigned</span></div>
         <div class="fieldWorkspace__body">
           <aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned</strong><span>${unassigned.length} players · Drag to field</span></div><table><thead><tr><th scope="col">Player</th></tr></thead><tbody>${unassigned.map(name => `<tr><td><button type="button" class="fieldRoster__tag ${selected===name?'isSelected':''}" data-name="${esc(name)}" aria-pressed="${selected===name}" ${canMove(name)?'':'disabled'}>${esc(name)}</button></td></tr>`).join('')}</tbody></table>${unassigned.length ? '<p class="fieldRoster__empty">Drop a field player here to unassign</p>' : '<p class="fieldRoster__empty">All players assigned<br>Drop here to unassign</p>'}</aside>
-          <div class="pitchStage">${attackLabel(upperGroup)}${pitchMarkup(false)}${attackLabel(lowerGroup)}</div>
+          <div class="pitchStage">${halfField ? '<span></span>' : attackLabel(upperGroup)}${pitchMarkup(false)}${halfField ? attackLabel(groups[0], true) : attackLabel(lowerGroup)}</div>
         </div>
         <footer class="fieldWorkspace__foot"><div class="fieldActions"><strong>${esc(selected || 'Tap a player to edit')}${selectedRole ? ` · ${esc(selectedRole)}` : ''}</strong>${selected && canMove(selected) && owner(selected) && options.onCaptain?'<button class="btn gray tiny" data-captain>Make captain</button>':''}${selected && canMove(selected) && owner(selected) && options.onRemove?'<button class="btn gray tiny" data-remove>Unassign</button>':''}${selected && canMove(selected) && !owner(selected) && options.onAssign?groups.map(group=>`<button class="btn gray tiny" data-assign="${esc(group.team)}">${esc(group.label)}</button>`).join(''):''}</div>${selected && owner(selected) && canMove(selected) ? `<label class="fieldPositionPicker">Position<select data-position aria-label="Position for ${esc(selected)}">${FIELD_POSITIONS.map(slot => `<option value="${slot.code}" ${slot.code===selectedRole?'selected':''}>${slot.code} · ${slot.name}</option>`).join('')}</select></label>` : ''}<span class="small" role="status" data-field-status>${esc(pending)}</span>${options.onSave && editable?'<button class="btn primary fieldWorkspace__save" data-save>Save team & positions</button>':''}</footer>
       </div></dialog>`;
@@ -249,8 +253,8 @@ export function mountTeamField(root, options) {
       const slot = FIELD_POSITIONS.find(item => item.code === positionPicker.value);
       const group = owner(selected);
       if (!slot || !group) return;
-      place(selected, upper(group) ? 100-slot.positionX : slot.positionX,
-        upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2);
+      place(selected, halfField ? slot.positionX : upper(group) ? 100-slot.positionX : slot.positionX,
+        halfField ? slot.positionY : upper(group) ? 50-slot.positionY/2 : 50+slot.positionY/2);
       root.querySelector('[data-position]')?.focus({preventScroll:true});
     };
     dialog.oncancel = event => { event.preventDefault(); saveDraftAndClose(); };
@@ -305,7 +309,7 @@ export function mountTeamField(root, options) {
           ghost.style.left=`${p.x}%`; ghost.style.top=`${p.y}%`;
         }
         if (marker && inside(event,pitch)) {
-          if (!options.onAssign) p.y=upper(owner(name))?Math.min(46.5,p.y):Math.max(53.5,p.y);
+          if (!options.onAssign && !halfField) p.y=upper(owner(name))?Math.min(46.5,p.y):Math.max(53.5,p.y);
           marker.style.left=`${Math.max(4,Math.min(96,p.x))}%`; marker.style.top=`${Math.max(4,Math.min(96,p.y))}%`;
           if (options.onAssign) marker.classList.toggle('fieldPlayer--orange',p.y<50 && groups.some(upper));
         }

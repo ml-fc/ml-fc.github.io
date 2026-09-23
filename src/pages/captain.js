@@ -352,6 +352,11 @@ export async function renderCaptainPage(root, query) {
 
   // Prefill drafts from backend if ratings/events already exist.
   const ratingMap = {};
+  const ratingCoverage = new Map();
+  (data.ratings || []).forEach(r => {
+    const key = String(r.playerName || "").trim().toLowerCase();
+    if (key) ratingCoverage.set(key, true);
+  });
   // A match may contain submissions from both captains and an admin. Prefill
   // only the current user's own draft; showing somebody else's latest values
   // makes a resubmission look like it belongs to the current user.
@@ -433,6 +438,12 @@ export async function renderCaptainPage(root, query) {
       .captainGuide__list li { counter-increment:duty; display:grid; grid-template-columns:32px 1fr; gap:10px; align-items:start; padding:12px; border-radius:14px; background:rgba(255,255,255,.72); }
       .captainGuide__list li::before { content:counter(duty); display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#0b4961; color:#fff; font-weight:900; }
       .captainGuide__note { padding:12px 14px; border-left:4px solid #f0b429; background:#fff8dc; border-radius:4px 12px 12px 4px; }
+      .ratingProgress--pending { outline:2px solid #dc2626; outline-offset:-2px; }
+      .ratingProgress--inProgress { outline:2px solid #eab308; outline-offset:-2px; }
+      .ratingProgressBadge { display:inline-flex; align-items:center; margin-left:8px; padding:3px 7px; border-radius:999px; font-size:10px; font-weight:900; line-height:1; vertical-align:middle; }
+      .ratingProgressBadge--pending { background:#fee2e2; color:#991b1b; }
+      .ratingProgressBadge--inProgress { background:#fef9c3; color:#854d0e; }
+      .ratingProgressBadge--complete { background:#dcfce7; color:#166534; }
     </style>
 
     <div class="card">
@@ -452,9 +463,9 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
 
-    ${adminMode ? "" : `<dialog class="captainGuide" id="captainGuide" aria-labelledby="captainGuideTitle"><div class="captainGuide__sheet"><div class="captainGuide__head"><div><div class="small stepEyebrow">Captain match duty</div><div class="h1" id="captainGuideTitle">Rate the full opposition</div></div><div class="captainGuide__mark" aria-hidden="true">C</div></div><ol class="captainGuide__list"><li><div><b>Rate every required player</b><br><span class="small">Use 1–10 in 0.5 steps. For internal games, rate the other team—not your own.</span></div></li><li><div><b>Record goals and assists</b><br><span class="small">The player goals must add up to the opponent score.</span></div></li><li><div><b>Use Boost with care</b><br><span class="small">Boost one FC Card attribute from PAC, SHO, PAS, DRI, DEF or PHY. Choose −3× to +3×, or leave it as None.</span></div></li></ol><p class="captainGuide__note"><b>Finish before your next availability response.</b> Your availability is paused until you or an admin has completed all required ratings for this match.</p><button class="btn primary" id="closeCaptainGuide" type="button" style="width:100%;margin-top:16px">Got it</button></div></dialog>`}
+    ${adminMode ? "" : `<dialog class="captainGuide" id="captainGuide" aria-labelledby="captainGuideTitle"><div class="captainGuide__sheet"><div class="captainGuide__head"><div><div class="small stepEyebrow">Captain match duty</div><div class="h1" id="captainGuideTitle">Rate the opposition</div></div><div class="captainGuide__mark" aria-hidden="true">C</div></div><ol class="captainGuide__list"><li><div><b>Save as you go</b><br><span class="small">You can submit some players now and return later for the rest. Use 1–10 in 0.5 steps.</span></div></li><li><div><b>Record goals and assists</b><br><span class="small">When all players are entered, their goals must add up to the opponent score.</span></div></li><li><div><b>Use Boost with care</b><br><span class="small">Boost one FC Card attribute from PAC, SHO, PAS, DRI, DEF or PHY. Choose −3× to +3×, or leave it as None.</span></div></li></ol><p class="captainGuide__note"><b>Finish before your next availability response.</b> Red players are pending; yellow players have details entered but still need a valid rating. An admin can complete any remaining players.</p><button class="btn primary" id="closeCaptainGuide" type="button" style="width:100%;margin-top:16px">Got it</button></div></dialog>`}
 
-    <div class="card"><div class="h1">Team positions</div><div class="small inlineNote">You can update your team’s formation from the moment you are assigned captain.</div><div id="captainField"></div>${adminMode ? "" : `<div class="field" style="margin-top:12px"><label class="field__label" for="captainShareMessage">Captain’s message (optional)</label><textarea id="captainShareMessage" class="input" rows="3" maxlength="500" placeholder="Add a message for the team…"></textarea></div>`}<div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team PNG</button>`}</div></div>
+    <div class="card"><div class="h1">Team positions</div><div class="small inlineNote">Update your own team on the half-field at any time before the match is completed and locked, including while entering ratings.</div><div id="captainField"></div>${adminMode ? "" : `<div class="field" style="margin-top:12px"><label class="field__label" for="captainShareMessage">Captain’s message (optional)</label><textarea id="captainShareMessage" class="input" rows="3" maxlength="500" placeholder="Add a message for the team…"></textarea></div>`}<div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team PNG</button>`}</div></div>
     <div class="card" id="stepScore">
       <div class="small stepEyebrow">Step 1 of 3</div><div class="h1">Update score</div>
       <div class="small">
@@ -557,9 +568,9 @@ export async function renderCaptainPage(root, query) {
 
         <div id="rosterMobileWrap"></div>
 
-        <div class="draftState isDirty" id="ratingsDraftState" role="status" aria-live="polite">Changes save locally until you submit the batch</div>
+        <div class="draftState isDirty" id="ratingsDraftState" role="status" aria-live="polite">Red is pending · yellow is in progress · save entered ratings at any time</div>
         <div class="row" style="margin-top:12px">
-          <button class="btn primary" id="submitRatings">Save ratings batch</button>
+          <button class="btn primary" id="submitRatings">Save entered ratings</button>
         </div>
         <div class="small" id="rateMsg" style="margin-top:10px"></div>
       </div>
@@ -594,7 +605,8 @@ export async function renderCaptainPage(root, query) {
     ts:Date.now(),
     positions:positionRows(fieldGroups.filter(group => ownTeams.includes(group.team)), fieldPositions)
   });
-  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:fieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,disabled:false,onSave:() => root.querySelector("#saveField").click(),onDraft:persistFieldDraft,onChange:() => { persistFieldDraft(); fieldEditor.status("Unsaved positions"); }});
+  const captainFieldGroups = adminMode ? fieldGroups : fieldGroups.filter(group => ownTeams.includes(group.team));
+  const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:captainFieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,halfField:!adminMode,disabled:false,onSave:() => root.querySelector("#saveField").click(),onDraft:persistFieldDraft,onChange:() => { persistFieldDraft(); fieldEditor.status("Unsaved positions"); }});
   if (Array.isArray(restoredFieldDraft?.positions)) fieldEditor.status("Local draft restored");
   root.querySelector("#shareCaptainTeam")?.addEventListener("click", async () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
@@ -771,6 +783,37 @@ export async function renderCaptainPage(root, query) {
   const mobileWrap = root.querySelector("#rosterMobileWrap");
   const searchEl = root.querySelector("#search");
 
+  function ratingProgress(playerName, canEdit = true) {
+    if (!canEdit) return { className: "", label: "", tone: "" };
+    const d = drafts[playerName] || {};
+    const ratingRaw = String(d.rating ?? "").trim();
+    const hasValidRating = clampHalfRating(ratingRaw, 1, 10) != null;
+    const hasOtherEntry = String(d.goals ?? "").trim() !== "" || String(d.assists ?? "").trim() !== "" || String(d.boostAttribute || "").trim() !== "";
+    if (hasValidRating || ratingCoverage.has(String(playerName || "").trim().toLowerCase())) {
+      return { className: "", label: "Rated", tone: "complete" };
+    }
+    if (ratingRaw || hasOtherEntry) return { className: "ratingProgress--inProgress", label: "In progress", tone: "inProgress" };
+    return { className: "ratingProgress--pending", label: "Pending", tone: "pending" };
+  }
+
+  function progressBadge(progress) {
+    return progress.label ? `<span class="ratingProgressBadge ratingProgressBadge--${progress.tone}" data-rating-progress-badge>${progress.label}</span>` : "";
+  }
+
+  function updatePlayerProgress(playerName) {
+    root.querySelectorAll("[data-rating-progress]").forEach(el => {
+      if (decodeURIComponent(el.getAttribute("data-rating-progress") || "") !== playerName) return;
+      const progress = ratingProgress(playerName);
+      el.classList.remove("ratingProgress--pending", "ratingProgress--inProgress");
+      if (progress.className) el.classList.add(progress.className);
+      const badge = el.querySelector("[data-rating-progress-badge]");
+      if (badge) {
+        badge.className = `ratingProgressBadge ratingProgressBadge--${progress.tone}`;
+        badge.textContent = progress.label;
+      }
+    });
+  }
+
   function renderRows() {
     const f = String(searchEl.value || "").trim().toLowerCase();
     const list = f ? roster.filter(p => p.toLowerCase().includes(f)) : roster;
@@ -798,6 +841,7 @@ export async function renderCaptainPage(root, query) {
       const tm = safeUpper(teamMap[p] || "BLUE");
       const canEdit = ratingsEnabled && isOpponentPlayer(p);
       const d = drafts[p] || {};
+      const progress = ratingProgress(p, canEdit);
 
       const ratingInput = canEdit
         ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="text-align:center" value="${d.rating ?? ""}" />`
@@ -829,8 +873,8 @@ export async function renderCaptainPage(root, query) {
       }
 
       return `
-        <div class="rosterCard">
-          <div style="font-weight:950; font-size:16px">${p}</div>
+        <div class="rosterCard ${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""}>
+          <div style="font-weight:950; font-size:16px">${p}${progressBadge(progress)}</div>
           <div class="muted" style="margin-top:6px; font-size:12px">Team</div>
           <div class="teamPills" style="margin-top:6px; gap:6px">
             ${moveBtns}
@@ -866,6 +910,7 @@ export async function renderCaptainPage(root, query) {
         const tm = safeUpper(teamMap[p] || "BLUE");
         const canEdit = ratingsEnabled && isOpponentPlayer(p);
         const d = drafts[p] || {};
+        const progress = ratingProgress(p, canEdit);
         const ratingCell = canEdit
           ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
           : `<span class="small muted">—</span>`;
@@ -876,8 +921,8 @@ export async function renderCaptainPage(root, query) {
           ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
           : `<span class="small muted">—</span>`;
         return `
-          <tr style="border-top:1px solid rgba(11,18,32,0.06)">
-            <td style="padding:10px; font-weight:950">${p}</td>
+          <tr class="${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""} style="border-top:1px solid rgba(11,18,32,0.06)">
+            <td style="padding:10px; font-weight:950">${p}${progressBadge(progress)}</td>
             <td style="padding:10px; text-align:center">
               <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
                 <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
@@ -905,6 +950,7 @@ export async function renderCaptainPage(root, query) {
         const tm = safeUpper(teamMap[p] || "BLUE");
         const canEdit = ratingsEnabled && isOpponentPlayer(p);
         const d = drafts[p] || {};
+        const progress = ratingProgress(p, canEdit);
 
         const ratingCell = canEdit
           ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
@@ -923,8 +969,8 @@ export async function renderCaptainPage(root, query) {
           : ``;
 
         return `
-          <tr style="border-top:1px solid rgba(11,18,32,0.08)">
-            <td style="padding:10px">${p}</td>
+          <tr class="${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""} style="border-top:1px solid rgba(11,18,32,0.08)">
+            <td style="padding:10px">${p}${progressBadge(progress)}</td>
             <td style="padding:10px; text-align:center">
               ${isInternalCaptainView ? moveBtn : `<span class="badge" style="background:${tm === "ORANGE" ? "#f97316" : "#2563eb"}; color:#fff">${visibleTeamName(tm)}</span>`}
             </td>
@@ -995,6 +1041,7 @@ export async function renderCaptainPage(root, query) {
         drafts[p] = drafts[p] || {};
         drafts[p].rating = String(inp.value ?? "");
         saveRatingsDraft();
+        updatePlayerProgress(p);
       });
     });
     root.querySelectorAll("[data-goals]").forEach(inp => {
@@ -1003,6 +1050,7 @@ export async function renderCaptainPage(root, query) {
         drafts[p] = drafts[p] || {};
         drafts[p].goals = String(inp.value ?? "");
         saveRatingsDraft();
+        updatePlayerProgress(p);
       });
     });
     root.querySelectorAll("[data-assists]").forEach(inp => {
@@ -1011,6 +1059,7 @@ export async function renderCaptainPage(root, query) {
         drafts[p] = drafts[p] || {};
         drafts[p].assists = String(inp.value ?? "");
         saveRatingsDraft();
+        updatePlayerProgress(p);
       });
     });
     root.querySelectorAll("[data-boost-attribute]").forEach(input=>input.addEventListener("change",()=>{
@@ -1058,19 +1107,13 @@ export async function renderCaptainPage(root, query) {
         // This keeps validation correct even when the roster is filtered via search.
         const ratablePlayers = roster.filter(p => ratingsEnabled && isOpponentPlayer(p));
 
-        // INTERNAL captain flow: require ratings for ALL ratable (opponent) players.
-        // Other match types keep the "rate whoever you want" behavior.
-        const requireAll = !adminMode; // captains must rate all required opponents; admins may submit partial
-
         const rows = [];
-        const missing = [];
 
         for (const p of ratablePlayers) {
           const d = drafts[p] || {};
           const ratingRaw = String(d.rating ?? "").trim();
 
           if (ratingRaw === "") {
-            if (requireAll) missing.push(p);
             continue;
           }
 
@@ -1096,12 +1139,8 @@ export async function renderCaptainPage(root, query) {
           });
         }
 
-        if (requireAll && missing.length) {
-          throw new Error(`Please rate all ${type === "OPPONENT" ? "MLFC" : opponentTeam} players before submitting. Missing: ${missing.join(", ")}`);
-        }
-
         if (rows.length === 0) {
-          toastWarn(requireAll ? `Rate all ${opponentTeam || "required"} players before submitting.` : "Enter at least one rating.");
+          toastWarn("Enter at least one rating.");
           msg.textContent = "Nothing to submit";
           return;
         }
@@ -1109,7 +1148,7 @@ export async function renderCaptainPage(root, query) {
         // Opponent match: ensure MLFC score matches total goals entered
         if (!adminMode && type !== "INTERNAL") {
           const mlfcScore = clampInt(String(m.scoreHome ?? "").trim(), 0, 99);
-          if (mlfcScore != null) {
+          if (mlfcScore != null && rows.length === ratablePlayers.length) {
             const totalGoals = rows.reduce((s,r)=>s+Number(r.goals||0),0);
             if (totalGoals !== mlfcScore) {
               throw new Error(`MLFC score (${mlfcScore}) must match total goals entered (${totalGoals}).`);
