@@ -1936,7 +1936,34 @@ body.hasCompactCaptainCommand .appbar { opacity:0; transform:translateY(-100%); 
 .captainCommand.isCompact .captainHeading .h1 { overflow:hidden; margin:0; font-size:16px; line-height:1.05; text-overflow:ellipsis; white-space:nowrap; }
 .captainCommand.isCompact .matchSteps { margin-top:7px; }
 .captainCommand.isCompact .matchSteps button { min-height:30px; padding:6px 8px; }
+.captainWizardLauncher { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; margin-top:14px; text-align:left; }
+.captainWizardLauncher small { padding:4px 7px; border-radius:999px; color:#0b4961; background:#d9f3fb; font:900 10px/1 ui-monospace,monospace; white-space:nowrap; }
+.captainWizardLauncher.isComplete small { color:#145b3c; background:#dcfce7; }
+.captainCommand.isCompact .captainWizardLauncher { min-height:34px; margin-top:7px; padding:7px 10px; }
+.captainWizard { width:min(940px,calc(100% - 22px)); max-height:calc(100dvh - 22px); padding:0; border:0; border-radius:14px; color:var(--ink); background:#eaf1f3; box-shadow:0 26px 85px rgba(2,14,22,.55); }
+.captainWizard::backdrop { background:rgba(2,14,22,.76); backdrop-filter:blur(4px); }
+.captainWizard__sheet { display:grid; grid-template-rows:auto auto minmax(0,1fr); max-height:calc(100dvh - 22px); }
+.captainWizard__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:17px 18px 12px; background:#fff; border-bottom:1px solid #d5e0e5; }
+.captainWizard__head .h1 { margin:2px 0 0; }
+.captainWizard__close { display:grid; place-items:center; flex:0 0 42px; width:42px; height:42px; padding:0; border:0; border-radius:50%; color:#fff; background:#123d58; font-size:25px; cursor:pointer; }
+.captainWizard__close:focus-visible { outline:3px solid #72d7fa; outline-offset:3px; }
+.captainWizard__steps { margin:0; padding:10px 18px; background:#fff; border-bottom:1px solid #d5e0e5; }
+.captainWizard__body { overflow:auto; padding:14px; overscroll-behavior:contain; }
+.captainWizard__body>.card:last-child { margin-bottom:0; }
+.playerActionDialog { width:min(400px,calc(100% - 24px)); padding:0; border:0; border-radius:13px; color:var(--ink); background:#fff; box-shadow:0 24px 75px rgba(2,14,22,.58); }
+.playerActionDialog::backdrop { background:rgba(2,14,22,.58); backdrop-filter:blur(2px); }
+.playerActionDialog__sheet header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:17px 18px 13px; border-bottom:1px solid #d7e2e6; }
+.playerActionDialog__sheet header .h1 { margin:2px 0 0; }
+.playerActionDialog__close { display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px; padding:0; border:0; border-radius:50%; color:#fff; background:#123d58; font-size:23px; cursor:pointer; }
+.playerActionDialog__close:focus-visible { outline:3px solid #72d7fa; outline-offset:2px; }
+.playerActionDialog__body { padding:15px 18px 18px; }
+.playerActionDialog__team { color:#536b78; font-size:12px; }
+.playerActionDialog__team b { color:#173847; }
+.playerActionDialog__actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.playerActionDialog__actions .btn { min-width:0; min-height:44px; }
+.playerActionDialog__actions .playerActionDialog__remove { grid-column:1/-1; }
 @media(max-width:819px){.captainCommand{top:70px;margin-inline:-4px}.captainCommand.isCompact{margin-inline:0}}
+@media(max-width:560px){.captainWizard{width:100%;max-height:100dvh;border-radius:0}.captainWizard__sheet{max-height:100dvh}.captainWizard__head{padding:14px}.captainWizard__steps{padding:9px}.captainWizard__body{padding:9px}.captainWizard__body>.card{padding:16px}}
 
 /* ==========================================================================
    Session 2 — resilient matchday layout and accessible control foundation
@@ -2378,7 +2405,7 @@ body.hasCompactMatchCommand .appbar {
 .digitalTeam__head--shared{display:grid;grid-template-columns:1fr 1fr;padding:0;background:#0b2b1a}
 .digitalTeam__team{position:relative;display:grid;gap:3px;padding:12px 46px 12px 14px}.digitalTeam__team+ .digitalTeam__team{border-left:1px solid rgba(255,255,255,.12)}.digitalTeam__team>b{position:absolute;right:14px;top:50%;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;transform:translateY(-50%);background:rgba(255,255,255,.1)}.digitalTeam__team--blue span{color:#9ee4ff}.digitalTeam__team--orange span{color:#ffc18d}.digitalTeam__pitch--shared{min-height:680px;background:repeating-linear-gradient(0deg,#26713b 0,#26713b 12.5%,#226936 12.5%,#226936 25%);border-color:rgba(255,255,255,.5)}.digitalTeam__pitch--shared::before{border-color:rgba(255,255,255,.52)}.digitalTeam__pitch--shared::after{border-color:rgba(255,255,255,.52)}.digitalTeam__pitch--shared .digitalPlayer--orange i{background:#ff9c55;color:#3b1b08}
 .digitalPlayer--positioned { position:absolute; z-index:1; transform:translate(-50%,-50%); }
-.teamAssignTools { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px; }.teamAssignTools .btn{min-height:38px;padding:8px 10px}.teamAssignTools .small{margin-left:auto;font-weight:900}
+.teamAssignTools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; }.teamAssignTools .btn{flex:0 0 auto;width:auto;min-height:32px;padding:5px 8px;font-size:11px;line-height:1.15}.teamAssignTools .small{margin-left:auto;font-weight:900}
 .smartTeamBtn { color:#052437; background:#78dcf8; border:1px solid #45bddd; box-shadow:0 7px 18px rgba(34,158,194,.2); font-weight:950; }.smartTeamBtn:hover{background:#95e5fb}.smartTeamBtn span{font-size:15px}.smartTeamBtn:disabled{opacity:.5;box-shadow:none}
 .autoTeamIntro { margin-top:8px; color:#5d7381; font-size:11px; line-height:1.45; }
 .autoTeamReport { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:3px 12px; margin-top:10px; padding:11px 13px; color:#103b2b; background:#e6f7ed; border:1px solid #a8d7b9; border-left:4px solid #24945a; border-radius:5px; }
@@ -2403,12 +2430,24 @@ body.hasCompactMatchCommand .appbar {
 /* Keep the score/rating workflow focused and remove nested-card noise. */
 #stepScore, #stepRoster { max-width: 1040px; margin-inline: auto; }
 #ratingsSection > .card, #rosterMobileWrap > .card, #rosterMobileWrap details.card { box-shadow: none; border-color: #d4dfe4; }
-#ratingsSection .rosterCard { margin-top: 8px; padding: 14px; border-radius: 5px; background: #f4f7f8; }
+#ratingsSection .rosterCard { margin-top:6px; padding:10px; border-radius:5px; background:#f4f7f8; }
 #ratingsSection .rosterGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #ratingsSection .rosterGrid .input { min-width: 0; }
 #ratingsSection .teamPills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
 #ratingsSection .teamPills .btn { min-width: 0; padding-inline: 6px; }
 #ratingsSection .teamPills [data-remove] { margin-left: 0 !important; }
+.ratingPlayerHead { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+.ratingPlayerHead>div { min-width:0; }
+.ratingPlayerName { overflow:hidden; color:#10232d; font-size:15px; font-weight:950; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
+.ratingPlayerTeam { margin-top:3px; color:#6a7f8a; font-size:10px; font-weight:800; }
+.ratingPlayerUpdate { min-height:32px; padding:5px 10px; border:1px solid #b9cdd6; border-radius:999px; color:#0b4961; background:#fff; font-size:11px; font-weight:950; cursor:pointer; }
+.ratingPlayerUpdate:hover { border-color:#0b4961; background:#e8f6fa; }
+.ratingPlayerUpdate:focus-visible { outline:3px solid #72d7fa; outline-offset:2px; }
+#ratingsSection .rosterGrid--ratings { gap:6px; margin-top:8px; }
+.ratingStatLabel { margin:0 0 3px 2px; color:#607783; font-size:10px; font-weight:850; line-height:1; }
+#ratingsSection .ratingStatInput { min-height:38px; padding:6px 7px; border-radius:7px; font-size:15px; font-weight:850; text-align:center; }
+#ratingsSection .ratingBoost { margin-top:6px; padding:5px 6px; }
+#ratingsSection .ratingBoost .input { min-height:32px; padding:4px 6px; border-radius:7px; }
 #submitRatings { min-width: 190px; }
 
 @media (min-width: 820px) {
@@ -2433,8 +2472,8 @@ body.hasCompactMatchCommand .appbar {
 }
 
 @media (max-width: 560px) {
-  #ratingsSection .rosterGrid { grid-template-columns: 1fr 1fr; }
-  #ratingsSection .rosterGrid > div:first-child { grid-column: 1 / -1; }
+  #ratingsSection .rosterGrid--ratings { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #ratingsSection .rosterGrid--ratings > div:first-child { grid-column:auto; }
   .notificationCard__actions .btn, .notificationCard__actions a.btn { flex: 1 1 120px; }
 }
 
