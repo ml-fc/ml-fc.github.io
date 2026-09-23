@@ -590,20 +590,19 @@ export async function renderCaptainPage(root, query) {
       .captainRosterSearch { margin-top:10px; }
       .captainRosterSearch .input { width:100%; }
       .captainAvailability { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
-      .captainAvailability__group { min-width:0; padding:9px; border:1px solid #d4dfe4; border-radius:5px; background:#f7fafb; }
+      .captainAvailability__group { min-width:0; padding:7px; border:1px solid #d4dfe4; border-radius:5px; background:#f7fafb; }
       .captainAvailability__group--blue { border-top:4px solid #2563eb; }
       .captainAvailability__group--orange { border-top:4px solid #f97316; }
       .captainAvailability__group--unavailable { grid-column:1/-1; border-top:4px solid #c62828; }
-      .captainAvailability__group h3 { margin:0 0 7px; color:#17344a; font-size:12px; }
-      .captainAvailability__player { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid #e1e8ec; font-size:12px; font-weight:800; }
+      .captainAvailability__group h3 { margin:0 0 5px; color:#17344a; font-size:11px; }
+      .captainAvailability__player { display:flex; align-items:center; justify-content:space-between; gap:4px; padding:4px 0; border-top:1px solid #e1e8ec; font-size:11px; font-weight:800; }
       .captainAvailability__player span { min-width:0; overflow-wrap:anywhere; }
-      .captainAvailability__player small { flex:0 0 auto; padding:3px 5px; border-radius:3px; font-size:9px; font-weight:900; text-transform:uppercase; }
+      .captainAvailability__player small { flex:0 0 auto; padding:2px 4px; border-radius:3px; font-size:8px; font-weight:900; text-transform:uppercase; }
       .captainAvailability__player small.is-yes { color:#12603d; background:#dcfce7; }
       .captainAvailability__player small.is-no { color:#991b1b; background:#fee2e2; }
       .captainAvailability__player small.is-waiting { color:#854d0e; background:#fef3c7; }
       .captainAvailability__player small.is-none { color:#526976; background:#e4edf1; }
       .captainAvailability__empty { color:#607783; font-size:11px; }
-      @media (max-width:420px) { .captainAvailability { grid-template-columns:1fr; } .captainAvailability__group--unavailable { grid-column:auto; } }
     </style>
 
     <div class="card captainCommand">
