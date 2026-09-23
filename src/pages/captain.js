@@ -551,6 +551,12 @@ export async function renderCaptainPage(root, query) {
       .ratingProgressBadge--pending { background:#fee2e2; color:#991b1b; }
       .ratingProgressBadge--inProgress { background:#fef9c3; color:#854d0e; }
       .ratingProgressBadge--complete { background:#dcfce7; color:#166534; }
+      .captainRosterAdd { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; margin-top:10px; }
+      .captainRosterAdd.hasTeam .captainRosterAdd__player { grid-column:1/-1; }
+      .captainRosterAdd .field { min-width:0; }
+      .captainRosterAdd__button { width:auto !important; min-width:92px; padding-inline:14px; white-space:nowrap; }
+      .captainRosterSearch { margin-top:10px; }
+      .captainRosterSearch .input { width:100%; }
     </style>
 
     <div class="card captainCommand">
@@ -625,17 +631,16 @@ export async function renderCaptainPage(root, query) {
         </div>
       </details>
 
-      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <select id="addFromAll" class="input" aria-label="Add late opponent from full list" style="flex:1" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>
-          <option value="">Add late opponent…</option>
-          ${(allPlayers||[]).map(p => `<option value="${p}">${p}</option>`).join("")}
-        </select>
-        <button class="btn gray" id="addBtn" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>Add</button>
+      <div class="captainRosterAdd${adminMode ? " hasTeam" : ""}">
+        <div class="field captainRosterAdd__player">
+          <label class="field__label" for="addFromAll">Player</label>
+          <input id="addFromAll" class="input" type="search" list="latePlayerOptions" autocomplete="off" aria-label="Search for a player to add" placeholder="Search player to add…" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""} />
+          <datalist id="latePlayerOptions">${(allPlayers||[]).filter(p => !roster.some(name => name.toLowerCase() === p.toLowerCase())).map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
+        </div>
+        ${adminMode ? `<div class="field"><label class="field__label" for="addPlayerTeam">Team</label><select id="addPlayerTeam" class="input" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}><option value="BLUE">${homeTeamName}</option><option value="ORANGE">${awayTeamName}</option></select></div>` : ""}
+        <button class="btn gray captainRosterAdd__button" id="addBtn" type="button" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}>Add player</button>
       </div>
-
-      <div class="row" style="margin-top:10px">
-        <input id="search" class="input" type="search" aria-label="Search roster" placeholder="Search roster…" />
-      </div>
+      ${hasStarted ? "" : `<div class="small inlineNote">Late-player additions unlock at kick-off.</div>`}
 
       <div id="ratingsGate" class="small" style="margin-top:12px">
           <button class="btn primary" id="continueToRatings" ${ratingsEnabled && roster.length ? "" : "disabled"}>Continue to ratings</button>
@@ -655,6 +660,10 @@ export async function renderCaptainPage(root, query) {
             </div>
           `
         }
+
+        <div class="captainRosterSearch">
+          <input id="search" class="input" type="search" aria-label="Search players in the roster" placeholder="Search players in roster…" />
+        </div>
 
         <div id="rosterTableWrap" style="overflow:auto; border-radius:14px; border:1px solid rgba(11,18,32,0.10)">
           <table class="ratingDesktopTable">
@@ -1322,26 +1331,29 @@ export async function renderCaptainPage(root, query) {
   searchEl.addEventListener("input", renderRows);
 
   root.querySelector("#addBtn").onclick = async () => {
-    if (adminMode || type === "OPPONENT") return toastWarn("Assign players in match management and save setup first.");
-    if (!ratingsEnabled || !opponentTeam) return toastWarn("Late opponents can be added after kick-off.");
+    if (type === "OPPONENT") return toastWarn("Assign players in match management and save setup first.");
+    if (!hasStarted || (!adminMode && (!ratingsEnabled || !opponentTeam))) return toastWarn("Late players can be added after kick-off and score entry.");
     const sel = root.querySelector("#addFromAll");
     const p = String(sel.value || "").trim();
     if (!p) return toastWarn("Select a player to add.");
+    const registeredPlayer = allPlayers.find(name => name.toLowerCase() === p.toLowerCase());
+    if (!registeredPlayer) return toastWarn("Choose a registered player from the search suggestions.");
     if (roster.some(x => x.toLowerCase() === p.toLowerCase())) return toastWarn("Already in roster.");
+    const selectedTeam = adminMode ? safeUpper(root.querySelector("#addPlayerTeam")?.value) : opponentTeam;
     const btn = root.querySelector("#addBtn");
     setDisabled(btn, true, "Adding…");
     try {
-      const out = await API.captainAddLateOpponent(code, p);
+      const out = await API.captainAddLateOpponent(code, registeredPlayer, selectedTeam);
       if (!out.ok) throw new Error(out.error || "Could not add player");
-      const playerName = String(out.playerName || p);
+      const playerName = String(out.playerName || registeredPlayer);
       roster = uniqueSorted([...roster, playerName]);
-      teamMap[playerName] = String(out.team || opponentTeam);
+      teamMap[playerName] = String(out.team || selectedTeam);
       drafts[playerName] = drafts[playerName] || { rating: "", goals: "", assists: "" };
       saveRosterLocal();
       saveTeamsLocal();
       sel.value = "";
       renderRows();
-      toastSuccess(`${playerName} added as a late opponent.`);
+      toastSuccess(`${playerName} added to ${visibleTeamName(teamMap[playerName])}.`);
     } catch (error) {
       toastError(error?.message || "Could not add player");
     } finally {

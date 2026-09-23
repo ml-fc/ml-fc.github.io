@@ -92,7 +92,7 @@ export const API = {
   saveTeamPositions: (code, team, positions) => apiPost({action:"save_team_positions",code,team,positions}),
 
   // captain
-  captainAddLateOpponent: (code, playerName) => apiPost({ action: "captain_add_late_opponent", code, playerName }),
+  captainAddLateOpponent: (code, playerName, team = "") => apiPost({ action: "captain_add_late_opponent", code, playerName, team }),
   captainRemoveNoShow: (code, playerName) => apiPost({ action: "captain_remove_no_show", code, playerName }),
   captainSubmitScore: (code, mode, a, b, scope = "CAPTAIN") => apiPost({ action: "captain_submit_score", code, mode, scoreA: a, scoreB: b, scope }),
   adminSubmitScore: (code, mode, a, b) => apiPost({ action: "admin_submit_score", code, mode, scoreA: a, scoreB: b }),
