@@ -1054,14 +1054,90 @@ export async function renderCaptainPage(root, query) {
   const playerActionTeam = root.querySelector("#playerActionTeam");
   const playerActionButtons = root.querySelector("#playerActionButtons");
 
-  const assignPlayerTeam = (playerName, team) => {
-    teamMap[playerName] = team;
-    saveTeamsLocal();
-    renderRows();
+  const invalidateTeamCaches = () => {
+    try {
+      localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
+      localStorage.removeItem(`mlfc_admin_manage_cache_v3:${code}`);
+      localStorage.removeItem(`mlfc_next_match_cache_v1:${captain.toLowerCase()}`);
+      if (m.seasonId) {
+        localStorage.removeItem(`mlfc_admin_matches_cache_v3:${m.seasonId}`);
+        localStorage.removeItem(`mlfc_open_matches_cache_v2:${m.seasonId}`);
+        localStorage.removeItem(`mlfc_past_matches_cache_v2:${m.seasonId}`);
+        localStorage.removeItem(`mlfc_leaderboard_v2:${m.seasonId}`);
+      }
+    } catch {}
   };
 
-  const movePlayer = (playerName, destination) => {
-    assignPlayerTeam(playerName, destination === "MY" ? captainTeam : opponentTeam);
+  const availableMovePositions = (playerName, team) => {
+    const destinationGroup = fieldGroups.find(group => group.team === safeUpper(team));
+    const players = (destinationGroup?.players || [])
+      .filter(name => name.toLowerCase() !== playerName.toLowerCase());
+    const occupied = new Set(positionRows([
+      { ...(destinationGroup || { team:safeUpper(team) }), players }
+    ], fieldPositions).map(row => fieldPositionCode(row)).filter(Boolean));
+    return FIELD_POSITIONS.filter(position => !occupied.has(position.code));
+  };
+
+  const movePositionPicker = (playerName, team) => {
+    const positions = availableMovePositions(playerName, team);
+    return `<label class="field"><span class="field__label">New position</span><select class="input" data-move-position="${team}" ${positions.length ? "" : "disabled"}><option value="">${positions.length ? "Choose…" : "No positions available"}</option>${positions.map(position => `<option value="${position.code}">${position.code} · ${position.name}</option>`).join("")}</select></label>`;
+  };
+
+  const assignPlayerTeam = async (playerName, team, button = null, positionCode = "") => {
+    const destinationTeam = safeUpper(team);
+    const previousTeam = safeUpper(teamMap[playerName]);
+    if (destinationTeam === previousTeam) return true;
+    if (!isInternalCaptainView && !adminMode) return false;
+    const selectedPosition = FIELD_POSITIONS.find(position => position.code === safeUpper(positionCode));
+    if (!selectedPosition) {
+      toastWarn("Choose the player's new position.");
+      return false;
+    }
+    if (button) setDisabled(button, true, "Moving…");
+    try {
+      const out = await API.captainMovePlayerTeam(code, playerName, destinationTeam, selectedPosition.positionX, selectedPosition.positionY);
+      if (!out.ok) throw new Error(out.error || "Could not move player");
+      const savedName = String(out.playerName || playerName);
+      delete teamMap[playerName];
+      teamMap[savedName] = safeUpper(out.team || destinationTeam);
+      fieldPositions[savedName] = {
+        positionX: Number(out.positionX ?? selectedPosition.positionX),
+        positionY: Number(out.positionY ?? selectedPosition.positionY),
+      };
+      for (const group of fieldGroups) {
+        group.players = group.players.filter(name => name.toLowerCase() !== savedName.toLowerCase());
+      }
+      const destinationGroup = fieldGroups.find(group => group.team === teamMap[savedName]);
+      if (destinationGroup) destinationGroup.players = uniqueSorted([...destinationGroup.players, savedName]);
+      if (out.captainCleared) {
+        if (String(capt.captain1 || "").toLowerCase() === savedName.toLowerCase()) capt.captain1 = "";
+        if (String(capt.captain2 || "").toLowerCase() === savedName.toLowerCase()) capt.captain2 = "";
+        for (const group of fieldGroups) {
+          if (String(group.captain || "").toLowerCase() === savedName.toLowerCase()) group.captain = "";
+        }
+      }
+      saveTeamsLocal();
+      invalidateTeamCaches();
+      fieldEditor.refresh();
+      renderAvailableAddPositions();
+      for (const teamName of ["BLUE", "ORANGE"]) {
+        const availabilityGroup = root.querySelector(`[data-team-availability="${teamName}"]`);
+        if (availabilityGroup) availabilityGroup.innerHTML = teamAvailabilityList(teamName);
+      }
+      renderRows();
+      toastSuccess(`${savedName} moved to ${visibleTeamName(teamMap[savedName])} as ${selectedPosition.code}.`);
+      if (out.captainCleared) toastInfo("Captain role cleared. Assign a new captain in match setup.");
+      return true;
+    } catch (error) {
+      toastError(error?.message || "Could not move player");
+      return false;
+    } finally {
+      if (button?.isConnected) setDisabled(button, false, button.dataset.origText || "Move player");
+    }
+  };
+
+  const movePlayer = (playerName, destination, button = null, positionCode = "") => {
+    return assignPlayerTeam(playerName, destination === "MY" ? captainTeam : opponentTeam, button, positionCode);
   };
 
   const removePlayer = (playerName) => {
@@ -1120,27 +1196,35 @@ export async function renderCaptainPage(root, query) {
 
     if (isInternalCaptainView) {
       const onMyTeam = team === captainTeam;
+      const destination = onMyTeam ? opponentTeam : captainTeam;
+      const canMoveToDestination = availableMovePositions(playerName, destination).length > 0;
       playerActionButtons.innerHTML = `
-        <button class="btn gray" type="button" data-action-move="${onMyTeam ? "OPP" : "MY"}">${onMyTeam ? "Move to opponent" : "Move to my team"}</button>
+        ${movePositionPicker(playerName, destination)}
+        <button class="btn gray" type="button" data-action-move="${onMyTeam ? "OPP" : "MY"}" ${canMoveToDestination ? "" : "disabled"}>${onMyTeam ? "Move to opponent" : "Move to my team"}</button>
         ${isOpponentPlayer(playerName) ? `<button class="btn bad" type="button" data-action-no-show>Didn't play</button>` : ""}
       `;
     } else if (!isOpponentMatch) {
+      const blueAvailable = availableMovePositions(playerName, "BLUE").length > 0;
+      const orangeAvailable = availableMovePositions(playerName, "ORANGE").length > 0;
       playerActionButtons.innerHTML = `
-        <button class="btn good" type="button" data-action-team="BLUE" ${team === "BLUE" ? "disabled" : ""}>Move to ${homeTeamName}</button>
-        <button class="btn warn" type="button" data-action-team="ORANGE" ${team === "ORANGE" ? "disabled" : ""}>Move to ${awayTeamName}</button>
+        ${team !== "BLUE" ? movePositionPicker(playerName, "BLUE") : ""}
+        <button class="btn good" type="button" data-action-team="BLUE" ${team === "BLUE" || !blueAvailable ? "disabled" : ""}>Move to ${homeTeamName}</button>
+        ${team !== "ORANGE" ? movePositionPicker(playerName, "ORANGE") : ""}
+        <button class="btn warn" type="button" data-action-team="ORANGE" ${team === "ORANGE" || !orangeAvailable ? "disabled" : ""}>Move to ${awayTeamName}</button>
         <button class="btn gray playerActionDialog__remove" type="button" data-action-remove>Remove from match</button>
       `;
     } else {
       playerActionButtons.innerHTML = `<div class="small muted">This player’s team is managed from match setup.</div>`;
     }
 
-    playerActionButtons.querySelector("[data-action-move]")?.addEventListener("click", event => {
-      movePlayer(playerName, event.currentTarget.dataset.actionMove);
-      playerActionDialog.close();
+    playerActionButtons.querySelector("[data-action-move]")?.addEventListener("click", async event => {
+      const destination = event.currentTarget.dataset.actionMove === "MY" ? captainTeam : opponentTeam;
+      const position = playerActionButtons.querySelector(`[data-move-position="${destination}"]`)?.value || "";
+      if (await movePlayer(playerName, event.currentTarget.dataset.actionMove, event.currentTarget, position)) playerActionDialog.close();
     });
-    playerActionButtons.querySelectorAll("[data-action-team]").forEach(button => button.addEventListener("click", () => {
-      assignPlayerTeam(playerName, button.dataset.actionTeam);
-      playerActionDialog.close();
+    playerActionButtons.querySelectorAll("[data-action-team]").forEach(button => button.addEventListener("click", async () => {
+      const position = playerActionButtons.querySelector(`[data-move-position="${button.dataset.actionTeam}"]`)?.value || "";
+      if (await assignPlayerTeam(playerName, button.dataset.actionTeam, button, position)) playerActionDialog.close();
     }));
     playerActionButtons.querySelector("[data-action-remove]")?.addEventListener("click", () => {
       removePlayer(playerName);
@@ -1349,18 +1433,18 @@ export async function renderCaptainPage(root, query) {
     });
 
     root.querySelectorAll("[data-team]").forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const team = btn.getAttribute("data-team");
         const p = decodeURIComponent(btn.getAttribute("data-p"));
-        assignPlayerTeam(p, team);
+        await assignPlayerTeam(p, team, btn);
       };
     });
 
     root.querySelectorAll("[data-move]").forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const p = decodeURIComponent(btn.getAttribute("data-move"));
         const to = btn.getAttribute("data-move-to");
-        movePlayer(p, to);
+        await movePlayer(p, to, btn);
       };
     });
 

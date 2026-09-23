@@ -93,6 +93,8 @@ export const API = {
   saveTeamPositions: (code, team, positions) => apiPost({action:"save_team_positions",code,team,positions}),
 
   // captain
+  captainMovePlayerTeam: (code, playerName, team, positionX, positionY) =>
+    apiPost({ action: "captain_move_player_team", code, playerName, team, positionX, positionY }),
   captainAddLateOpponent: (code, playerName, team = "", positionX = null, positionY = null) =>
     apiPost({ action: "captain_add_late_opponent", code, playerName, team, positionX, positionY }),
   captainRemoveNoShow: (code, playerName) => apiPost({ action: "captain_remove_no_show", code, playerName }),
