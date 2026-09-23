@@ -159,6 +159,7 @@ export function mountTeamField(root, options) {
   function pitchMarkup(preview = false) {
     return `<div class="${preview?'fieldPreviewPitch':'sharedPitch'}${halfField?' fieldPitch--half':''}" aria-label="${halfField?'Team half-field positions':preview?'Team field preview':'Shared team field'}">
       <div class="teamField__circle" aria-hidden="true"></div>
+      ${halfField ? '<div class="teamField__goal" aria-hidden="true"></div>' : ''}
       ${groups.flatMap(group => group.players.map(name => playerMarker(name, group, preview))).join('')}
       ${!groups.some(group => group.players.length) ? '<span class="teamField__empty">No players assigned</span>' : ''}
     </div>`;

@@ -1266,8 +1266,9 @@ body::before {
 @keyframes routeIn { from { opacity: 0; transform: translateY(7px); } }
 
 /* A transformed ancestor changes the containing block for fixed children.
-   The manage-match banner must stay fixed to the viewport while scrolling. */
-#app > [data-route="#/admin"] {
+   Match controllers must stay fixed to the viewport while scrolling. */
+#app > [data-route="#/admin"],
+#app > [data-route="#/captain"] {
   animation: none;
   transform: none;
 }
@@ -1918,10 +1919,24 @@ details.card[open] > summary { margin-bottom: 14px; }
 @media(max-width:560px){.potmVoteRow{align-items:stretch}.potmVoteRow .input,.potmVoteRow .btn{width:100%}.playerSummary>div:last-child{grid-column:1/-1}}
 @media(max-width:560px){.potmPrompt{grid-template-columns:auto minmax(0,1fr);padding:13px}.potmPrompt__trophy{font-size:28px}.potmPrompt h2{font-size:17px}.potmPrompt__button{grid-column:1/-1;width:100%}}
 .matchSteps { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:16px; }
-.matchSteps span { display:flex; align-items:center; gap:6px; padding:8px; color:#617684; background:#edf3f5; border-bottom:3px solid #cad7dd; border-radius:4px 4px 0 0; font:800 11px/1.1 ui-monospace,monospace; }
-.matchSteps span.isActive { color:#fff; background:var(--blue); border-color:#f4c84b; }
+.matchSteps button { display:flex; align-items:center; gap:6px; padding:8px; color:#617684; background:#edf3f5; border:0; border-bottom:3px solid #cad7dd; border-radius:4px 4px 0 0; font:800 11px/1.1 ui-monospace,monospace; text-align:left; cursor:pointer; }
+.matchSteps button:hover:not(:disabled) { color:#0b4961; background:#dcebee; }
+.matchSteps button:focus-visible { outline:3px solid #72d7fa; outline-offset:2px; }
+.matchSteps button:disabled { cursor:not-allowed; opacity:.5; }
+.matchSteps button.isActive { color:#fff; background:#0b4961; border-color:#f4c84b; opacity:1; }
 .matchSteps b { font:inherit; }
 .stepEyebrow { margin-bottom:4px; color:var(--blue); font:900 10px/1.2 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; }
+
+.captainCommand { position:sticky; top:76px; z-index:12; transition:padding .18s ease, border-radius .18s ease, box-shadow .18s ease; }
+#stepScore,#stepRoster { scroll-margin-top:92px; }
+#app > [data-route].hasCompactCaptainCommand { padding-top:var(--captain-command-space,0); }
+.captainCommand.isCompact { position:fixed; top:0; left:var(--captain-command-left,10px); z-index:31; width:var(--captain-command-width,calc(100% - 20px)); margin:0; padding:8px 11px; border-radius:0 0 7px 7px; box-shadow:0 7px 18px rgba(0,0,0,.3); }
+body.hasCompactCaptainCommand .appbar { opacity:0; transform:translateY(-100%); pointer-events:none; }
+.captainCommand.isCompact .captainCommand__context,.captainCommand.isCompact .captainInfoButton { display:none; }
+.captainCommand.isCompact .captainHeading .h1 { overflow:hidden; margin:0; font-size:16px; line-height:1.05; text-overflow:ellipsis; white-space:nowrap; }
+.captainCommand.isCompact .matchSteps { margin-top:7px; }
+.captainCommand.isCompact .matchSteps button { min-height:30px; padding:6px 8px; }
+@media(max-width:819px){.captainCommand{top:70px;margin-inline:-4px}.captainCommand.isCompact{margin-inline:0}}
 
 /* ==========================================================================
    Session 2 — resilient matchday layout and accessible control foundation
@@ -2459,6 +2474,8 @@ body.hasCompactMatchCommand .appbar {
 .sharedPitch:after{content:"";position:absolute;inset:0 32%;border-top:12px solid #ffffff30;border-bottom:12px solid #ffffff30;pointer-events:none}
 .fieldPitch--half:before{top:0;border-top:2px solid #ffffff65}
 .fieldPitch--half:after{inset:auto 24% 0;height:18%;border:1px solid #ffffff55;border-bottom:0}
+.fieldPitch--half .teamField__circle{top:0;width:100px;height:100px}
+.teamField__goal{position:absolute;z-index:0;bottom:0;left:50%;width:22%;height:4%;transform:translateX(-50%);border:2px solid #ffffffe6;border-bottom:0;background:repeating-linear-gradient(90deg,transparent 0 14px,#ffffff38 14px 16px);pointer-events:none}
 .sharedPitch .fieldPlayer{width:84px}.sharedPitch .fieldPlayer>span:not(.playerPhoto){font-size:11px}.sharedPitch .fieldPlayer--orange i{background:#ff9d4d;color:#3b1b08}
 .attackDirection{position:absolute;right:8px;top:51%;color:#9fe3ff;font:800 10px/1.2 ui-monospace,monospace;pointer-events:none}.attackDirection--upper{top:auto;bottom:51%;color:#ffbc88}
 .fieldWorkspace__foot{border-top:1px solid #cad7dd;margin-top:10px}.fieldWorkspace__foot .fieldActions{margin:0;min-height:40px;flex:1}.fieldWorkspace__foot [data-field-status]{max-width:220px}

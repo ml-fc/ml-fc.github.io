@@ -26,11 +26,30 @@ async function refreshIdentity() {
   }
   return user;
 }
-function notifyDesktop(title, body) {
+function notificationTarget(item) {
+  const code = String(item?.publicCode || item?.matchCode || "").trim();
+  if (code) return new URL(`#/match?code=${encodeURIComponent(code)}`, location.href).href;
+  try {
+    const rawLink = String(item?.linkUrl || "").trim();
+    if (!rawLink) throw new Error("No notification link");
+    const link = new URL(rawLink, location.href);
+    if (link.protocol === "https:" || link.origin === location.origin) return link.href;
+  } catch {}
+  return new URL("#/login", location.href).href;
+}
+
+function notifyDesktop(title, body, items = []) {
   try {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") {
-      new Notification(title, { body });
+      const notification = new Notification(title, { body });
+      notification.onclick = async () => {
+        notification.close();
+        window.focus();
+        const ids = items.map(item => item?.id).filter(id => id !== null && id !== undefined && id !== "");
+        if (ids.length) await syncPhoneDismissals(ids);
+        location.href = items.length === 1 ? notificationTarget(items[0]) : new URL("#/login", location.href).href;
+      };
     }
   } catch {
     // ignore
@@ -150,7 +169,7 @@ async function checkNotificationsOnce() {
 
   if (newly.length) {
     const first = newly[0];
-    notifyDesktop("MLFC", newly.length === 1 ? first.message : `${newly.length} new notifications`);
+    notifyDesktop("MLFC", newly.length === 1 ? first.message : `${newly.length} new notifications`, newly);
     try {
       localStorage.setItem(LS_NOTIFIED, JSON.stringify(Array.from(ids).slice(0, 200)));
     } catch {

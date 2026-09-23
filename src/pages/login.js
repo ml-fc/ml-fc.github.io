@@ -550,7 +550,14 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
     root.querySelector("#closeAnnouncementDialog")?.addEventListener("click", () => { dialog.close(); frame.src = "about:blank"; });
     list.onclick = async event => {
       const button = event.target.closest("button");
-      if (!button || clearing) return;
+      const link = event.target.closest("a");
+      if (clearing) return;
+      if (link && !button) {
+        const card = link.closest(".notificationCard");
+        if (card) clearNotifications([card.dataset.notificationId]);
+        return;
+      }
+      if (!button) return;
       if (button.hasAttribute("data-close")) await clearNotifications([button.dataset.close]);
       else if (button.hasAttribute("data-open-captain")) {
         const destination = button.dataset.openCaptain;
@@ -564,7 +571,10 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       } else if (button.hasAttribute("data-embed-url")) {
         const url = safeHttpsUrl(button.dataset.embedUrl);
         if (!url) return toastError("This registration link is not valid.");
-        root.querySelector("#announcementDialogTitle").textContent = button.dataset.embedTitle || "Registration";
+        const title = button.dataset.embedTitle || "Registration";
+        const notificationId = button.closest(".notificationCard").dataset.notificationId;
+        await clearNotifications([notificationId]);
+        root.querySelector("#announcementDialogTitle").textContent = title;
         frame.src = url;
         dialog.showModal();
       }

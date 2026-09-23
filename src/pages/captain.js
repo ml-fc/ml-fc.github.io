@@ -12,12 +12,72 @@ const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
 const LS_CAPTAIN_RATINGS_DRAFT_PREFIX = "mlfc_captain_ratings_draft_v1:";
 const LS_CAPTAIN_FIELD_DRAFT_PREFIX = "mlfc_captain_field_draft_v1:";
 const LS_CAPTAIN_GUIDE_PREFIX = "mlfc_captain_guide_seen_v1:";
+let CAPTAIN_COMMAND_SCROLL_HANDLER = null;
 
 function rosterKey(code, captain){ return `${LS_CAPTAIN_ROSTER_PREFIX}${code}:${captain.toLowerCase()}`; }
 function teamsKey(code){ return `${LS_CAPTAIN_TEAMS_PREFIX}${code}`; }
 function ratingsDraftKey(code, actor){ return `${LS_CAPTAIN_RATINGS_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
 function fieldDraftKey(code, actor){ return `${LS_CAPTAIN_FIELD_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
 function captainGuideKey(code, actor){ return `${LS_CAPTAIN_GUIDE_PREFIX}${code}:${actor.toLowerCase()}`; }
+
+function installCaptainCommandScrollBehavior(root) {
+  if (CAPTAIN_COMMAND_SCROLL_HANDLER) {
+    window.removeEventListener("scroll", CAPTAIN_COMMAND_SCROLL_HANDLER);
+    window.removeEventListener("resize", CAPTAIN_COMMAND_SCROLL_HANDLER);
+    window.removeEventListener("hashchange", CAPTAIN_COMMAND_SCROLL_HANDLER);
+  }
+  const command = root?.querySelector(".captainCommand");
+  if (!command) return;
+
+  let scheduled = false;
+  let compact = false;
+  let handler = null;
+  const setCompact = (nextCompact) => {
+    if (nextCompact === compact) return;
+    if (nextCompact) {
+      const styles = getComputedStyle(command);
+      const outerHeight = command.getBoundingClientRect().height
+        + Number.parseFloat(styles.marginTop || "0")
+        + Number.parseFloat(styles.marginBottom || "0");
+      root.style.setProperty("--captain-command-space", `${Math.ceil(outerHeight)}px`);
+    }
+    compact = nextCompact;
+    root.classList.toggle("hasCompactCaptainCommand", compact);
+    command.classList.toggle("isCompact", compact);
+    document.body.classList.toggle("hasCompactCaptainCommand", compact);
+  };
+  const syncCompactBounds = () => {
+    const bounds = root.getBoundingClientRect();
+    const edge = window.innerWidth <= 819 ? 4 : 0;
+    command.style.setProperty("--captain-command-left", `${Math.max(0, bounds.left - edge)}px`);
+    command.style.setProperty("--captain-command-width", `${Math.min(window.innerWidth, bounds.width + edge * 2)}px`);
+  };
+  const update = () => {
+    scheduled = false;
+    if (!document.body.contains(command)) {
+      window.removeEventListener("scroll", handler);
+      window.removeEventListener("resize", handler);
+      window.removeEventListener("hashchange", handler);
+      document.body.classList.remove("hasCompactCaptainCommand");
+      if (CAPTAIN_COMMAND_SCROLL_HANDLER === handler) CAPTAIN_COMMAND_SCROLL_HANDLER = null;
+      return;
+    }
+    const routeActive = String(window.location.hash || "").split("?")[0] === "#/captain" && root.offsetParent !== null;
+    const nextCompact = routeActive && (compact ? window.scrollY > 72 : window.scrollY > 140);
+    if (nextCompact) syncCompactBounds();
+    setCompact(nextCompact);
+  };
+  handler = () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(update);
+  };
+  CAPTAIN_COMMAND_SCROLL_HANDLER = handler;
+  window.addEventListener("scroll", handler, { passive:true });
+  window.addEventListener("resize", handler, { passive:true });
+  window.addEventListener("hashchange", handler);
+  update();
+}
 
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
@@ -125,7 +185,9 @@ async function captainTeamImageFile(match, when, team, positions) {
     context.textAlign = "left";
   }
 
-  const pitch = { x: 55, y: 270, width: 970, height: 1000 };
+  // Captain sheets show one team from its own goal towards the attacking end.
+  // Saved positionY values follow that convention: GK ~= 94 (bottom), ST ~= 8 (top).
+  const pitch = { x: 55, y: 300, width: 970, height: 900 };
   const weeklyCrest = await loadCanvasImage(weeklyTheme?.crest);
   const grass = context.createLinearGradient(0, pitch.y, 0, pitch.y + pitch.height);
   grass.addColorStop(0, "#126779");
@@ -142,20 +204,43 @@ async function captainTeamImageFile(match, when, team, positions) {
   context.strokeStyle = "rgba(255,255,255,.55)";
   context.lineWidth = 4;
   context.strokeRect(pitch.x + 18, pitch.y + 18, pitch.width - 36, pitch.height - 36);
+
+  // Halfway line and the visible half of the centre circle mark the attacking end.
   context.beginPath();
-  context.moveTo(pitch.x + 18, pitch.y + pitch.height / 2);
-  context.lineTo(pitch.x + pitch.width - 18, pitch.y + pitch.height / 2);
+  context.moveTo(pitch.x + 18, pitch.y + 18);
+  context.lineTo(pitch.x + pitch.width - 18, pitch.y + 18);
   context.stroke();
   context.beginPath();
-  context.arc(pitch.x + pitch.width / 2, pitch.y + pitch.height / 2, 92, 0, Math.PI * 2);
+  context.arc(pitch.x + pitch.width / 2, pitch.y + 18, 92, 0, Math.PI);
   context.stroke();
+
+  // Defensive penalty area, six-yard box and goal are always at the bottom.
+  const goalLineY = pitch.y + pitch.height - 18;
+  context.strokeRect(pitch.x + pitch.width * .22, goalLineY - 180, pitch.width * .56, 180);
+  context.strokeRect(pitch.x + pitch.width * .35, goalLineY - 82, pitch.width * .3, 82);
+  context.fillStyle = "rgba(255,255,255,.8)";
+  context.beginPath();
+  context.arc(pitch.x + pitch.width / 2, goalLineY - 125, 6, 0, Math.PI * 2);
+  context.fill();
+  const goal = { x:pitch.x + pitch.width / 2 - 105, y:goalLineY, width:210, height:34 };
+  context.strokeStyle = "rgba(255,255,255,.9)";
+  context.strokeRect(goal.x, goal.y, goal.width, goal.height);
+  context.lineWidth = 2;
+  for (let x = goal.x + 35; x < goal.x + goal.width; x += 35) {
+    context.beginPath(); context.moveTo(x, goal.y); context.lineTo(x, goal.y + goal.height); context.stroke();
+  }
+
+  context.fillStyle = weeklyTheme?.accent || "#72d7fa";
+  context.font = "900 21px Arial";
+  context.textAlign = "center";
+  context.fillText("ATTACKING  ↑", pitch.x + pitch.width / 2, pitch.y - 17);
 
   const rows = positionRows([team], positions);
   const resolved = Object.fromEntries(rows.map(row => [row.playerName, row]));
   for (const player of team.players) {
     const position = resolved[player] || { positionX: 50, positionY: 50 };
-    const x = pitch.x + 45 + Number(position.positionX) / 100 * (pitch.width - 90);
-    const y = pitch.y + 45 + (100 - Number(position.positionY)) / 100 * (pitch.height - 90);
+    const x = pitch.x + 55 + Number(position.positionX) / 100 * (pitch.width - 110);
+    const y = pitch.y + 65 + Number(position.positionY) / 100 * (pitch.height - 195);
     context.fillStyle = player === team.captain ? "#ffe16a" : "#72d7fa";
     context.beginPath();
     context.arc(x, y, 34, 0, Math.PI * 2);
@@ -331,8 +416,13 @@ export async function renderCaptainPage(root, query) {
     ? (captainTeam === "BLUE" ? "ORANGE" : "BLUE")
     : "";
 
-  // Score entry and ratings are independent; both become available at kick-off.
-  let ratingsEnabled = hasStarted;
+  const scoreHomePresent = String(m.scoreHome ?? "").trim() !== "";
+  const scoreAwayPresent = String(m.scoreAway ?? "").trim() !== "";
+  const relevantScorePresent = !adminMode && type === "INTERNAL" && captainTeam
+    ? (captainTeam === "BLUE" ? scoreAwayPresent : scoreHomePresent)
+    : scoreHomePresent && scoreAwayPresent;
+  // Ratings open after kick-off once this captain/admin has a saved score.
+  let ratingsEnabled = hasStarted && relevantScorePresent;
 
   function isOpponentPlayer(playerName) {
     if (adminMode) return true;
@@ -446,20 +536,20 @@ export async function renderCaptainPage(root, query) {
       .ratingProgressBadge--complete { background:#dcfce7; color:#166534; }
     </style>
 
-    <div class="card">
+    <div class="card captainCommand">
       <div class="captainHeading"><div class="h1">${m.title}</div>${adminMode ? "" : `<button class="captainInfoButton" id="openCaptainGuide" type="button" aria-label="How captain ratings and boosts work" aria-haspopup="dialog">i</button>`}</div>
-      <div class="row">
+      <div class="row captainCommand__context">
         <span class="badge">${m.type}</span>
         <span class="badge">${m.status}</span>
       </div>
-      <div class="small" style="margin-top:10px">${when}</div>
-      <div class="small" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}`}</div>
-      ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote">You can only rate/update <b>opponent</b> players.</div>` : ""}
-      <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+      <div class="small captainCommand__context" style="margin-top:10px">${when}</div>
+      <div class="small captainCommand__context" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}`}</div>
+      ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote captainCommand__context">You can only rate/update <b>opponent</b> players.</div>` : ""}
+      <div class="row captainCommand__context" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">${adminMode ? "Back to match management" : "Open match"}</button>
       </div>
       <div class="matchSteps" aria-label="Match update progress">
-        <span data-step-dot="1">1 <b>Score</b></span><span data-step-dot="2">2 <b>Roster</b></span><span data-step-dot="3">3 <b>Ratings</b></span>
+        <button type="button" data-step-dot="1">1 <b>Score</b></button><button type="button" data-step-dot="2">2 <b>Roster</b></button><button type="button" data-step-dot="3" ${ratingsEnabled && roster.length ? "" : "disabled"}>3 <b>Ratings</b></button>
       </div>
     </div>
 
@@ -520,8 +610,8 @@ export async function renderCaptainPage(root, query) {
       </details>
 
       <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <select id="addFromAll" class="input" aria-label="Add player from full list" style="flex:1" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>
-          <option value="">Add player from full list…</option>
+        <select id="addFromAll" class="input" aria-label="Add late opponent from full list" style="flex:1" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>
+          <option value="">Add late opponent…</option>
           ${(allPlayers||[]).map(p => `<option value="${p}">${p}</option>`).join("")}
         </select>
         <button class="btn gray" id="addBtn" ${adminMode || type === "OPPONENT" ? "disabled" : ""}>Add</button>
@@ -576,6 +666,8 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
   `;
+
+  installCaptainCommandScrollBehavior(root);
 
   if (!adminMode) {
     const guide = root.querySelector("#captainGuide");
@@ -646,18 +738,45 @@ export async function renderCaptainPage(root, query) {
     finally { button.disabled = false; }
   };
 
-  function showStage(stage) {
+  let currentStage = 1;
+
+  function updateStepAvailability() {
+    const ratingsReady = ratingsEnabled && roster.length > 0;
+    const ratingsStep = root.querySelector('[data-step-dot="3"]');
+    const continueButton = root.querySelector("#continueToRatings");
+    if (ratingsStep) ratingsStep.disabled = !ratingsReady;
+    if (continueButton) continueButton.disabled = !ratingsReady;
+    return ratingsReady;
+  }
+
+  function showStage(stage, { scroll = true } = {}) {
+    const requestedStage = Number(stage);
+    if (requestedStage === 3 && !updateStepAvailability()) {
+      toastWarn("Update the score and confirm a roster before opening ratings.");
+      return;
+    }
+    currentStage = requestedStage;
     root.querySelector("#stepScore").style.display = stage === 1 ? "block" : "none";
     root.querySelector("#stepRoster").style.display = stage >= 2 ? "block" : "none";
     root.querySelector("#rosterSetup").style.display = stage === 2 ? "block" : "none";
     root.querySelector("#ratingsSection").style.display = stage === 3 ? "block" : "none";
-    root.querySelectorAll("[data-step-dot]").forEach(el => el.classList.toggle("isActive", Number(el.dataset.stepDot) === stage));
-    if (stage > 1) {
+    root.querySelectorAll("[data-step-dot]").forEach(el => {
+      const active = Number(el.dataset.stepDot) === stage;
+      el.classList.toggle("isActive", active);
+      if (active) el.setAttribute("aria-current", "step");
+      else el.removeAttribute("aria-current");
+    });
+    if (scroll) {
       const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-      root.querySelector("#stepRoster")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      const target = stage === 1 ? root.querySelector("#stepScore") : root.querySelector("#stepRoster");
+      target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
     }
   }
-  showStage(ratingsEnabled && (!adminMode || roster.length) ? (adminMode ? 3 : 2) : (adminMode ? 2 : 1));
+  root.querySelectorAll("[data-step-dot]").forEach(button => {
+    button.addEventListener("click", () => showStage(Number(button.dataset.stepDot)));
+  });
+  updateStepAvailability();
+  showStage(ratingsEnabled && (!adminMode || roster.length) ? (adminMode ? 3 : 2) : (adminMode ? 2 : 1), { scroll:false });
   root.querySelector("#continueToRatings").onclick = () => showStage(3);
 
   // Prefill score UI (no extra fetch)
@@ -723,9 +842,9 @@ export async function renderCaptainPage(root, query) {
         toastSuccess("Opponent score submitted.");
 
         ratingsEnabled = true;
-        root.querySelector("#continueToRatings").disabled = false;
+        updateStepAvailability();
         renderRows();
-        showStage(adminMode ? 3 : 2);
+        showStage(roster.length ? 3 : 2);
       } else {
         const sAEl = root.querySelector("#scoreA");
         const sBEl = root.querySelector("#scoreB");
@@ -754,9 +873,9 @@ export async function renderCaptainPage(root, query) {
         toastSuccess("Score submitted.");
 
         ratingsEnabled = true;
-        root.querySelector("#continueToRatings").disabled = false;
+        updateStepAvailability();
         renderRows();
-        showStage(adminMode ? 3 : 2);
+        showStage(roster.length ? 3 : 2);
       }
 
       // Update label if present
@@ -878,7 +997,9 @@ export async function renderCaptainPage(root, query) {
           <div class="muted" style="margin-top:6px; font-size:12px">Team</div>
           <div class="teamPills" style="margin-top:6px; gap:6px">
             ${moveBtns}
-            ${type === "OPPONENT" ? "" : `<button class="btn gray tinyBtn" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>`}
+            ${type === "OPPONENT" ? "" : isInternalCaptainView
+              ? (isOpponentPlayer(p) ? `<button class="btn bad tinyBtn" data-no-show="${encodeURIComponent(p)}" style="margin-left:auto">Didn't play</button>` : "")
+              : `<button class="btn gray tinyBtn" data-remove="${encodeURIComponent(p)}" style="margin-left:auto">Remove</button>`}
           </div>
 
           ${canEdit ? `
@@ -977,7 +1098,11 @@ export async function renderCaptainPage(root, query) {
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
-            <td style="padding:10px; text-align:center">${boostControlHtml(p,canEdit)}${type === "OPPONENT" ? `<span class="small muted">Admin managed</span>` : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
+            <td style="padding:10px; text-align:center">${boostControlHtml(p,canEdit)}${type === "OPPONENT"
+              ? `<span class="small muted">Admin managed</span>`
+              : isInternalCaptainView
+                ? (isOpponentPlayer(p) ? `<button class="btn bad" data-no-show="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Didn't play</button>` : "")
+                : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
           </tr>
         `;
       }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
@@ -1034,6 +1159,30 @@ export async function renderCaptainPage(root, query) {
       };
     });
 
+    root.querySelectorAll("[data-no-show]").forEach(btn => {
+      btn.onclick = async () => {
+        const p = decodeURIComponent(btn.getAttribute("data-no-show"));
+        if (!window.confirm(`Remove ${p} as a no-show? They will not count as playing in this match.`)) return;
+        setDisabled(btn, true, "Removing…");
+        try {
+          const out = await API.captainRemoveNoShow(code, p);
+          if (!out.ok) throw new Error(out.error || "Could not remove player");
+          roster = roster.filter(name => name.toLowerCase() !== p.toLowerCase());
+          delete drafts[p];
+          delete teamMap[p];
+          ratingCoverage.delete(p.toLowerCase());
+          saveRosterLocal();
+          saveTeamsLocal();
+          saveRatingsDraft();
+          renderRows();
+          toastSuccess(`${p} removed as a no-show.`);
+        } catch (error) {
+          setDisabled(btn, false, "Removing…");
+          toastError(error?.message || "Could not remove player");
+        }
+      };
+    });
+
     root.querySelectorAll("[data-rating]").forEach(inp => {
       inp.addEventListener("input", () => {
         const p = decodeURIComponent(inp.getAttribute("data-rating"));
@@ -1068,24 +1217,39 @@ export async function renderCaptainPage(root, query) {
     root.querySelectorAll("[data-boost-multiplier]").forEach(input=>input.addEventListener("change",()=>{
       const p=decodeURIComponent(input.dataset.boostMultiplier);drafts[p]=drafts[p]||{};drafts[p].boostMultiplier=Number(input.value||1);saveRatingsDraft();
     }));
+    const ratingsReady = updateStepAvailability();
+    if (currentStage === 3 && !ratingsReady) showStage(2);
   }
 
   renderRows();
   searchEl.addEventListener("input", renderRows);
 
-  root.querySelector("#addBtn").onclick = () => {
+  root.querySelector("#addBtn").onclick = async () => {
     if (adminMode || type === "OPPONENT") return toastWarn("Assign players in match management and save setup first.");
+    if (!ratingsEnabled || !opponentTeam) return toastWarn("Late opponents can be added after kick-off.");
     const sel = root.querySelector("#addFromAll");
     const p = String(sel.value || "").trim();
     if (!p) return toastWarn("Select a player to add.");
     if (roster.some(x => x.toLowerCase() === p.toLowerCase())) return toastWarn("Already in roster.");
-    roster = uniqueSorted([...roster, p]);
-    if (!teamMap[p]) teamMap[p] = "BLUE";
-    saveRosterLocal();
-    saveTeamsLocal();
-    sel.value = "";
-    renderRows();
-    toastSuccess("Player added to roster.");
+    const btn = root.querySelector("#addBtn");
+    setDisabled(btn, true, "Adding…");
+    try {
+      const out = await API.captainAddLateOpponent(code, p);
+      if (!out.ok) throw new Error(out.error || "Could not add player");
+      const playerName = String(out.playerName || p);
+      roster = uniqueSorted([...roster, playerName]);
+      teamMap[playerName] = String(out.team || opponentTeam);
+      drafts[playerName] = drafts[playerName] || { rating: "", goals: "", assists: "" };
+      saveRosterLocal();
+      saveTeamsLocal();
+      sel.value = "";
+      renderRows();
+      toastSuccess(`${playerName} added as a late opponent.`);
+    } catch (error) {
+      toastError(error?.message || "Could not add player");
+    } finally {
+      setDisabled(btn, false, "Adding…");
+    }
   };
 
   const submitRatingsBtn = root.querySelector("#submitRatings");
