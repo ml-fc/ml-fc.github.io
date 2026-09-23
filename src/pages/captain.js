@@ -537,6 +537,7 @@ export async function renderCaptainPage(root, query) {
       .captainGuide__note { padding:12px 14px; border-left:4px solid #f0b429; background:#fff8dc; border-radius:4px 12px 12px 4px; }
       .ratingProgress--pending { outline:2px solid #dc2626; outline-offset:-2px; }
       .ratingProgress--inProgress { outline:2px solid #eab308; outline-offset:-2px; }
+      .ratingProgress--complete { outline:2px solid #16a34a; outline-offset:-2px; }
       .ratingProgressBadge { display:inline-flex; align-items:center; margin-left:8px; padding:3px 7px; border-radius:999px; font-size:10px; font-weight:900; line-height:1; vertical-align:middle; }
       .ratingProgressBadge--pending { background:#fee2e2; color:#991b1b; }
       .ratingProgressBadge--inProgress { background:#fef9c3; color:#854d0e; }
@@ -555,7 +556,7 @@ export async function renderCaptainPage(root, query) {
       <div class="row captainCommand__context" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">${adminMode ? "Back to match management" : "Open match"}</button>
       </div>
-      <button class="btn primary captainWizardLauncher" id="openRatingWizard" type="button" aria-haspopup="dialog"><span>Open rating wizard</span><small id="ratingWizardProgress">${initialDutyStatus.completed}/${initialDutyStatus.required} rated</small></button>
+      <button class="btn primary captainWizardLauncher${!adminMode && hasStarted && !initialDutyStatus.complete ? " isDue" : ""}" id="openRatingWizard" type="button" aria-haspopup="dialog"><span>Open rating wizard</span><small id="ratingWizardProgress">${initialDutyStatus.completed}/${initialDutyStatus.required} rated</small></button>
     </div>
 
     ${adminMode ? "" : `<dialog class="captainGuide" id="captainGuide" aria-labelledby="captainGuideTitle"><div class="captainGuide__sheet"><div class="captainGuide__head"><div><div class="small stepEyebrow">Captain match duty</div><div class="h1" id="captainGuideTitle">Rate the opposition</div></div><div class="captainGuide__mark" aria-hidden="true">C</div></div><ol class="captainGuide__list"><li><div><b>Save as you go</b><br><span class="small">You can submit some players now and return later for the rest. Use 1–10 in 0.5 steps.</span></div></li><li><div><b>Record goals and assists</b><br><span class="small">When all players are entered, their goals must add up to the opponent score.</span></div></li><li><div><b>Use Boost with care</b><br><span class="small">Boost one FC Card attribute from PAC, SHO, PAS, DRI, DEF or PHY. Choose −3× to +3×, or leave it as None.</span></div></li></ol><p class="captainGuide__note"><b>Finish before your next availability response.</b> Red players are pending; yellow players have details entered but still need a valid rating. An admin can complete any remaining players.</p><button class="btn primary" id="closeCaptainGuide" type="button" style="width:100%;margin-top:16px">Got it</button></div></dialog>`}
@@ -647,7 +648,8 @@ export async function renderCaptainPage(root, query) {
         }
 
         <div id="rosterTableWrap" style="overflow:auto; border-radius:14px; border:1px solid rgba(11,18,32,0.10)">
-          <table style="width:100%; border-collapse:collapse; min-width:780px">
+          <table class="ratingDesktopTable">
+            <colgroup><col class="ratingColPlayer"/><col class="ratingColTeam"/><col class="ratingColStat"/><col class="ratingColStat"/><col class="ratingColStat"/><col class="ratingColActions"/></colgroup>
             <thead>
               <tr style="background: rgba(11,18,32,0.04)">
                 <th style="text-align:left; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Player</th>
@@ -655,7 +657,7 @@ export async function renderCaptainPage(root, query) {
                 <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Rating</th>
                 <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Goals</th>
                 <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Assists</th>
-                <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Remove</th>
+                <th style="text-align:center; padding:10px; font-size:12px; color:rgba(11,18,32,0.72)">Boost / update</th>
               </tr>
             </thead>
             <tbody id="body"></tbody>
@@ -778,6 +780,7 @@ export async function renderCaptainPage(root, query) {
     if (!launcher || !progress) return;
     const duty = ratingDutyStatus();
     launcher.classList.toggle("isComplete", duty.complete);
+    launcher.classList.toggle("isDue", !adminMode && hasStarted && !duty.complete);
     const label = launcher.querySelector("span");
     if (label) label.textContent = duty.complete ? "Review rating wizard" : "Open rating wizard";
     progress.textContent = `${duty.completed}/${duty.required} rated`;
@@ -1054,7 +1057,7 @@ export async function renderCaptainPage(root, query) {
     const hasValidRating = clampHalfRating(ratingRaw, 1, 10) != null;
     const hasOtherEntry = String(d.goals ?? "").trim() !== "" || String(d.assists ?? "").trim() !== "" || String(d.boostAttribute || "").trim() !== "";
     if (hasValidRating || ratingCoverage.has(String(playerName || "").trim().toLowerCase())) {
-      return { className: "", label: "Rated", tone: "complete" };
+      return { className: "ratingProgress--complete", label: "Rated", tone: "complete" };
     }
     if (ratingRaw || hasOtherEntry) return { className: "ratingProgress--inProgress", label: "In progress", tone: "inProgress" };
     return { className: "ratingProgress--pending", label: "Pending", tone: "pending" };
@@ -1068,7 +1071,7 @@ export async function renderCaptainPage(root, query) {
     root.querySelectorAll("[data-rating-progress]").forEach(el => {
       if (decodeURIComponent(el.getAttribute("data-rating-progress") || "") !== playerName) return;
       const progress = ratingProgress(playerName);
-      el.classList.remove("ratingProgress--pending", "ratingProgress--inProgress");
+      el.classList.remove("ratingProgress--pending", "ratingProgress--inProgress", "ratingProgress--complete");
       if (progress.className) el.classList.add(progress.className);
       const badge = el.querySelector("[data-rating-progress-badge]");
       if (badge) {
@@ -1155,29 +1158,23 @@ export async function renderCaptainPage(root, query) {
         const d = drafts[p] || {};
         const progress = ratingProgress(p, canEdit);
         const ratingCell = canEdit
-          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
           : `<span class="small muted">—</span>`;
         const goalsCell = canEdit
-          ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
           : `<span class="small muted">—</span>`;
         const assistsCell = canEdit
-          ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
           : `<span class="small muted">—</span>`;
         return `
           <tr class="${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""} style="border-top:1px solid rgba(11,18,32,0.06)">
-            <td style="padding:10px; font-weight:950">${p}${progressBadge(progress)}</td>
-            <td style="padding:10px; text-align:center">
-              <div class="row" style="gap:8px; justify-content:center; flex-wrap:wrap">
-                <button class="btn good compactBtn" data-team="BLUE" data-p="${encodeURIComponent(p)}" ${tm==="BLUE"?"disabled":""}>${homeTeamName}</button>
-                <button class="btn warn compactBtn" data-team="ORANGE" data-p="${encodeURIComponent(p)}" ${tm==="ORANGE"?"disabled":""}>${awayTeamName}</button>
-              </div>
-            </td>
+            <td style="padding:10px; font-weight:950">${escapeHtml(p)}${progressBadge(progress)}</td>
+            <td style="padding:10px; text-align:center"><span class="ratingTeamBadge ratingTeamBadge--${tm === "ORANGE" ? "orange" : "blue"}">${visibleTeamName(tm)}</span></td>
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
             <td style="padding:10px; text-align:center">
-              ${boostControlHtml(p,canEdit)}
-              <button class="btn gray" data-remove="${encodeURIComponent(p)}" style="padding:8px 10px; border-radius:12px">Remove</button>
+              <div class="ratingTableActions">${boostControlHtml(p,canEdit)}<button class="ratingPlayerUpdate" type="button" data-player-actions="${encodeURIComponent(p)}" aria-label="Update ${escapeHtml(p)}">Update</button></div>
             </td>
           </tr>
         `;
@@ -1196,48 +1193,40 @@ export async function renderCaptainPage(root, query) {
         const progress = ratingProgress(p, canEdit);
 
         const ratingCell = canEdit
-          ? `<input class="input" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" style="width:110px; text-align:center" value="${d.rating ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const goalsCell = canEdit
-          ? `<input class="input" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.goals ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const assistsCell = canEdit
-          ? `<input class="input" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" style="width:90px; text-align:center" value="${d.assists ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
-        const moveBtn = isInternalCaptainView
-          ? `<button class="btn gray" data-move="${encodeURIComponent(p)}" data-move-to="${isOpponentPlayer(p) ? "MY" : "OPP"}" style="padding:6px 10px; border-radius:12px; font-size:12px">${isOpponentPlayer(p) ? "Move to my team" : "Move to opponent"}</button>`
+        const updateButton = isInternalCaptainView
+          ? `<button class="ratingPlayerUpdate" type="button" data-player-actions="${encodeURIComponent(p)}" aria-label="Update ${escapeHtml(p)}">Update</button>`
           : ``;
 
         return `
           <tr class="${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""} style="border-top:1px solid rgba(11,18,32,0.08)">
-            <td style="padding:10px">${p}${progressBadge(progress)}</td>
-            <td style="padding:10px; text-align:center">
-              ${isInternalCaptainView ? moveBtn : `<span class="badge" style="background:${tm === "ORANGE" ? "#f97316" : "#2563eb"}; color:#fff">${visibleTeamName(tm)}</span>`}
-            </td>
+            <td style="padding:10px">${escapeHtml(p)}${progressBadge(progress)}</td>
+            <td style="padding:10px; text-align:center"><span class="ratingTeamBadge ratingTeamBadge--${tm === "ORANGE" ? "orange" : "blue"}">${visibleTeamName(tm)}</span></td>
             <td style="padding:10px; text-align:center">${ratingCell}</td>
             <td style="padding:10px; text-align:center">${goalsCell}</td>
             <td style="padding:10px; text-align:center">${assistsCell}</td>
-            <td style="padding:10px; text-align:center">${boostControlHtml(p,canEdit)}${type === "OPPONENT"
-              ? `<span class="small muted">Admin managed</span>`
-              : isInternalCaptainView
-                ? (isOpponentPlayer(p) ? `<button class="btn bad" data-no-show="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Didn't play</button>` : "")
-                : `<button class="btn bad" data-remove="${encodeURIComponent(p)}" style="padding:6px 10px; border-radius:12px">Remove</button>`}</td>
+            <td style="padding:10px; text-align:center"><div class="ratingTableActions">${boostControlHtml(p,canEdit)}${updateButton || `<span class="small muted">Admin managed</span>`}</div></td>
           </tr>
         `;
       }).join("") || `<tr><td colspan="6" class="small" style="padding:12px">No players in roster.</td></tr>`;
 
       bodyEl.innerHTML = tableHtml;
 
-      // Mobile: show sections (opponent to rate, my team collapsed)
+      // Mobile: the instruction above already identifies the opponent team, so
+      // keep rateable cards flat and reserve a container only for my team.
       mobileWrap.innerHTML = `
         ${isInternalCaptainView ? `
-          <div class="card" style="margin-top:10px">
-            <div style="font-weight:950">Opponent (rate these)</div>
-            <div style="margin-top:8px">${oppList.map(playerCardHtml).join("") || `<div class="small">No players.</div>`}</div>
-          </div>
+          ${oppList.map(playerCardHtml).join("") || `<div class="small" style="margin-top:8px">No opponent players.</div>`}
           <details class="card" style="margin-top:10px">
             <summary style="font-weight:950">My team (collapsed)</summary>
             <div style="margin-top:8px">${myList.map(playerCardHtml).join("") || `<div class="small">No players.</div>`}</div>
