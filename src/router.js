@@ -112,10 +112,9 @@ async function renderRoute() {
   // - Switch tabs: no rerender if same hash for that route
   // - Open match detail: hash changes (#/match?code=...) => rerender match page
   // Login page content depends on auth state, so always re-render it.
-  // Admin actions can happen on the captain page (score/ratings). Re-render the
-  // admin route whenever it is revisited so its cached DOM cannot show stale
-  // scores, lock controls, or deleted matches.
-  const shouldRender = firstTime || (fullHash !== lastHash) || route === "#/login" || route === "#/admin";
+  // Score/ratings actions happen on the captain page. Re-render match and admin
+  // whenever they are revisited so hidden route DOM cannot show stale results.
+  const shouldRender = firstTime || (fullHash !== lastHash) || route === "#/login" || route === "#/admin" || route === "#/match";
   LAST_HASH_BY_ROUTE[route] = fullHash;
 
   if (!shouldRender) return;

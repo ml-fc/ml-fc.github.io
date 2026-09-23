@@ -100,8 +100,8 @@ export const API = {
   captainRemoveNoShow: (code, playerName) => apiPost({ action: "captain_remove_no_show", code, playerName }),
   captainSubmitScore: (code, mode, a, b, scope = "CAPTAIN") => apiPost({ action: "captain_submit_score", code, mode, scoreA: a, scoreB: b, scope }),
   adminSubmitScore: (code, mode, a, b) => apiPost({ action: "admin_submit_score", code, mode, scoreA: a, scoreB: b }),
-  captainSubmitRatingsBatch: (code, rows, scope = "CAPTAIN") => apiPost({ action: "captain_submit_ratings_batch", code, rows, scope }),
-  adminSubmitRatingsBatch: (code, rows) => apiPost({ action: "admin_submit_ratings_batch", code, rows }),
+  captainSubmitRatingsBatch: (code, rows, scope = "CAPTAIN", ratingsVersion = "") => apiPost({ action: "captain_submit_ratings_batch", code, rows, scope, ratingsVersion }),
+  adminSubmitRatingsBatch: (code, rows, ratingsVersion = "") => apiPost({ action: "admin_submit_ratings_batch", code, rows, ratingsVersion }),
 
     pushPublicKey: () => apiGet({ action: "push_public_key" }),
   pushSubscribe: (subscription, userAgent) =>

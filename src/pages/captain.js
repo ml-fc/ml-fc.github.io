@@ -331,6 +331,7 @@ export async function renderCaptainPage(root, query) {
   }
 
   const m = data.match;
+  let ratingsVersion = String(data.ratingsVersion || "");
   const type = safeUpper(m.type);
   const homeTeamName = escapeHtml(type === "INTERNAL" ? String(m.teamHomeName || "Blue") : "MLFC");
   const awayTeamName = escapeHtml(type === "INTERNAL" ? String(m.teamAwayName || "Orange") : "Opponent");
@@ -488,15 +489,14 @@ export async function renderCaptainPage(root, query) {
   const responseList = (players, label, tone) => players.length
     ? players.map(player => `<div class="captainAvailability__player"><span>${escapeHtml(player)}</span><small class="is-${tone}">${label}</small></div>`).join("")
     : `<div class="captainAvailability__empty">None</div>`;
-  // A match may contain submissions from both captains and an admin. Prefill
-  // only the current user's own draft; showing somebody else's latest values
-  // makes a resubmission look like it belongs to the current user.
-  const currentActor = captain.toLowerCase();
-  (data.ratings || []).filter(r => String(r.givenBy || "").trim().toLowerCase() === currentActor)
+  // Ratings and match events are shared match data. Prefill the most recently
+  // saved value regardless of whether it came from a captain or an admin so
+  // every editor starts from the same visible result.
+  (data.ratings || [])
     .slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
     .forEach(r => { const p = String(r.playerName||"").trim(); if (p) ratingMap[p] = String(r.rating ?? ""); });
   const eventMap = {};
-  (data.events || []).filter(e => String(e.givenBy || "").trim().toLowerCase() === currentActor)
+  (data.events || [])
     .slice().sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")))
     .forEach(e => {
       const p = String(e.playerName||"").trim();
@@ -512,7 +512,10 @@ export async function renderCaptainPage(root, query) {
     if (drafts[p].assists == null || drafts[p].assists === "") drafts[p].assists = eventMap[p]?.assists ?? "";
   });
   const localRatingsDraft = lsGet(ratingsDraftKey(code, captain));
-  if (localRatingsDraft?.drafts && typeof localRatingsDraft.drafts === "object") {
+  const latestServerEdit = Math.max(0, ...[...(data.ratings || []), ...(data.events || [])]
+    .map(row => Date.parse(String(row.timestamp || "")))
+    .filter(Number.isFinite));
+  if (localRatingsDraft?.drafts && typeof localRatingsDraft.drafts === "object" && Number(localRatingsDraft.ts || 0) > latestServerEdit) {
     roster.forEach(p => {
       if (!localRatingsDraft.drafts[p]) return;
       drafts[p] = { ...drafts[p], ...localRatingsDraft.drafts[p] };
@@ -980,7 +983,7 @@ export async function renderCaptainPage(root, query) {
         m.scoreHome = String(out.scoreHome ?? m.scoreHome ?? "");
         m.scoreAway = String(out.scoreAway ?? m.scoreAway ?? "");
 
-        msg.textContent = "Submitted ✅";
+        msg.textContent = "";
         toastSuccess(Number(out.potmNotified || 0) > 0
           ? `Score submitted. Voting opened and ${Number(out.potmNotified)} players notified.`
           : "Opponent score submitted.");
@@ -1013,7 +1016,7 @@ export async function renderCaptainPage(root, query) {
         m.scoreHome = String(out.scoreHome ?? a);
         m.scoreAway = String(out.scoreAway ?? b);
 
-        msg.textContent = "Submitted ✅";
+        msg.textContent = "";
         toastSuccess(Number(out.potmNotified || 0) > 0
           ? `Score submitted. Voting opened and ${Number(out.potmNotified)} players notified.`
           : "Score submitted.");
@@ -1686,31 +1689,39 @@ export async function renderCaptainPage(root, query) {
         }
 
         const out = adminMode
-          ? await API.adminSubmitRatingsBatch(code, rows)
-          : await API.captainSubmitRatingsBatch(code, rows, "CAPTAIN");
+          ? await API.adminSubmitRatingsBatch(code, rows, ratingsVersion)
+          : await API.captainSubmitRatingsBatch(code, rows, "CAPTAIN", ratingsVersion);
         if (!out.ok) {
           msg.textContent = out.error || "Failed";
           toastError(out.error || "Submit failed");
           return;
         }
+        ratingsVersion = String(out.ratingsVersion || ratingsVersion);
         rows.forEach(row => ratingCoverage.set(String(row.playerName || "").trim().toLowerCase(), true));
         renderRows();
         updateWizardProgress();
 
         try {
+          localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
+          localStorage.removeItem(`mlfc_admin_manage_cache_v3:${code}`);
+          localStorage.removeItem(`mlfc_next_match_cache_v1:${captain.toLowerCase()}`);
           const seasonId = String(m.seasonId || "");
-          if (seasonId) localStorage.removeItem(`mlfc_leaderboard_v2:${seasonId}`);
+          if (seasonId) {
+            localStorage.removeItem(`mlfc_leaderboard_v2:${seasonId}`);
+            localStorage.removeItem(`mlfc_open_matches_cache_v2:${seasonId}`);
+            localStorage.removeItem(`mlfc_past_matches_cache_v2:${seasonId}`);
+            localStorage.removeItem(`mlfc_admin_matches_cache_v3:${seasonId}`);
+          }
         } catch {}
 
-        msg.textContent = "Submitted ✅";
+        msg.textContent = "";
         try { localStorage.removeItem(ratingsDraftKey(code, captain)); } catch {}
         const indicator = root.querySelector("#ratingsDraftState");
         if (indicator) {
           indicator.textContent = `Saved ${rows.length} player rating${rows.length === 1 ? "" : "s"}`;
           indicator.classList.remove("isDirty");
         }
-        toastSuccess(`${rows.length} player rating${rows.length === 1 ? "" : "s"} saved.`);
-        toastInfo("Leaderboard cache cleared. Open Leaderboard and tap Refresh.");
+        toastSuccess(`${rows.length} player rating${rows.length === 1 ? "" : "s"}, goals and assists saved.`);
       } catch (e) {
         msg.textContent = "Failed";
         toastError(e?.message || "Submit failed");

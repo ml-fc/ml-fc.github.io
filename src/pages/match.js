@@ -1146,12 +1146,21 @@ function wireNextMatchLinks(host) {
 function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
+  const weeklyTeam = String(document.body.dataset.weeklyTeam || "");
+  const weeklyThemeMark = `
+    <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `Team of the Week: ${weeklyTeam}` : "Team of the Week")}">
+      <span class="nextMatch__themeCrest" aria-hidden="true"></span>
+      <span><small>Team of the Week</small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
+    </div>`;
   if (!match) {
     const result = data?.latestResult;
     host.innerHTML = `
       ${potmVoteBannerHtml(data?.potmVote)}
       <section class="nextMatch nextMatch--empty${result ? " nextMatch--withResult" : ""}" aria-labelledby="nextMatchTitle">
-        <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
+        <header class="nextMatch__head">
+          <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
+          <div class="nextMatch__aside">${weeklyThemeMark}</div>
+        </header>
         <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
         ${result ? `<div class="nextMatch__lastResult">
           <span class="nextMatch__lastLabel">Last result</span>
@@ -1180,7 +1189,6 @@ function renderNextMatchDashboard(host, data) {
   const statusBlocksAvailability = ["INJURED", "INACTIVE"].includes(playerStatus);
   const showResponse = canRespond && !hasAvailabilityResponse && (!action || action.type === "RESPOND");
   const result = data?.latestResult;
-  const weeklyTeam = String(document.body.dataset.weeklyTeam || "");
 
   host.innerHTML = `
     ${potmVoteBannerHtml(data?.potmVote)}
@@ -1193,10 +1201,7 @@ function renderNextMatchDashboard(host, data) {
           <p>${escapeHtml(formatHumanDateTime(match.date, match.time))} <span aria-hidden="true">·</span> ${escapeHtml(match.type)}</p>
         </div>
         <div class="nextMatch__aside">
-          <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `Team of the Week: ${weeklyTeam}` : "Team of the Week")}">
-            <span class="nextMatch__themeCrest" aria-hidden="true"></span>
-            <span><small>Team of the Week</small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
-          </div>
+          ${weeklyThemeMark}
           <div class="nextMatch__countdown" data-next-countdown aria-live="off">${escapeHtml(countdownLabel(match))}</div>
         </div>
       </header>
