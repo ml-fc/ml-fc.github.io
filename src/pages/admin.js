@@ -403,12 +403,6 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.fillRect(left,top,width,height);
   context.fillStyle="#226936";
   for(let i=0;i<10;i+=2) context.fillRect(left,top+i*height/10,width,height/10);
-  if (teams.length > 1) {
-    context.save();context.globalAlpha=.13;
-    context.fillStyle=teams[1].color;context.fillRect(left,top,width,height/2);
-    context.fillStyle=teams[0].color;context.fillRect(left,top+height/2,width,height/2);
-    context.restore();
-  }
   if (weeklyCrest) {
     const crestSize=Math.min(width*.58,height*.52);
     context.save();context.globalAlpha=.1;
@@ -422,9 +416,9 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.strokeRect(left+width*.32,top,width*.36,50);
   context.strokeRect(left+width*.32,top+height-50,width*.36,50);
   context.textAlign="center";
+  context.fillStyle=weeklyTheme?.accent||"#72d7fa";context.font="900 24px Arial";
+  context.fillText(teams.map(team=>team.name).join(" VS ").toUpperCase(),540,345,900);
   for(const team of teams) {
-    context.fillStyle=team.color;context.font="900 24px Arial";
-    context.fillText(`${team.name} · ${team.players.length} · ${team.upper?'↓':'↑'} attacks`,540,team.upper?345:1460);
     const defaults=defaultPositions(team.players);
     team.players.forEach((name)=>{
         const position=positions[name]||defaults[name]||{positionX:50,positionY:50};

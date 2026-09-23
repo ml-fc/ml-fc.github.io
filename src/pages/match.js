@@ -260,7 +260,7 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
 
   return `<section class="digitalTeam digitalTeam--shared" aria-label="Digital team sheet">
     <header class="digitalTeam__head digitalTeam__head--shared">
-      ${teams.map((team) => `<div class="digitalTeam__team digitalTeam__team--${team.tone}"><span>${team.upper ? "↓" : "↑"} attacks</span><strong>${escapeHtml(team.name)}</strong><b>${team.rows.length}</b></div>`).join("")}
+      <div class="digitalTeam__team" style="grid-column:1/-1;text-align:center;padding-right:14px"><span>Match teams</span><strong>${teams.map(team => escapeHtml(team.name)).join(" <span aria-hidden=\"true\">vs</span> ")}</strong><b>${total}</b></div>
       <span class="srOnly">${total} players</span>
     </header>
     <div class="digitalTeam__pitch digitalTeam__pitch--positioned digitalTeam__pitch--shared"><span class="digitalTeam__centre" aria-hidden="true"></span>
@@ -351,20 +351,14 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
     { name: homeName, rows: homeRows || [], captain: captains[0], upper: false, color: "#72d7fa" },
     { name: awayName, rows: awayRows || [], captain: captains[1], upper: true, color: "#ff9c55" },
   ].filter(team => team.rows.length);
-  if (teams.length > 1) {
-    context.save(); context.globalAlpha = .13;
-    context.fillStyle = teams[1].color; context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height / 2);
-    context.fillStyle = teams[0].color; context.fillRect(pitch.x, pitch.y + pitch.height / 2, pitch.width, pitch.height / 2);
-    context.restore();
-  }
   const portraits = new Map(await Promise.all(teams.flatMap(team => team.rows).map(async row => [row.playerName, await loadCanvasImage(row.photoUrl)])));
+  context.fillStyle = theme?.accent || "#72d7fa";
+  context.font = "900 22px Arial";
+  context.textAlign = "center";
+  context.fillText(teams.map(team => team.name).join(" VS ").toUpperCase(), 540, 172, 970);
   for (const team of teams) {
     const players = team.rows.map(row => String(row.playerName || "").trim()).filter(Boolean);
     const defaults = defaultPositions(players);
-    context.fillStyle = team.color;
-    context.font = "900 22px Arial";
-    context.textAlign = "center";
-    context.fillText(`${team.name.toUpperCase()} · ${players.length} · ${team.upper ? "↓" : "↑"} ATTACKS`, 540, team.upper ? 172 : 1294);
     for (const row of team.rows) {
       const name = String(row.playerName || "").trim();
       if (!name) continue;
