@@ -161,12 +161,16 @@ async function captainTeamImageFile(match, when, team, positions) {
   canvas.height = 1350;
   const context = canvas.getContext("2d");
   const weeklyTheme = getActiveWeeklyTheme();
+  const teamKey = safeUpper(team.team);
+  const teamPalette = teamKey === "ORANGE"
+    ? { background:"#351304", panel:"#8a3205", accent:"#fb923c", player:"#f97316", playerText:"#fff7ed" }
+    : { background:"#071b3d", panel:"#123d7a", accent:"#60a5fa", player:"#2563eb", playerText:"#eff6ff" };
   const background = context.createLinearGradient(0, 0, 0, canvas.height);
-  background.addColorStop(0, weeklyTheme?.background || "#07111e");
-  background.addColorStop(1, weeklyTheme?.panel2 || "#0b3444");
+  background.addColorStop(0, teamPalette.background);
+  background.addColorStop(1, teamPalette.panel);
   context.fillStyle = background;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = weeklyTheme?.accent || "#72d7fa";
+  context.fillStyle = teamPalette.accent;
   context.fillRect(0, 0, canvas.width, 18);
   context.fillStyle = "#fff";
   context.font = "900 34px Arial";
@@ -190,8 +194,8 @@ async function captainTeamImageFile(match, when, team, positions) {
   const pitch = { x: 55, y: 300, width: 970, height: 900 };
   const weeklyCrest = await loadCanvasImage(weeklyTheme?.crest);
   const grass = context.createLinearGradient(0, pitch.y, 0, pitch.y + pitch.height);
-  grass.addColorStop(0, "#126779");
-  grass.addColorStop(1, "#084155");
+  grass.addColorStop(0, "#25834b");
+  grass.addColorStop(1, "#105c32");
   context.fillStyle = grass;
   context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height);
   if (weeklyCrest) {
@@ -230,7 +234,7 @@ async function captainTeamImageFile(match, when, team, positions) {
     context.beginPath(); context.moveTo(x, goal.y); context.lineTo(x, goal.y + goal.height); context.stroke();
   }
 
-  context.fillStyle = weeklyTheme?.accent || "#72d7fa";
+  context.fillStyle = teamPalette.accent;
   context.font = "900 21px Arial";
   context.textAlign = "center";
   context.fillText("ATTACKING  ↑", pitch.x + pitch.width / 2, pitch.y - 17);
@@ -241,10 +245,15 @@ async function captainTeamImageFile(match, when, team, positions) {
     const position = resolved[player] || { positionX: 50, positionY: 50 };
     const x = pitch.x + 55 + Number(position.positionX) / 100 * (pitch.width - 110);
     const y = pitch.y + 65 + Number(position.positionY) / 100 * (pitch.height - 195);
-    context.fillStyle = player === team.captain ? "#ffe16a" : "#72d7fa";
+    context.fillStyle = teamPalette.player;
     context.beginPath();
     context.arc(x, y, 34, 0, Math.PI * 2);
     context.fill();
+    if (player === team.captain) {
+      context.strokeStyle = "#ffe16a";
+      context.lineWidth = 7;
+      context.stroke();
+    }
     const role = fieldPositionCode(position);
     if (role) {
       context.fillStyle = "#fff";
@@ -254,7 +263,7 @@ async function captainTeamImageFile(match, when, team, positions) {
       context.textAlign = "center";
       context.fillText(role, x - 25, y - 19);
     }
-    context.fillStyle = "#08283b";
+    context.fillStyle = teamPalette.playerText;
     context.font = "900 24px Arial";
     context.textAlign = "center";
     context.fillText(player === team.captain ? "C" : "•", x, y + 8);
