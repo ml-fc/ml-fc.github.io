@@ -7,7 +7,7 @@ import { cleanupCaches } from "../cache_cleanup.js";
 import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
 import { initials, loadCanvasImage } from "../ui/player_photo.js";
-import { EPL_THEMES } from "../themes.js";
+import { EPL_THEMES, getActiveWeeklyTheme } from "../themes.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -361,16 +361,17 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   if (!context) return null;
 
   context.scale(2, 2);
+  const weeklyTheme = getActiveWeeklyTheme();
   const gradient = context.createLinearGradient(0, 0, 1080, 1350);
-  gradient.addColorStop(0, "#061724");
-  gradient.addColorStop(1, "#0e3a52");
+  gradient.addColorStop(0, weeklyTheme?.background || "#061724");
+  gradient.addColorStop(1, weeklyTheme?.panel2 || "#0e3a52");
   context.fillStyle = gradient;
   context.fillRect(0, 0, 1080, balance ? 1710 : 1560);
   context.strokeStyle = "rgba(114,215,250,.25)";
   context.lineWidth = 3;
   context.beginPath(); context.arc(940, 250, 280, 0, Math.PI * 2); context.stroke();
 
-  context.fillStyle = "#72d7fa";
+  context.fillStyle = weeklyTheme?.accent || "#72d7fa";
   context.font = "900 24px Arial";
   context.fillText("MANOR LAKES FC · DIGITAL TEAM SHEET", 70, 80);
   context.fillStyle = "#ffffff";
@@ -380,6 +381,13 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.fillStyle = "#bed2dc";
   context.font = "700 25px Arial";
   context.fillText(when, 70, 300);
+  if (weeklyTheme) {
+    context.fillStyle = weeklyTheme.accent;
+    context.font = "900 18px Arial";
+    context.textAlign = "right";
+    context.fillText(`TEAM OF THE WEEK · ${weeklyTheme.name.toUpperCase()}`, 1010, 80);
+    context.textAlign = "left";
+  }
 
   const teams = [{ name: homeName, players: homePlayers, color: "#72d7fa", captain:captains[0], upper:false }];
   if (awayName) teams.push({ name: awayName, players: awayPlayers, color: "#ff9c55", captain:captains[1], upper:true });
@@ -405,18 +413,14 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
     context.fillStyle=team.color;context.font="900 24px Arial";
     context.fillText(`${team.name} · ${team.players.length} · ${team.upper?'↓':'↑'} attacks`,540,team.upper?345:1460);
     const defaults=defaultPositions(team.players);
-    const orderedPlayers=[...team.players].sort((a,b)=>(positions[b]||defaults[b]).positionY-(positions[a]||defaults[a]).positionY);
-    const rowCounts=formationRows(orderedPlayers).map(row=>row.length);
-    let rowOffset=0;
-    const halfHeight=height/2;
-    const rowGap=(halfHeight-105)/Math.max(1,rowCounts.length-1);
-    rowCounts.forEach((rowCount,rowIndex)=>{
-      const row=orderedPlayers.slice(rowOffset,rowOffset+rowCount).sort((a,b)=>(positions[a]||defaults[a]).positionX-(positions[b]||defaults[b]).positionX);
-      rowOffset+=rowCount;
-      const y=team.upper ? top+55+rowIndex*rowGap : top+height-55-rowIndex*rowGap;
-      const playerGap=width/(row.length+1);
-      row.forEach((name,playerIndex)=>{
-        const x=left+playerGap*(playerIndex+1);
+    team.players.forEach((name)=>{
+        const position=positions[name]||defaults[name]||{positionX:50,positionY:50};
+        const rawX=Number(position.positionX),rawY=Number(position.positionY);
+        const positionX=Math.max(7,Math.min(93,Number.isFinite(rawX)?rawX:50));
+        const positionY=Math.max(7,Math.min(93,Number.isFinite(rawY)?rawY:50));
+        const x=left+width*(team.upper ? 100-positionX : positionX)/100;
+        const displayY=teams.length===1 ? 100-positionY : team.upper ? 50-positionY/2 : 50+positionY/2;
+        const y=top+height*displayY/100;
         const portrait=portraits.get(name);
         const markerRadius=29;
         context.save();
@@ -437,13 +441,12 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
           context.fillStyle="#132c3b";context.font="900 15px Arial";context.fillText("C",x+21,y-14);
         }
         context.font="900 20px Arial";
-        const maxLabelWidth=Math.min(170,playerGap-14);
+        const maxLabelWidth=170;
         const label=fitCanvasLabel(context,name,maxLabelWidth-18);
         const labelWidth=context.measureText(label).width+18;
         const labelY=y+markerRadius+7;
         context.fillStyle="rgba(2,19,30,.9)";context.fillRect(x-labelWidth/2,labelY,labelWidth,29);
         context.fillStyle="#fff";context.fillText(label,x,labelY+21);
-      });
     });
   }
   context.textAlign="left";

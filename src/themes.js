@@ -39,6 +39,16 @@ export function resolveEplTheme(selection = {}) {
     [theme.name, ...(theme.aliases || [])].some((candidate) => normalized(candidate) === name)) || null;
 }
 
+export function getActiveWeeklyTheme() {
+  const slug = String(document.body?.dataset?.weeklyTheme || "").trim();
+  if (slug) return resolveEplTheme({ themeSlug: slug });
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (cached?.enabled && cached?.theme) return resolveEplTheme(cached.theme);
+  } catch {}
+  return null;
+}
+
 function clearWeeklyTheme() {
   const root = document.documentElement;
   THEME_PROPERTIES.forEach((property) => root.style.removeProperty(property));

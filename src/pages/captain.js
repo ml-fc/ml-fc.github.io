@@ -4,6 +4,7 @@ import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
 import { lsGet, lsSet } from "../storage.js";
 import { getCachedUser, refreshMe } from "../auth.js";
+import { getActiveWeeklyTheme } from "../themes.js";
 
 const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
@@ -96,12 +97,13 @@ async function captainTeamImageFile(match, when, team, positions) {
   canvas.width = 1080;
   canvas.height = 1350;
   const context = canvas.getContext("2d");
+  const weeklyTheme = getActiveWeeklyTheme();
   const background = context.createLinearGradient(0, 0, 0, canvas.height);
-  background.addColorStop(0, "#07111e");
-  background.addColorStop(1, "#0b3444");
+  background.addColorStop(0, weeklyTheme?.background || "#07111e");
+  background.addColorStop(1, weeklyTheme?.panel2 || "#0b3444");
   context.fillStyle = background;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#72d7fa";
+  context.fillStyle = weeklyTheme?.accent || "#72d7fa";
   context.fillRect(0, 0, canvas.width, 18);
   context.fillStyle = "#fff";
   context.font = "900 34px Arial";
@@ -112,6 +114,13 @@ async function captainTeamImageFile(match, when, team, positions) {
   context.font = "700 25px Arial";
   context.fillText(String(match.title || "Match"), 60, 190);
   context.fillText(when, 60, 228);
+  if (weeklyTheme) {
+    context.fillStyle = weeklyTheme.accent;
+    context.font = "900 18px Arial";
+    context.textAlign = "right";
+    context.fillText(`TEAM OF THE WEEK · ${weeklyTheme.name.toUpperCase()}`, 1020, 76);
+    context.textAlign = "left";
+  }
 
   const pitch = { x: 55, y: 270, width: 970, height: 1000 };
   const grass = context.createLinearGradient(0, pitch.y, 0, pitch.y + pitch.height);

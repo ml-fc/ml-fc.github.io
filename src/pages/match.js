@@ -5,6 +5,7 @@ import { isReloadForMatchList, isReloadForMatchCode } from "../nav_state.js";
 import { getCachedUser } from "../auth.js";
 import { defaultPositions, fieldPositionCode } from "../ui/team_field.js";
 import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
+import { getActiveWeeklyTheme } from "../themes.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -240,10 +241,10 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const player = String(row.playerName || "").trim();
         if (!player) return "";
         const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-        const rawX = savedPositions[player]?.positionX;
-        const rawY = savedPositions[player]?.positionY;
+        const rawX = row.positionX == null || row.positionX === "" ? NaN : Number(row.positionX);
+        const rawY = row.positionY == null || row.positionY === "" ? NaN : Number(row.positionY);
         const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
-        const y = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
+        const y = 100 - Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
         return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
       }).join("")}
     </div>
@@ -271,8 +272,8 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
           const player = String(row.playerName || "").trim();
           if (!player) return "";
           const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-          const rawX = savedPositions[player]?.positionX;
-          const rawY = savedPositions[player]?.positionY;
+          const rawX = row.positionX == null || row.positionX === "" ? NaN : Number(row.positionX);
+          const rawY = row.positionY == null || row.positionY === "" ? NaN : Number(row.positionY);
           const positionX = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
           const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
           const x = team.upper ? 100 - positionX : positionX;
@@ -294,6 +295,107 @@ function publicTeamBalance(balance, homeName, awayName) {
       ${considerations.length ? `<small><b>Considerations:</b> ${considerations.map(escapeHtml).join(" · ")}</small>` : ""}
     </div>
   </div>`;
+}
+
+async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayName, awayRows, captains = []) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const theme = getActiveWeeklyTheme();
+  const background = context.createLinearGradient(0, 0, 1080, 1350);
+  background.addColorStop(0, theme?.background || "#061724");
+  background.addColorStop(1, theme?.panel2 || "#0e3a52");
+  context.fillStyle = background;
+  context.fillRect(0, 0, 1080, 1350);
+  context.fillStyle = theme?.accent || "#72d7fa";
+  context.font = "900 23px Arial";
+  context.fillText("MANOR LAKES FC · DIGITAL TEAM SHEET", 55, 55);
+  context.fillStyle = "#fff";
+  context.font = "900 42px Arial";
+  context.fillText(String(match.title || "MATCH").toUpperCase(), 55, 108, 970);
+  context.fillStyle = "#bed2dc";
+  context.font = "700 21px Arial";
+  context.fillText(when, 55, 144);
+  if (theme) {
+    context.fillStyle = theme.accent;
+    context.font = "900 17px Arial";
+    context.textAlign = "right";
+    context.fillText(`TEAM OF THE WEEK · ${theme.name.toUpperCase()}`, 1025, 55);
+    context.textAlign = "left";
+  }
+
+  const pitch = { x: 55, y: 180, width: 970, height: 1080 };
+  context.fillStyle = "#26713b";
+  context.fillRect(pitch.x, pitch.y, pitch.width, pitch.height);
+  context.fillStyle = "#226936";
+  for (let stripe = 0; stripe < 10; stripe += 2) context.fillRect(pitch.x, pitch.y + stripe * pitch.height / 10, pitch.width, pitch.height / 10);
+  context.strokeStyle = "rgba(255,255,255,.55)";
+  context.lineWidth = 3;
+  context.strokeRect(pitch.x, pitch.y, pitch.width, pitch.height);
+  context.beginPath(); context.moveTo(pitch.x, pitch.y + pitch.height / 2); context.lineTo(pitch.x + pitch.width, pitch.y + pitch.height / 2); context.stroke();
+  context.beginPath(); context.arc(540, pitch.y + pitch.height / 2, 72, 0, Math.PI * 2); context.stroke();
+  context.strokeRect(pitch.x + pitch.width * .32, pitch.y, pitch.width * .36, 52);
+  context.strokeRect(pitch.x + pitch.width * .32, pitch.y + pitch.height - 52, pitch.width * .36, 52);
+
+  const teams = [
+    { name: homeName, rows: homeRows || [], captain: captains[0], upper: false, color: "#72d7fa" },
+    { name: awayName, rows: awayRows || [], captain: captains[1], upper: true, color: "#ff9c55" },
+  ].filter(team => team.rows.length);
+  const portraits = new Map(await Promise.all(teams.flatMap(team => team.rows).map(async row => [row.playerName, await loadCanvasImage(row.photoUrl)])));
+  for (const team of teams) {
+    const players = team.rows.map(row => String(row.playerName || "").trim()).filter(Boolean);
+    const defaults = defaultPositions(players);
+    context.fillStyle = team.color;
+    context.font = "900 22px Arial";
+    context.textAlign = "center";
+    context.fillText(`${team.name.toUpperCase()} · ${players.length} · ${team.upper ? "↓" : "↑"} ATTACKS`, 540, team.upper ? 172 : 1294);
+    for (const row of team.rows) {
+      const name = String(row.playerName || "").trim();
+      if (!name) continue;
+      const fallback = defaults[name] || { positionX: 50, positionY: 50 };
+      const px = row.positionX == null || row.positionX === "" ? fallback.positionX : Number(row.positionX);
+      const py = row.positionY == null || row.positionY === "" ? fallback.positionY : Number(row.positionY);
+      const singleTeam = teams.length === 1;
+      const x = pitch.x + pitch.width * (team.upper ? 100 - Math.max(7, Math.min(93, px)) : Math.max(7, Math.min(93, px))) / 100;
+      const displayY = singleTeam ? 100 - Math.max(7, Math.min(93, py)) : team.upper ? 50 - Math.max(7, Math.min(93, py)) / 2 : 50 + Math.max(7, Math.min(93, py)) / 2;
+      const y = pitch.y + pitch.height * displayY / 100;
+      const portrait = portraits.get(row.playerName);
+      context.save(); context.beginPath(); context.arc(x, y, 30, 0, Math.PI * 2); context.clip();
+      if (portrait) {
+        const scale = Math.max(60 / portrait.width, 60 / portrait.height);
+        context.drawImage(portrait, x - portrait.width * scale / 2, y - portrait.height * scale / 2, portrait.width * scale, portrait.height * scale);
+      } else { context.fillStyle = team.color; context.fillRect(x - 30, y - 30, 60, 60); }
+      context.restore();
+      context.strokeStyle = "#fff"; context.lineWidth = 3; context.beginPath(); context.arc(x, y, 30, 0, Math.PI * 2); context.stroke();
+      if (name === team.captain) { context.fillStyle = "#ffe16a"; context.beginPath(); context.arc(x + 22, y - 21, 12, 0, Math.PI * 2); context.fill(); context.fillStyle = "#132c3b"; context.font = "900 14px Arial"; context.fillText("C", x + 22, y - 16); }
+      context.font = "900 19px Arial";
+      const labelWidth = Math.min(190, Math.max(90, context.measureText(name).width + 18));
+      context.fillStyle = "rgba(2,19,30,.9)"; context.fillRect(x - labelWidth / 2, y + 36, labelWidth, 29);
+      context.fillStyle = "#fff"; context.fillText(name, x, y + 57, labelWidth - 12);
+    }
+  }
+  context.textAlign = "left";
+  context.fillStyle = "#bed2dc"; context.font = "700 18px Arial";
+  context.fillText("Shared from the public MLFC match page", 55, 1325);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  return blob ? new File([blob], `mlfc-team-sheet-${match.publicCode}.png`, { type: "image/png" }) : null;
+}
+
+async function sharePublicTeamSheet(match, when, homeName, homeRows, awayName, awayRows, captains) {
+  const file = await publicTeamSheetImageFile(match, when, homeName, homeRows, awayName, awayRows, captains);
+  if (!file) throw new Error("Could not create the team-sheet image.");
+  const text = `⚽ ${match.title}\n🗓️ ${when}\n\nView match: ${baseUrl()}#/match?code=${match.publicCode}`;
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: `${match.title} team sheet`, text, files: [file] });
+    return "image";
+  }
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return "download";
 }
 
 // Handle both normalized and Sheets Date-string formats
@@ -1726,7 +1828,7 @@ const cap = availabilityLimitForMatch(m);
     </div>` : ``}
 
     ${teamsSelected ? `<div class="card teamSheetCard">
-      <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><span class="badge">${homePlayers.length + awayPlayers.length} players</span></div>
+      <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="badge">${homePlayers.length + awayPlayers.length} players</span><button class="btn whatsappBtn" id="shareTeamSheet" type="button">Share team sheet</button></div></div>
       <div class="digitalTeamGrid digitalTeamGrid--single">
         ${awayPlayers.length
           ? publicSharedTeamSheet(teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, caps.captain1, caps.captain2)
@@ -1806,6 +1908,17 @@ const cap = availabilityLimitForMatch(m);
     } catch (error) {
       if (error?.name !== "AbortError") toastError(error?.message || "Could not prepare the match recap.");
     } finally { setDisabled(shareResult, false); }
+  };
+
+  const shareTeamSheet = detail.querySelector("#shareTeamSheet");
+  if (shareTeamSheet) shareTeamSheet.onclick = async () => {
+    setDisabled(shareTeamSheet, true, "Preparing…");
+    try {
+      const mode = await sharePublicTeamSheet(m, when, teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, [caps.captain1, caps.captain2]);
+      toastInfo(mode === "image" ? "Choose an app to share the team sheet." : "Team-sheet image downloaded. Attach it to your message.");
+    } catch (error) {
+      if (error?.name !== "AbortError") toastError(error?.message || "Could not share the team sheet.");
+    } finally { setDisabled(shareTeamSheet, false); }
   };
 
   const capBtn = detail.querySelector("#openCaptain");
