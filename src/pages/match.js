@@ -449,16 +449,16 @@ function openMatchSortKey(m) {
   return { type: "dt", v: Number.isNaN(dt) ? Number.MAX_SAFE_INTEGER : dt };
 }
 
-function isUpcomingFixture(match, referenceTime = Date.now()) {
-  const kickoff = openMatchSortKey(match).v;
+function isAvailableFixture(match) {
   const hasFinalScore = String(match?.scoreHome ?? "").trim() !== "" &&
     String(match?.scoreAway ?? "").trim() !== "";
-  return !hasFinalScore && kickoff !== Number.MAX_SAFE_INTEGER && kickoff >= referenceTime;
+  // Kickoff does not close availability; admins control it explicitly.
+  return String(match?.status || "OPEN").toUpperCase() === "OPEN" && !hasFinalScore;
 }
 
 // Find the next scheduled match.
 function getLatestOpenCode(openMatches) {
-  const list = (Array.isArray(openMatches) ? openMatches : []).filter((match) => isUpcomingFixture(match));
+  const list = (Array.isArray(openMatches) ? openMatches : []).filter((match) => isAvailableFixture(match));
   list.sort((a, b) => openMatchSortKey(a).v - openMatchSortKey(b).v);
   return list[0]?.publicCode || "";
 }
@@ -938,6 +938,8 @@ function countdownLabel(match) {
 
 function availabilityPresentation(availability) {
   const status = String(availability?.status || "NOT_RESPONDED").toUpperCase();
+  const blockedReason = String(availability?.blockedReason || "").trim();
+  if (blockedReason && status === "NOT_RESPONDED") return { label: "Ratings due", tone: "pending", detail: blockedReason };
   if (status === "YES") return { label: "Available", tone: "yes", detail: "You’re on the availability list." };
   if (status === "NO") return { label: "Not available", tone: "no", detail: "You’ve told the club you can’t play." };
   if (status === "WAITING") {
@@ -1475,7 +1477,7 @@ function renderMatchList(root, seasonId, openMatches) {
   list.style.display = "block";
   detail.style.display = "none";
 
-  const open = (openMatches || []).filter((match) => isUpcomingFixture(match)).sort((a, b) => {
+  const open = (openMatches || []).filter((match) => isAvailableFixture(match)).sort((a, b) => {
     const ak = openMatchSortKey(a);
     const bk = openMatchSortKey(b);
 
@@ -1510,7 +1512,7 @@ function renderMatchList(root, seasonId, openMatches) {
                 </div>
                 <div class="fixtureRow__title">${escapeHtml(m.title || "Match")}</div>
                 <div class="small fixtureRow__meta">${escapeHtml(formatHumanDateTime(m.date,m.time))} <span aria-hidden="true">·</span> ${escapeHtml(m.type)}</div>
-                ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${escapeHtml(formatResultLabel(m))}</b></div>` : `<div class="fixtureRow__status"><span aria-hidden="true">●</span> Availability open</div>`}
+                ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${escapeHtml(formatResultLabel(m))}</b></div>` : `<div class="fixtureRow__status"><span aria-hidden="true">●</span> ${Number(m.availabilityLocked) === 1 || String(m.availabilityLocked).toUpperCase() === "TRUE" ? "Availability closed" : "Availability open"}</div>`}
               </div>
               <button class="btn primary fixtureRow__open" data-open="${escapeHtml(m.publicCode)}" aria-label="View ${escapeHtml(m.title || "match")}">View match</button>
             </article>

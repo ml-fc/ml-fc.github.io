@@ -11,11 +11,13 @@ const LS_CAPTAIN_ROSTER_PREFIX = "mlfc_captain_roster_v1:"; // + code + captain
 const LS_CAPTAIN_TEAMS_PREFIX = "mlfc_captain_teams_v1:";   // + code
 const LS_CAPTAIN_RATINGS_DRAFT_PREFIX = "mlfc_captain_ratings_draft_v1:";
 const LS_CAPTAIN_FIELD_DRAFT_PREFIX = "mlfc_captain_field_draft_v1:";
+const LS_CAPTAIN_GUIDE_PREFIX = "mlfc_captain_guide_seen_v1:";
 
 function rosterKey(code, captain){ return `${LS_CAPTAIN_ROSTER_PREFIX}${code}:${captain.toLowerCase()}`; }
 function teamsKey(code){ return `${LS_CAPTAIN_TEAMS_PREFIX}${code}`; }
 function ratingsDraftKey(code, actor){ return `${LS_CAPTAIN_RATINGS_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
 function fieldDraftKey(code, actor){ return `${LS_CAPTAIN_FIELD_DRAFT_PREFIX}${code}:${actor.toLowerCase()}`; }
+function captainGuideKey(code, actor){ return `${LS_CAPTAIN_GUIDE_PREFIX}${code}:${actor.toLowerCase()}`; }
 
 function setDisabled(btn, disabled, busyText) {
   if (!btn) return;
@@ -419,10 +421,22 @@ export async function renderCaptainPage(root, query) {
       .tinyBtn { padding: 6px 8px !important; border-radius: 10px !important; font-size: 12px !important; }
       .pill { display:inline-block; padding: 4px 10px; border-radius:999px; background: rgba(11,18,32,0.06); font-weight:950; }
       .inlineNote { margin-top:6px; }
+      .captainHeading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .captainInfoButton { width:42px; height:42px; flex:0 0 42px; border:1px solid rgba(11,18,32,.13); border-radius:50%; background:#fff; color:#0b4961; font:950 20px/1 Georgia,serif; box-shadow:0 5px 16px rgba(11,73,97,.12); cursor:pointer; }
+      .captainInfoButton:focus-visible { outline:3px solid #72d7fa; outline-offset:3px; }
+      .captainGuide { border:0; padding:0; width:min(92vw,560px); border-radius:24px; color:#10232d; box-shadow:0 24px 80px rgba(2,14,22,.35); }
+      .captainGuide::backdrop { background:rgba(2,14,22,.68); backdrop-filter:blur(3px); }
+      .captainGuide__sheet { padding:24px; background:linear-gradient(145deg,#f7fcfe 0%,#eaf7fb 100%); }
+      .captainGuide__head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+      .captainGuide__mark { display:grid; place-items:center; width:52px; height:52px; border-radius:16px; background:#0b4961; color:#ffe16a; font:950 25px/1 Georgia,serif; transform:rotate(-3deg); }
+      .captainGuide__list { display:grid; gap:10px; margin:20px 0; padding:0; list-style:none; counter-reset:duty; }
+      .captainGuide__list li { counter-increment:duty; display:grid; grid-template-columns:32px 1fr; gap:10px; align-items:start; padding:12px; border-radius:14px; background:rgba(255,255,255,.72); }
+      .captainGuide__list li::before { content:counter(duty); display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:#0b4961; color:#fff; font-weight:900; }
+      .captainGuide__note { padding:12px 14px; border-left:4px solid #f0b429; background:#fff8dc; border-radius:4px 12px 12px 4px; }
     </style>
 
     <div class="card">
-      <div class="h1">${m.title}</div>
+      <div class="captainHeading"><div class="h1">${m.title}</div>${adminMode ? "" : `<button class="captainInfoButton" id="openCaptainGuide" type="button" aria-label="How captain ratings and boosts work" aria-haspopup="dialog">i</button>`}</div>
       <div class="row">
         <span class="badge">${m.type}</span>
         <span class="badge">${m.status}</span>
@@ -437,6 +451,8 @@ export async function renderCaptainPage(root, query) {
         <span data-step-dot="1">1 <b>Score</b></span><span data-step-dot="2">2 <b>Roster</b></span><span data-step-dot="3">3 <b>Ratings</b></span>
       </div>
     </div>
+
+    ${adminMode ? "" : `<dialog class="captainGuide" id="captainGuide" aria-labelledby="captainGuideTitle"><div class="captainGuide__sheet"><div class="captainGuide__head"><div><div class="small stepEyebrow">Captain match duty</div><div class="h1" id="captainGuideTitle">Rate the full opposition</div></div><div class="captainGuide__mark" aria-hidden="true">C</div></div><ol class="captainGuide__list"><li><div><b>Rate every required player</b><br><span class="small">Use 1–10 in 0.5 steps. For internal games, rate the other team—not your own.</span></div></li><li><div><b>Record goals and assists</b><br><span class="small">The player goals must add up to the opponent score.</span></div></li><li><div><b>Use Boost with care</b><br><span class="small">Boost one FC Card attribute from PAC, SHO, PAS, DRI, DEF or PHY. Choose −3× to +3×, or leave it as None.</span></div></li></ol><p class="captainGuide__note"><b>Finish before your next availability response.</b> Your availability is paused until you or an admin has completed all required ratings for this match.</p><button class="btn primary" id="closeCaptainGuide" type="button" style="width:100%;margin-top:16px">Got it</button></div></dialog>`}
 
     <div class="card"><div class="h1">Team positions</div><div class="small inlineNote">You can update your team’s formation from the moment you are assigned captain.</div><div id="captainField"></div>${adminMode ? "" : `<div class="field" style="margin-top:12px"><label class="field__label" for="captainShareMessage">Captain’s message (optional)</label><textarea id="captainShareMessage" class="input" rows="3" maxlength="500" placeholder="Add a message for the team…"></textarea></div>`}<div class="row" style="gap:10px; flex-wrap:wrap"><button class="btn primary" id="saveField">Save positions</button>${adminMode ? "" : `<button class="btn whatsappBtn" id="shareCaptainTeam" type="button">Share my team PNG</button>`}</div></div>
     <div class="card" id="stepScore">
@@ -549,6 +565,21 @@ export async function renderCaptainPage(root, query) {
       </div>
     </div>
   `;
+
+  if (!adminMode) {
+    const guide = root.querySelector("#captainGuide");
+    const openGuide = () => {
+      if (guide && !guide.open) guide.showModal();
+    };
+    root.querySelector("#openCaptainGuide")?.addEventListener("click", openGuide);
+    root.querySelector("#closeCaptainGuide")?.addEventListener("click", () => guide?.close());
+    guide?.addEventListener("click", (event) => { if (event.target === guide) guide.close(); });
+    const guideKey = captainGuideKey(code, captain);
+    if (!lsGet(guideKey)) {
+      lsSet(guideKey, { shownAt: Date.now() });
+      openGuide();
+    }
+  }
 
   const ownTeams = type === "INTERNAL" ? (adminMode ? ["BLUE","ORANGE"] : [captainTeam]) : ["MLFC"];
   const fieldGroups = (type === "INTERNAL" ? ["BLUE","ORANGE"] : ["MLFC"]).map(team => ({team, label:team === "BLUE" ? String(m.teamHomeName || "Blue") : team === "ORANGE" ? String(m.teamAwayName || "Orange") : "MLFC", players:(data.teams || []).filter(r => r.team === team).map(r => r.playerName), captain:team === "ORANGE" ? capt.captain2 : capt.captain1}));

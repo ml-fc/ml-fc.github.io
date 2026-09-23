@@ -2329,7 +2329,7 @@ function bindListButtons(root, view) {
               captains chosen via checkbox in team lists,
               Publish teams + Share team sheet buttons after the field,
               Captain links remain available from the Manage screen
-   - No close availability anywhere
+   - Admins can close and reopen availability from Manage
    ======================= */
 
 function renderManageUI(root, data, routeToken, { fromCache, prevView } = { fromCache: true, prevView: "open" }) {
@@ -2379,6 +2379,13 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   function availabilityLimitEditorHtml() {
     return `
+      <div class="card">
+        <div class="h1">Availability</div>
+        <div class="small">${isEditLocked || availabilityLocked ? "Availability is closed." : "Availability stays open after kickoff until an admin closes it or scoring starts."}</div>
+        <div class="row" style="margin-top:12px; gap:10px">
+          <button class="btn ${availabilityLocked ? "primary" : "warn"}" id="${availabilityLocked ? "openAvailability" : "closeAvailability"}" type="button" ${isEditLocked ? "disabled" : ""}>${availabilityLocked ? "Reopen availability" : "Close availability"}</button>
+        </div>
+      </div>
       <details class="card">
         <summary style="font-weight:950">Availability limit</summary>
 
