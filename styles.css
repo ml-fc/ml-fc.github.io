@@ -2660,56 +2660,70 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .fcPlayerCard svg{display:block;width:100%;height:auto;overflow:visible}
 .leaderCardWrap .fcPlayerCard{width:min(100%,360px)}
 
-/* Team-field editor: readable bench tags and a persistent editing tray. */
-.fieldWorkspace__head{flex-shrink:0;background:#f3f6f6}
-.fieldWorkspace__head [data-back]{margin-left:auto;min-height:44px}
-.fieldWorkspace__tools{flex-shrink:0}
-.fieldWorkspace__body{overflow:auto;align-items:start;padding-bottom:12px}
-.fieldRoster{min-height:140px;max-height:100%;border-radius:12px;border:1px solid #adc3cb}
-.fieldRoster__head{position:static;gap:6px;padding:12px;background:#e4edf1}
-.fieldRoster__head strong{display:flex;align-items:center;gap:8px;font-size:14px}
-.fieldRoster__head span{font-size:12px;line-height:1.4}
-.fieldRoster__count{display:inline-grid;place-items:center;min-width:24px;height:24px;border-radius:50%;background:#fff;color:#102c40}
-.fieldRoster__tags{display:flex;flex-wrap:wrap;gap:8px;padding:12px}
-.fieldRoster .fieldRoster__tag{display:inline-flex;align-items:center;gap:7px;width:auto;max-width:100%;min-height:44px;padding:10px 14px;border:1px solid #91b2bf;border-radius:24px;background:#fff;color:#102c40;font-size:14px;line-height:1.35;box-shadow:0 2px 0 #d8e4e9;white-space:normal;text-align:left;cursor:pointer}
-.fieldRoster__tag span:last-child{overflow-wrap:anywhere;min-width:0}
-.fieldRoster .fieldRoster__tag.isSelected{background:#fff0b5;border-color:#9b7300;box-shadow:0 0 0 2px #e7bf46}
-.fieldRoster__tag:focus-visible,.fieldPositionPicker select:focus-visible{outline:3px solid #136c9c;outline-offset:3px}
-.fieldRoster__empty{display:block;margin:0;padding:0 12px 14px}
-.pitchStage{min-height:1060px;grid-template-rows:30px 1000px 30px}
-.sharedPitch .playerPhoto--field{width:30px;height:30px;font-size:10px}
-.sharedPitch .fieldPlayer>small{position:absolute;top:23px;left:calc(50% + 5px);font-size:8px;padding:2px 3px}
-.sharedPitch .fieldPlayer{width:76px;min-height:48px}
-.sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:76px;font-size:11px;line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip;border:1px solid #ffffff80;border-radius:7px;padding:3px 5px;background:#102c40}
+/* Single-screen tactics board: roster and full pitch remain side by side. */
+.fieldDialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-width:1400px;overflow:hidden}
+.fieldWorkspace{height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;overflow:hidden}
+.fieldWorkspace__head{padding:8px 12px;flex-wrap:nowrap;gap:8px;background:#f3f6f6}
+.fieldWorkspace__head strong{font-size:19px;white-space:nowrap}
+.fieldWorkspace__head .small{flex:1;font-size:12px}
+.fieldWorkspace__head [data-back]{margin-left:auto}
+.fieldWorkspace__head .btn{min-height:40px;padding:8px 16px}
+.fieldWorkspace__tools{padding:0 12px 6px;gap:6px;flex-wrap:nowrap}
+.fieldWorkspace__tools .btn{min-height:32px;padding:5px 10px;font-size:11px}
+.fieldWorkspace__body{display:grid;grid-template-columns:minmax(130px,220px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);align-items:stretch;gap:10px;min-height:0;overflow:hidden;padding:0 12px}
+.fieldRoster{min-height:0;max-height:none;overflow:hidden;border-radius:8px;display:flex;flex-direction:column;background:#fff}
+.fieldRoster__head{position:static;display:block;padding:8px;font-size:13px;flex-shrink:0}
+.fieldRoster__head span{display:block;font-size:10px;margin-top:3px;line-height:1.3}
+.fieldRoster table{display:table;width:100%;table-layout:fixed;border-collapse:collapse;white-space:normal}
+.fieldRoster thead{display:table-header-group}
+.fieldRoster tbody{display:table-row-group}
+.fieldRoster tr{display:table-row;min-width:0;border:0}
+.fieldRoster th{color:#526976;background:#e4edf1;position:static;padding:4px 6px;font-size:10px}
+.fieldRoster th:last-child{width:30px}
+.fieldRoster td,.fieldRoster td:last-child{display:table-cell!important;padding:2px 4px;border-bottom:1px solid #e1e8ec}
+.fieldRoster .fieldRoster__tag{min-height:22px;width:100%;border:1px solid #b9ced8;border-radius:5px;background:#f0f6f8;color:#102c40;padding:3px 5px;font-size:11px;line-height:1.1;white-space:normal;overflow-wrap:anywhere;cursor:grab;touch-action:none}
+.fieldRoster .fieldRoster__tag.isSelected{background:#fff0b5;border-color:#ad8000}
+.fieldRoster__badge{color:#007eaf;font-size:15px}.fieldRoster__badge.isOrange{color:#ca5800}
+.fieldRoster__empty{display:block;padding:5px;margin:0;margin-top:auto;font-size:10px;line-height:1.2;text-align:center;background:#e4edf1}
+.pitchStage{display:grid;min-height:0;grid-template-rows:22px minmax(0,1fr) 22px;overflow:hidden}
+.sharedPitch{height:100%;min-height:0}
+.sharedPitch .fieldPlayer{width:72px;min-height:24px;gap:0;padding:0}
+.sharedPitch .playerPhoto--field{width:22px;height:22px;margin:0;font-size:8px;border-width:2px}
+.sharedPitch .fieldPlayer>span:not(.playerPhoto){font-size:10px;line-height:1.1;max-width:72px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;border:1px solid #65cce8;background:#102c40}
+.sharedPitch .fieldPlayer--orange>span:not(.playerPhoto){border-color:#ffa75b}
+.sharedPitch .fieldPlayer>small{position:absolute;top:12px;left:calc(50% + 8px);font-size:7px;padding:1px 2px}
 .sharedPitch .fieldPlayer.isSelected{z-index:5}
-.sharedPitch .fieldPlayer.isSelected>span:not(.playerPhoto){background:#fff0b5;color:#102c40;border-color:#e7bf46}
-.fieldWorkspace__foot{flex-shrink:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;background:#fff;margin-top:0;padding:12px 16px;box-shadow:0 -4px 16px #102c4012}
-.fieldWorkspace__foot .fieldActions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;min-height:0}
-.fieldWorkspace__foot .fieldActions strong{font-size:14px;overflow-wrap:anywhere}
-.fieldPositionPicker{display:grid;gap:4px;min-width:0;font-size:11px;font-weight:700}
-.fieldPositionPicker select{width:100%;min-height:44px;border:1px solid #adc3cb;border-radius:8px;padding:8px;background:#f3f6f6;color:#102c40;font:inherit;font-size:13px}
-.fieldWorkspace__foot [data-save]{grid-column:2;grid-row:2;align-self:end;min-height:44px;margin:0;white-space:nowrap}
+.sharedPitch .fieldPlayer.isSelected>span:not(.playerPhoto){background:#ffe16a;color:#102c40}
+.fieldWorkspace__foot{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;margin:0;padding:6px 12px;min-height:54px;border-top:1px solid #cad7dd;background:#f3f6f6}
+.fieldWorkspace__foot .fieldActions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;min-height:0;flex:1}
+.fieldActions strong{font-size:12px}
+.fieldWorkspace__foot .btn{min-height:30px;padding:5px 8px;font-size:11px}
+.fieldPositionPicker{display:grid;gap:2px;font-size:10px;width:150px;flex-shrink:0}
+.fieldPositionPicker select{width:100%;min-height:30px;border:1px solid #adc3cb;border-radius:5px;background:#fff;color:#102c40;font-size:11px}
 .fieldWorkspace__foot [data-field-status]:empty{display:none}
-.fieldWorkspace__foot [data-field-status]:not(:empty){grid-column:1/-1;max-width:none}
 @media(max-width:600px){
-  .fieldDialog{width:100vw;height:100dvh;max-width:none;border:0;border-radius:0}
-  .fieldWorkspace__head{padding:12px;gap:8px}
-  .fieldWorkspace__head strong{font-size:19px}
-  .fieldWorkspace__head .small{display:block;order:3;width:100%;font-size:12px;line-height:1.4}
-  .fieldWorkspace__head [data-back]{padding:8px 10px;font-size:12px}
-  .fieldWorkspace__tools{padding:0 12px 10px;gap:6px}
-  .fieldWorkspace__tools .btn{min-height:44px;font-size:12px}
-  .fieldWorkspace__tools .small{display:none}
-  .fieldWorkspace__body{display:flex;flex-direction:column;gap:12px;padding:0 10px 12px;overflow:auto;min-height:0}
-  .fieldRoster{width:100%;flex-shrink:0;min-height:120px;max-height:240px}
-  .fieldRoster__head{display:grid;grid-template-columns:1fr;padding:10px 12px}
-  .fieldRoster__tags{padding:10px 12px}
-  .pitchStage{width:100%;flex-shrink:0}
-  .sharedPitch .fieldPlayer{width:64px;min-height:48px;gap:2px}
-  .sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:64px;font-size:10px;line-height:1.2;white-space:normal;padding:3px 4px}
-  .sharedPitch .playerPhoto--field{width:30px;height:30px}
-  .sharedPitch .fieldPlayer>small{top:23px;font-size:8px}
-  .fieldWorkspace__foot{padding:10px 12px max(10px,env(safe-area-inset-bottom));gap:8px}
-  .fieldWorkspace__foot .fieldActions{min-width:0;gap:6px}
-  .fieldWorkspace__foot .btn{min-height:44px;padding:8px 10px}
+ .fieldDialog{width:100vw;height:100dvh;border:0;border-radius:0}
+ .fieldWorkspace__head{padding:6px;gap:6px}.fieldWorkspace__head strong{font-size:16px}.fieldWorkspace__head .small{display:none}
+ .fieldWorkspace__head .btn{min-height:36px;padding:6px 12px}
+ .fieldWorkspace__tools{padding:0 6px 4px;gap:4px}.fieldWorkspace__tools .small{display:none}.fieldWorkspace__tools .btn{font-size:10px;padding:5px 7px;min-height:30px}
+ .fieldWorkspace__body{grid-template-columns:100px minmax(0,1fr);gap:4px;padding:0 4px}
+ .fieldRoster__head{padding:5px;font-size:12px}.fieldRoster th{padding:3px;font-size:9px}.fieldRoster th:last-child{width:24px;padding-left:0;padding-right:0}.fieldRoster td,.fieldRoster td:last-child{padding:1px 2px}
+ .fieldRoster .fieldRoster__tag{font-size:10px;min-height:20px;padding:2px 3px}
+ .fieldRoster__badge{font-size:11px}.fieldRoster__empty{font-size:9px}
+ .pitchStage{grid-template-rows:20px minmax(0,1fr) 20px}.attackLane{font-size:9px;gap:3px}.attackLane b{font-size:15px}
+ .sharedPitch .fieldPlayer{width:46px;min-height:24px}
+ .sharedPitch .playerPhoto--field{width:18px;height:18px;font-size:7px}
+ .sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:46px;font-size:8px;padding:2px;line-height:1}
+ .sharedPitch .fieldPlayer>small{top:8px;left:calc(50% + 5px);font-size:6px}
+ .sharedPitch .fieldPlayer em{width:12px;height:12px;font-size:8px;left:calc(50% + 5px)}
+ .fieldWorkspace__foot{padding:5px 6px max(5px,env(safe-area-inset-bottom));gap:5px;min-height:60px}
+ .fieldWorkspace__foot .fieldActions{min-width:0;gap:4px}.fieldWorkspace__foot .fieldActions strong{font-size:11px;width:100%}
+ .fieldPositionPicker{width:115px}.fieldWorkspace__foot .btn{font-size:10px;padding:4px 6px;min-height:28px}
+}
+@media(max-height:740px){
+ .fieldRoster .fieldRoster__tag{min-height:16px;padding:1px 3px;font-size:9px}
+ .fieldRoster td,.fieldRoster td:last-child{padding:0 2px}
+ .sharedPitch .playerPhoto--field{display:none}
+ .sharedPitch .fieldPlayer>small{position:static;font-size:7px}
+ .sharedPitch .fieldPlayer{min-height:20px}
 }
