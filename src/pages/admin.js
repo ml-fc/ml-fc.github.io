@@ -17,6 +17,7 @@ const LS_ADMIN_MATCHES_PREFIX = "mlfc_admin_matches_cache_v3:"; // + seasonId =>
 const LS_MANAGE_CACHE_PREFIX = "mlfc_admin_manage_cache_v3:";   // + code => {ts, data}
 const LS_MATCH_DETAIL_PREFIX = "mlfc_match_detail_cache_v2:";   // shared with match page
 const LS_USERS_CACHE = "mlfc_admin_users_cache_v1"; // {ts, users}
+const USERS_CACHE_MAX_AGE_MS = 60 * 1000;
 const LS_SETUP_DRAFT_PREFIX = "mlfc_admin_setup_draft_v1:";
    // shared with match page
 
@@ -910,9 +911,14 @@ function installManageCommandScrollBehavior(manageArea) {
 
 async function getUsersCached(force = false) {
   const cached = lsGet(LS_USERS_CACHE);
-  if (!force && cached?.users) return cached.users;
+  const age = Date.now() - Number(cached?.ts || 0);
+  if (!force && Array.isArray(cached?.users) && age <= USERS_CACHE_MAX_AGE_MS) return cached.users;
   const res = await API.adminUsers();
-  if (!res?.ok) throw new Error(res?.error || "Failed to load users");
+  if (!res?.ok) {
+    // Keep the last roster usable when the admin is temporarily offline.
+    if (Array.isArray(cached?.users)) return cached.users;
+    throw new Error(res?.error || "Failed to load users");
+  }
   const users = res.users || [];
   lsSet(LS_USERS_CACHE, { ts: Date.now(), users });
   return users;
@@ -2640,15 +2646,29 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       });
     };
 
-    getUsersCached(false).then(users => {
+    let latestLoad = 0;
+    const loadPlayers = async (force = false) => {
+      const loadId = ++latestLoad;
+      const users = await getUsersCached(force);
+      if (loadId !== latestLoad) return;
       allPlayers = uniqueSorted((users || []).map(user => String(user?.name || user || "").trim()).filter(Boolean));
-      input.onfocus = () => renderList(input.value);
-      input.oninput = () => renderList(input.value);
-      input.onblur = () => setTimeout(hideList, 120);
-      input.onkeydown = event => {
-        if (event.key === "Escape") { hideList(); input.blur(); }
-      };
-    }).catch(() => {
+      if (document.activeElement === input) renderList(input.value);
+    };
+
+    input.onfocus = () => {
+      // Show the local list immediately, then replace it with the latest roster.
+      // This makes an account registered on another device searchable without
+      // requiring the admin to reload the page or clear app caches.
+      renderList(input.value);
+      loadPlayers(true).catch(() => {});
+    };
+    input.oninput = () => renderList(input.value);
+    input.onblur = () => setTimeout(hideList, 120);
+    input.onkeydown = event => {
+      if (event.key === "Escape") { hideList(); input.blur(); }
+    };
+
+    loadPlayers(false).catch(() => {
       addBtn.disabled = true;
       if (msgEl) msgEl.textContent = "Failed to load players list.";
     });

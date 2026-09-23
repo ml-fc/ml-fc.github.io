@@ -1,4 +1,4 @@
-import { mountTeamField, positionMap, positionRows, fieldPositionCode } from "../ui/team_field.js";
+import { FIELD_POSITIONS, mountTeamField, positionMap, positionRows, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/captain.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -375,7 +375,16 @@ export async function renderCaptainPage(root, query) {
   const postedPlayers = uniqueSorted(avail.map(a => a.playerName));
 
   const playersRes = await API.players();
-  const allPlayers = playersRes.ok ? uniqueSorted((playersRes.players || []).map(p => p.name)) : [];
+  let allPlayers = playersRes.ok ? uniqueSorted((playersRes.players || []).map(p => p.name)) : [];
+  let playersRefresh = null;
+  const refreshAllPlayers = async () => {
+    if (playersRefresh) return playersRefresh;
+    playersRefresh = API.players().then((result) => {
+      if (result?.ok) allPlayers = uniqueSorted((result.players || []).map(player => player.name));
+      return result;
+    }).finally(() => { playersRefresh = null; });
+    return playersRefresh;
+  };
 
   const cachedRoster = lsGet(rosterKey(code, captain));
   let roster = cachedRoster?.roster && Array.isArray(cachedRoster.roster)
@@ -463,6 +472,22 @@ export async function renderCaptainPage(root, query) {
   }
   const initialDutyStatus = ratingDutyStatus();
   const stepButtonsHtml = `<button type="button" data-step-dot="1">1 <b>Score</b></button><button type="button" data-step-dot="2">2 <b>Roster</b></button><button type="button" data-step-dot="3" ${ratingsEnabled && roster.length ? "" : "disabled"}>3 <b>Ratings</b></button>`;
+  const availabilityByPlayer = new Map(avail.map(item => [item.playerName.toLowerCase(), item.availability]));
+  const teamAvailabilityList = (team) => {
+    const players = roster.filter(player => safeUpper(teamMap[player]) === team && availabilityByPlayer.get(player.toLowerCase()) !== "NO");
+    if (!players.length) return `<div class="captainAvailability__empty">No players assigned.</div>`;
+    return players.map(player => {
+      const availability = availabilityByPlayer.get(player.toLowerCase()) || "";
+      const status = availability === "YES" ? "Available" : availability === "WAITING" ? "Waiting" : availability === "NO" ? "Unavailable" : "No response";
+      const tone = availability === "YES" ? "yes" : availability === "NO" ? "no" : availability === "WAITING" ? "waiting" : "none";
+      return `<div class="captainAvailability__player"><span>${escapeHtml(player)}</span><small class="is-${tone}">${status}</small></div>`;
+    }).join("");
+  };
+  const unavailablePlayers = avail.filter(item => item.availability === "NO").map(item => item.playerName);
+  const waitingPlayers = avail.filter(item => item.availability === "WAITING").map(item => item.playerName);
+  const responseList = (players, label, tone) => players.length
+    ? players.map(player => `<div class="captainAvailability__player"><span>${escapeHtml(player)}</span><small class="is-${tone}">${label}</small></div>`).join("")
+    : `<div class="captainAvailability__empty">None</div>`;
   // A match may contain submissions from both captains and an admin. Prefill
   // only the current user's own draft; showing somebody else's latest values
   // makes a resubmission look like it belongs to the current user.
@@ -552,11 +577,33 @@ export async function renderCaptainPage(root, query) {
       .ratingProgressBadge--inProgress { background:#fef9c3; color:#854d0e; }
       .ratingProgressBadge--complete { background:#dcfce7; color:#166534; }
       .captainRosterAdd { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; margin-top:10px; }
-      .captainRosterAdd.hasTeam .captainRosterAdd__player { grid-column:1/-1; }
+      .captainRosterAdd__player,.captainRosterAdd__options { grid-column:1/-1; }
+      .captainRosterAdd__options { display:flex; align-items:end; gap:8px; min-width:0; }
+      .captainRosterAdd__options .field { flex:1 1 120px; }
       .captainRosterAdd .field { min-width:0; }
       .captainRosterAdd__button { width:auto !important; min-width:92px; padding-inline:14px; white-space:nowrap; }
+      .captainPlayerResults { display:grid; gap:2px; max-height:190px; margin-top:4px; padding:4px; overflow:auto; border:1px solid #bdcbd4; border-radius:5px; background:#fff; box-shadow:0 8px 20px rgba(6,39,62,.12); }
+      .captainPlayerResults[hidden] { display:none; }
+      .captainPlayerResult { width:100%; min-height:38px; padding:7px 9px; border:0; border-radius:3px; color:#17344a; background:#f3f7f8; font-family:inherit; font-size:13px; font-weight:800; line-height:1.2; text-align:left; cursor:pointer; }
+      .captainPlayerResult:hover,.captainPlayerResult:focus-visible { background:#dff1f7; outline:2px solid #72d7fa; }
+      .captainPlayerResults__empty { padding:9px; color:#607783; font-size:12px; }
       .captainRosterSearch { margin-top:10px; }
       .captainRosterSearch .input { width:100%; }
+      .captainAvailability { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
+      .captainAvailability__group { min-width:0; padding:9px; border:1px solid #d4dfe4; border-radius:5px; background:#f7fafb; }
+      .captainAvailability__group--blue { border-top:4px solid #2563eb; }
+      .captainAvailability__group--orange { border-top:4px solid #f97316; }
+      .captainAvailability__group--unavailable { grid-column:1/-1; border-top:4px solid #c62828; }
+      .captainAvailability__group h3 { margin:0 0 7px; color:#17344a; font-size:12px; }
+      .captainAvailability__player { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid #e1e8ec; font-size:12px; font-weight:800; }
+      .captainAvailability__player span { min-width:0; overflow-wrap:anywhere; }
+      .captainAvailability__player small { flex:0 0 auto; padding:3px 5px; border-radius:3px; font-size:9px; font-weight:900; text-transform:uppercase; }
+      .captainAvailability__player small.is-yes { color:#12603d; background:#dcfce7; }
+      .captainAvailability__player small.is-no { color:#991b1b; background:#fee2e2; }
+      .captainAvailability__player small.is-waiting { color:#854d0e; background:#fef3c7; }
+      .captainAvailability__player small.is-none { color:#526976; background:#e4edf1; }
+      .captainAvailability__empty { color:#607783; font-size:11px; }
+      @media (max-width:420px) { .captainAvailability { grid-template-columns:1fr; } .captainAvailability__group--unavailable { grid-column:auto; } }
     </style>
 
     <div class="card captainCommand">
@@ -624,21 +671,26 @@ export async function renderCaptainPage(root, query) {
           ? "This is the saved MLFC team sheet. Ask an admin to change the selected squad."
           : "Roster starts from confirmed YES availability. Add more players if someone joins late."}</div>
 
-      <details class="card" style="margin-top:10px">
-        <summary style="font-weight:950">Players who posted availability (${postedPlayers.length})</summary>
-        <div class="small" style="margin-top:8px">
-          ${postedPlayers.map(p => `• ${p}`).join("<br/>") || "None"}
+      <details class="card" style="margin-top:10px" open>
+        <summary style="font-weight:950">Teams and availability (${postedPlayers.length} responses)</summary>
+        <div class="captainAvailability">
+          <section class="captainAvailability__group captainAvailability__group--blue"><h3>${type === "INTERNAL" ? homeTeamName : "MLFC"} team</h3><div data-team-availability="${type === "INTERNAL" ? "BLUE" : "MLFC"}">${teamAvailabilityList(type === "INTERNAL" ? "BLUE" : "MLFC")}</div></section>
+          ${type === "INTERNAL" ? `<section class="captainAvailability__group captainAvailability__group--orange"><h3>${awayTeamName} team</h3><div data-team-availability="ORANGE">${teamAvailabilityList("ORANGE")}</div></section>` : ""}
+          <section class="captainAvailability__group captainAvailability__group--unavailable"><h3>Unavailable (${unavailablePlayers.length})${waitingPlayers.length ? ` · Waiting (${waitingPlayers.length})` : ""}</h3>${responseList(unavailablePlayers, "Unavailable", "no")}${waitingPlayers.length ? responseList(waitingPlayers, "Waiting", "waiting") : ""}</section>
         </div>
       </details>
 
       <div class="captainRosterAdd${adminMode ? " hasTeam" : ""}">
         <div class="field captainRosterAdd__player">
           <label class="field__label" for="addFromAll">Player</label>
-          <input id="addFromAll" class="input" type="search" list="latePlayerOptions" autocomplete="off" aria-label="Search for a player to add" placeholder="Search player to add…" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""} />
-          <datalist id="latePlayerOptions">${(allPlayers||[]).filter(p => !roster.some(name => name.toLowerCase() === p.toLowerCase())).map(p => `<option value="${escapeHtml(p)}"></option>`).join("")}</datalist>
+          <input id="addFromAll" class="input" type="search" autocomplete="off" aria-label="Search for a player to add" aria-controls="addPlayerResults" aria-expanded="false" placeholder="Search player to add…" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""} />
+          <div id="addPlayerResults" class="captainPlayerResults" role="listbox" aria-label="Matching players" hidden></div>
         </div>
-        ${adminMode ? `<div class="field"><label class="field__label" for="addPlayerTeam">Team</label><select id="addPlayerTeam" class="input" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}><option value="BLUE">${homeTeamName}</option><option value="ORANGE">${awayTeamName}</option></select></div>` : ""}
-        <button class="btn gray captainRosterAdd__button" id="addBtn" type="button" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}>Add player</button>
+        <div class="captainRosterAdd__options">
+          ${adminMode ? `<div class="field"><label class="field__label" for="addPlayerTeam">Team</label><select id="addPlayerTeam" class="input" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}><option value="BLUE">${homeTeamName}</option><option value="ORANGE">${awayTeamName}</option></select></div>` : ""}
+          <div class="field"><label class="field__label" for="addPlayerPosition">Available position</label><select id="addPlayerPosition" class="input" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}></select></div>
+          <button class="btn gray captainRosterAdd__button" id="addBtn" type="button" ${type === "OPPONENT" || !hasStarted ? "disabled" : ""}>Add player</button>
+        </div>
       </div>
       ${hasStarted ? "" : `<div class="small inlineNote">Late-player additions unlock at kick-off.</div>`}
 
@@ -741,6 +793,21 @@ export async function renderCaptainPage(root, query) {
   });
   const captainFieldGroups = adminMode ? fieldGroups : fieldGroups.filter(group => ownTeams.includes(group.team));
   const fieldEditor = mountTeamField(root.querySelector("#captainField"), {groups:captainFieldGroups,positions:fieldPositions,photos:fieldPhotos,editableTeams:ownTeams,halfField:!adminMode,disabled:false,onSave:() => root.querySelector("#saveField").click(),onDraft:persistFieldDraft,onChange:() => { persistFieldDraft(); fieldEditor.status("Unsaved positions"); }});
+  const addPlayerTeamSelect = root.querySelector("#addPlayerTeam");
+  const addPlayerPositionSelect = root.querySelector("#addPlayerPosition");
+  const renderAvailableAddPositions = () => {
+    if (!addPlayerPositionSelect) return;
+    const selectedTeam = adminMode ? safeUpper(addPlayerTeamSelect?.value) : opponentTeam;
+    const team = fieldGroups.find(group => group.team === selectedTeam);
+    const occupied = new Set((team?.players || []).map(player => fieldPositionCode(fieldPositions[player])).filter(Boolean));
+    const available = FIELD_POSITIONS.filter(position => !occupied.has(position.code));
+    addPlayerPositionSelect.innerHTML = `<option value="">${available.length ? "Choose…" : "No positions available"}</option>${available.map(position => `<option value="${position.code}">${position.code} · ${position.name}</option>`).join("")}`;
+    addPlayerPositionSelect.disabled = type === "OPPONENT" || !hasStarted || !available.length;
+    const addButton = root.querySelector("#addBtn");
+    if (addButton) addButton.disabled = type === "OPPONENT" || !hasStarted || !available.length;
+  };
+  addPlayerTeamSelect?.addEventListener("change", renderAvailableAddPositions);
+  renderAvailableAddPositions();
   if (Array.isArray(restoredFieldDraft?.positions)) fieldEditor.status("Local draft restored");
   root.querySelector("#shareCaptainTeam")?.addEventListener("click", async () => {
     const team = fieldGroups.find(group => ownTeams.includes(group.team));
@@ -1330,6 +1397,50 @@ export async function renderCaptainPage(root, query) {
   renderRows();
   searchEl.addEventListener("input", renderRows);
 
+  const addPlayerInput = root.querySelector("#addFromAll");
+  const addPlayerResults = root.querySelector("#addPlayerResults");
+  const hideAddPlayerResults = () => {
+    if (!addPlayerResults || !addPlayerInput) return;
+    addPlayerResults.hidden = true;
+    addPlayerInput.setAttribute("aria-expanded", "false");
+  };
+  const renderAddPlayerResults = () => {
+    if (!addPlayerResults || !addPlayerInput || addPlayerInput.disabled) return hideAddPlayerResults();
+    const queryText = String(addPlayerInput.value || "").trim().toLowerCase();
+    if (!queryText) return hideAddPlayerResults();
+    const matches = allPlayers
+      .filter(player => player.toLowerCase().includes(queryText))
+      .filter(player => !roster.some(name => name.toLowerCase() === player.toLowerCase()))
+      .slice(0, 12);
+    addPlayerResults.innerHTML = matches.length
+      ? matches.map(player => `<button class="captainPlayerResult" type="button" role="option" data-add-player="${encodeURIComponent(player)}">${escapeHtml(player)}</button>`).join("")
+      : `<div class="captainPlayerResults__empty">No unassigned players found.</div>`;
+    addPlayerResults.hidden = false;
+    addPlayerInput.setAttribute("aria-expanded", "true");
+    addPlayerResults.querySelectorAll("[data-add-player]").forEach(button => {
+      const choosePlayer = () => {
+        addPlayerInput.value = decodeURIComponent(button.dataset.addPlayer || "");
+        hideAddPlayerResults();
+        addPlayerInput.focus();
+      };
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        choosePlayer();
+      });
+      button.addEventListener("click", choosePlayer);
+    });
+  };
+  addPlayerInput?.addEventListener("input", renderAddPlayerResults);
+  addPlayerInput?.addEventListener("focus", () => {
+    renderAddPlayerResults();
+    // Registration may have happened while this captain page was already open.
+    // Refresh in place so the new player becomes searchable without a reload.
+    refreshAllPlayers().then(() => {
+      if (document.activeElement === addPlayerInput) renderAddPlayerResults();
+    }).catch(() => {});
+  });
+  addPlayerInput?.addEventListener("blur", () => setTimeout(hideAddPlayerResults, 150));
+
   root.querySelector("#addBtn").onclick = async () => {
     if (type === "OPPONENT") return toastWarn("Assign players in match management and save setup first.");
     if (!hasStarted || (!adminMode && (!ratingsEnabled || !opponentTeam))) return toastWarn("Late players can be added after kick-off and score entry.");
@@ -1340,24 +1451,45 @@ export async function renderCaptainPage(root, query) {
     if (!registeredPlayer) return toastWarn("Choose a registered player from the search suggestions.");
     if (roster.some(x => x.toLowerCase() === p.toLowerCase())) return toastWarn("Already in roster.");
     const selectedTeam = adminMode ? safeUpper(root.querySelector("#addPlayerTeam")?.value) : opponentTeam;
+    const selectedPosition = FIELD_POSITIONS.find(position => position.code === safeUpper(addPlayerPositionSelect?.value));
+    if (!selectedPosition) return toastWarn("Choose an available field position.");
     const btn = root.querySelector("#addBtn");
     setDisabled(btn, true, "Adding…");
     try {
-      const out = await API.captainAddLateOpponent(code, registeredPlayer, selectedTeam);
+      const out = await API.captainAddLateOpponent(code, registeredPlayer, selectedTeam, selectedPosition.positionX, selectedPosition.positionY);
       if (!out.ok) throw new Error(out.error || "Could not add player");
       const playerName = String(out.playerName || registeredPlayer);
       roster = uniqueSorted([...roster, playerName]);
       teamMap[playerName] = String(out.team || selectedTeam);
+      fieldPositions[playerName] = {
+        positionX: Number(out.positionX ?? selectedPosition.positionX),
+        positionY: Number(out.positionY ?? selectedPosition.positionY)
+      };
+      const fieldGroup = fieldGroups.find(group => group.team === teamMap[playerName]);
+      if (fieldGroup && !fieldGroup.players.some(name => name.toLowerCase() === playerName.toLowerCase())) {
+        fieldGroup.players = uniqueSorted([...fieldGroup.players, playerName]);
+      }
       drafts[playerName] = drafts[playerName] || { rating: "", goals: "", assists: "" };
       saveRosterLocal();
       saveTeamsLocal();
+      if (ownTeams.includes(teamMap[playerName])) persistFieldDraft();
       sel.value = "";
+      addPlayerPositionSelect.value = "";
+      hideAddPlayerResults();
+      fieldEditor.refresh();
+      const availabilityGroup = root.querySelector(`[data-team-availability="${teamMap[playerName]}"]`);
+      if (availabilityGroup) availabilityGroup.innerHTML = teamAvailabilityList(teamMap[playerName]);
+      try {
+        localStorage.removeItem(`mlfc_match_detail_cache_v2:${code}`);
+        localStorage.removeItem(`mlfc_admin_manage_cache_v3:${code}`);
+      } catch {}
       renderRows();
       toastSuccess(`${playerName} added to ${visibleTeamName(teamMap[playerName])}.`);
     } catch (error) {
       toastError(error?.message || "Could not add player");
     } finally {
       setDisabled(btn, false, "Adding…");
+      renderAvailableAddPositions();
     }
   };
 

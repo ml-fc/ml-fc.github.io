@@ -1936,7 +1936,9 @@ body.hasCompactCaptainCommand .appbar { opacity:0; transform:translateY(-100%); 
 .captainCommand.isCompact .captainHeading .h1 { overflow:hidden; margin:0; font-size:16px; line-height:1.05; text-overflow:ellipsis; white-space:nowrap; }
 .captainCommand.isCompact .matchSteps { margin-top:7px; }
 .captainCommand.isCompact .matchSteps button { min-height:30px; padding:6px 8px; }
-.captainWizardLauncher { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; margin-top:14px; text-align:left; }
+.captainWizardLauncher { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; width:100%; margin-top:14px; text-align:center; }
+.captainWizardLauncher > span { grid-column:2; }
+.captainWizardLauncher > small { grid-column:3; justify-self:end; }
 .captainWizardLauncher.isDue { position:relative; isolation:isolate; }
 .captainWizardLauncher.isDue::after { content:""; position:absolute; inset:-5px; z-index:1; padding:3px; border-radius:inherit; pointer-events:none; background:conic-gradient(from var(--wizard-ring-angle),transparent 0deg 245deg,#72d7fa 274deg,#ffe16a 310deg,#fff4b3 334deg,transparent 360deg); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:wizardRingRun 1.75s linear infinite; filter:drop-shadow(0 0 4px rgba(255,225,106,.72)); }
 .captainWizardLauncher small { padding:4px 7px; border-radius:999px; color:#0b4961; background:#d9f3fb; font:900 10px/1 ui-monospace,monospace; white-space:nowrap; }

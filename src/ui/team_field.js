@@ -336,5 +336,8 @@ export function mountTeamField(root, options) {
   }
 
   draw();
-  return {status(message){pending=message;const el=root.querySelector('[data-field-status]');if(el)el.textContent=message;}};
+  return {
+    refresh(){draw();},
+    status(message){pending=message;const el=root.querySelector('[data-field-status]');if(el)el.textContent=message;}
+  };
 }
