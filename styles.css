@@ -2102,6 +2102,11 @@ details.card[open] > summary { margin-bottom: 14px; }
 }
 .manageCommand__title { margin: 5px 0 0; color: #fff; }
 .manageCommand__meta { margin-top: 4px; color: #b7c8d4; font-size: 12px; font-weight: 750; }
+.manageCommand__statusGroup {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 7px;
+}
 .manageCommand__state {
   display: inline-flex;
   align-items: center;
@@ -2113,6 +2118,12 @@ details.card[open] > summary { margin-bottom: 14px; }
   border: 1px solid rgba(110, 231, 255, .2);
   border-radius: 4px;
   font: 850 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+.manageCommand__availabilityBtn {
+  min-height: 32px;
+  padding: 7px 11px;
+  font: 900 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   text-transform: uppercase;
 }
 .statusDot { width: 8px; height: 8px; background: #46dc92; border-radius: 50%; box-shadow: 0 0 0 3px rgba(70, 220, 146, .14); }
@@ -2144,13 +2155,13 @@ details.card[open] > summary { margin-bottom: 14px; }
 @media (max-width: 819px) {
   .manageCommand { top: 70px; margin-inline: -4px; padding: 14px; }
   .manageCommand > .row { gap: 10px; }
-  .manageCommand__state { align-self: flex-start; }
+  .manageCommand__statusGroup { align-self: flex-start; }
   .manageCommand__actions .btn { flex: 1 1 145px; }
 }
 
 @media (max-width: 480px) {
   .manageCommand > .row { display: grid; }
-  .manageCommand__state { justify-self: start; }
+  .manageCommand__statusGroup { justify-self: start; }
 }
 
 /* The sticky match controller collapses once its full context has scrolled by. */
@@ -2204,6 +2215,14 @@ body.hasCompactMatchCommand .appbar {
   padding: 5px 7px;
   font-size: 9px;
   white-space: nowrap;
+}
+.manageCommand.isCompact .manageCommand__statusGroup {
+  flex: 0 0 auto;
+}
+.manageCommand.isCompact .manageCommand__availabilityBtn {
+  min-height: 27px;
+  padding: 5px 7px;
+  font-size: 9px;
 }
 .manageCommand.isCompact .statusDot {
   width: 6px;
@@ -2679,11 +2698,9 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .fieldRoster tbody{display:table-row-group}
 .fieldRoster tr{display:table-row;min-width:0;border:0}
 .fieldRoster th{color:#526976;background:#e4edf1;position:static;padding:4px 6px;font-size:10px}
-.fieldRoster th:last-child{width:30px}
 .fieldRoster td,.fieldRoster td:last-child{display:table-cell!important;padding:2px 4px;border-bottom:1px solid #e1e8ec}
 .fieldRoster .fieldRoster__tag{min-height:22px;width:100%;border:1px solid #b9ced8;border-radius:5px;background:#f0f6f8;color:#102c40;padding:3px 5px;font-size:11px;line-height:1.1;white-space:normal;overflow-wrap:anywhere;cursor:grab;touch-action:none}
 .fieldRoster .fieldRoster__tag.isSelected{background:#fff0b5;border-color:#ad8000}
-.fieldRoster__badge{color:#007eaf;font-size:15px}.fieldRoster__badge.isOrange{color:#ca5800}
 .fieldRoster__empty{display:block;padding:5px;margin:0;margin-top:auto;font-size:10px;line-height:1.2;text-align:center;background:#e4edf1}
 .pitchStage{display:grid;min-height:0;grid-template-rows:22px minmax(0,1fr) 22px;overflow:hidden}
 .sharedPitch{height:100%;min-height:0}
@@ -2694,29 +2711,30 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .sharedPitch .fieldPlayer>small{position:absolute;top:12px;left:calc(50% + 8px);font-size:7px;padding:1px 2px}
 .sharedPitch .fieldPlayer.isSelected{z-index:5}
 .sharedPitch .fieldPlayer.isSelected>span:not(.playerPhoto){background:#ffe16a;color:#102c40}
-.fieldWorkspace__foot{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;margin:0;padding:6px 12px;min-height:54px;border-top:1px solid #cad7dd;background:#f3f6f6}
+.fieldWorkspace__foot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:6px 8px;margin:0;padding:7px 12px 10px;min-height:88px;border-top:1px solid #cad7dd;background:#f3f6f6}
 .fieldWorkspace__foot .fieldActions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;min-height:0;flex:1}
 .fieldActions strong{font-size:12px}
 .fieldWorkspace__foot .btn{min-height:30px;padding:5px 8px;font-size:11px}
 .fieldPositionPicker{display:grid;gap:2px;font-size:10px;width:150px;flex-shrink:0}
 .fieldPositionPicker select{width:100%;min-height:30px;border:1px solid #adc3cb;border-radius:5px;background:#fff;color:#102c40;font-size:11px}
 .fieldWorkspace__foot [data-field-status]:empty{display:none}
+.fieldWorkspace__save{grid-column:1/-1;width:100%;min-height:44px!important;font-size:14px!important;font-weight:900}
 @media(max-width:600px){
  .fieldDialog{width:100vw;height:100dvh;border:0;border-radius:0}
  .fieldWorkspace__head{padding:6px;gap:6px}.fieldWorkspace__head strong{font-size:16px}.fieldWorkspace__head .small{display:none}
  .fieldWorkspace__head .btn{min-height:36px;padding:6px 12px}
  .fieldWorkspace__tools{padding:0 6px 4px;gap:4px}.fieldWorkspace__tools .small{display:none}.fieldWorkspace__tools .btn{font-size:10px;padding:5px 7px;min-height:30px}
  .fieldWorkspace__body{grid-template-columns:100px minmax(0,1fr);gap:4px;padding:0 4px}
- .fieldRoster__head{padding:5px;font-size:12px}.fieldRoster th{padding:3px;font-size:9px}.fieldRoster th:last-child{width:24px;padding-left:0;padding-right:0}.fieldRoster td,.fieldRoster td:last-child{padding:1px 2px}
+ .fieldRoster__head{padding:5px;font-size:12px}.fieldRoster th{padding:3px;font-size:9px}.fieldRoster td,.fieldRoster td:last-child{padding:1px 2px}
  .fieldRoster .fieldRoster__tag{font-size:10px;min-height:20px;padding:2px 3px}
- .fieldRoster__badge{font-size:11px}.fieldRoster__empty{font-size:9px}
+ .fieldRoster__empty{font-size:9px}
  .pitchStage{grid-template-rows:20px minmax(0,1fr) 20px}.attackLane{font-size:9px;gap:3px}.attackLane b{font-size:15px}
  .sharedPitch .fieldPlayer{width:46px;min-height:24px}
  .sharedPitch .playerPhoto--field{width:18px;height:18px;font-size:7px}
  .sharedPitch .fieldPlayer>span:not(.playerPhoto){max-width:46px;font-size:8px;padding:2px;line-height:1}
  .sharedPitch .fieldPlayer>small{top:8px;left:calc(50% + 5px);font-size:6px}
  .sharedPitch .fieldPlayer em{width:12px;height:12px;font-size:8px;left:calc(50% + 5px)}
- .fieldWorkspace__foot{padding:5px 6px max(5px,env(safe-area-inset-bottom));gap:5px;min-height:60px}
+ .fieldWorkspace__foot{grid-template-columns:minmax(0,1fr) 115px;padding:5px 6px max(6px,env(safe-area-inset-bottom));gap:5px;min-height:90px}
  .fieldWorkspace__foot .fieldActions{min-width:0;gap:4px}.fieldWorkspace__foot .fieldActions strong{font-size:11px;width:100%}
  .fieldPositionPicker{width:115px}.fieldWorkspace__foot .btn{font-size:10px;padding:4px 6px;min-height:28px}
 }

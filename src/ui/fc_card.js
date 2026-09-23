@@ -5,6 +5,16 @@ let sequence = 0;
 const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 const score = value => Math.max(0, Math.min(99, Number(value) || 50));
 
+function ratingChange(value, x, y, size = "stat") {
+  const change = Math.max(-99, Math.min(99, Math.round(Number(value) || 0)));
+  if (!change) return "";
+  const positive = change > 0;
+  const label = `${positive ? "+" : "−"}${Math.abs(change)}`;
+  const width = size === "overall" ? 46 : 36;
+  const height = size === "overall" ? 30 : 22;
+  return `<g transform="translate(${x} ${y})" role="img" aria-label="${positive ? "Up" : "Down"} ${Math.abs(change)}"><title>${positive ? "Increased" : "Decreased"} by ${Math.abs(change)}</title><rect width="${width}" height="${height}" rx="${height/2}" fill="${positive ? "#08783e" : "#b42318"}" stroke="#fff6c8" stroke-width="2"/><text x="${width/2}" y="${size === "overall" ? 21 : 16}" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif" font-size="${size === "overall" ? 17 : 14}" font-weight="900">${label}</text></g>`;
+}
+
 function playerStatusBadge(status) {
   if (status === "INJURED") return `<g aria-label="Injured"><title>Injured</title><circle r="31" fill="#fff" stroke="#d71920" stroke-width="5"/><g transform="rotate(-42)"><rect x="-21" y="-9" width="42" height="18" rx="7" fill="#d71920"/><rect x="-6" y="-9" width="12" height="18" fill="#fff"/><circle cx="-14" cy="0" r="2.2" fill="#fff"/><circle cx="14" cy="0" r="2.2" fill="#fff"/></g></g>`;
   if (status === "INACTIVE") return `<g aria-label="Inactive"><title>Inactive</title><circle r="31" fill="#f4f7f8" stroke="#52616b" stroke-width="5"/><rect x="-10" y="-14" width="7" height="28" rx="2" fill="#52616b"/><rect x="3" y="-14" width="7" height="28" rx="2" fill="#52616b"/></g>`;
@@ -16,8 +26,12 @@ export function fcCardSvg(card, name, photo = card.photoUrl) {
   const playerStatus = String(card.playerStatus || "ACTIVE").toUpperCase();
   const playerStatusLabel = ({ACTIVE:"Active",INJURED:"Injured",UNAVAILABLE:"Unavailable",INACTIVE:"Inactive"})[playerStatus] || "Active";
   const nameSize = Math.min(49, 760 / Math.max(14, String(name).length));
+  const latestChanges = card.latestChanges || {};
+  const changedRatings = [["OVR",latestChanges.overall],...STATS.map(stat => [stat,latestChanges.attributes?.[stat]])]
+    .map(([stat,value]) => [stat,Math.round(Number(value) || 0)]).filter(([,value]) => value);
+  const changeLabel = changedRatings.length ? ` · Latest changes ${changedRatings.map(([stat,value]) => `${stat} ${value > 0 ? "plus" : "minus"} ${Math.abs(value)}`).join(", ")}` : "";
   const lines = Array.from({length: 95}, (_, i) => `<path d="M${-550+i*14} 530 L${180+i*14} -30"/>`).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="750" viewBox="0 0 600 750" role="img" aria-label="${escape(name)} · ${score(card.overall)} OVR · ${escape(card.position || "CM")} · ${playerStatusLabel}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="750" viewBox="0 0 600 750" role="img" aria-label="${escape(name)} · ${score(card.overall)} OVR · ${escape(card.position || "CM")} · ${playerStatusLabel}${changeLabel}">
     <defs>
       <linearGradient id="${id}-gold" x2=".85" y2="1"><stop stop-color="#fff5b7"/><stop offset=".28" stop-color="#f6d86d"/><stop offset=".52" stop-color="#cf961e"/><stop offset=".73" stop-color="#ffe68d"/><stop offset="1" stop-color="#bb821c"/></linearGradient>
       <linearGradient id="${id}-panel" x2=".8" y2="1"><stop stop-color="#ffe99a"/><stop offset=".48" stop-color="#edc85d"/><stop offset="1" stop-color="#d4a039"/></linearGradient>
@@ -34,9 +48,10 @@ export function fcCardSvg(card, name, photo = card.photoUrl) {
       <path d="M24 480 H576" stroke="#fff3b7" stroke-width="4"/>
       <g fill="#302609" text-anchor="middle" font-family="'Arial Narrow',Arial,sans-serif">
         <text x="82" y="169" font-size="83" font-weight="900" letter-spacing="-5">${score(card.overall)}</text>
+        ${ratingChange(latestChanges.overall, 116, 116, "overall")}
         <text x="82" y="208" font-size="34" font-weight="800">${escape(card.position || "CM")}</text>
         <text x="300" y="537" font-size="${nameSize}" font-weight="800">${escape(name)}</text>
-        ${STATS.map((stat,i) => `<text x="${76+i*90}" y="583" font-size="26" font-weight="700">${stat}</text><text x="${76+i*90}" y="628" font-size="43" font-weight="800" letter-spacing="-1.5">${score(card.attributes?.[stat])}</text>`).join("")}
+        ${STATS.map((stat,i) => `<text x="${76+i*90}" y="583" font-size="26" font-weight="700">${stat}</text><text x="${76+i*90}" y="628" font-size="43" font-weight="800" letter-spacing="-1.5">${score(card.attributes?.[stat])}</text>${ratingChange(latestChanges.attributes?.[stat],58+i*90,637)}`).join("")}
         <text x="184" y="672" font-size="13" font-weight="700" letter-spacing="1">${escape(card.status || "LIVE")}</text>
         <text x="416" y="672" font-size="13" font-weight="700" letter-spacing="1">${Number(card.appearances) || 0} APPS</text>
         <path d="M277 648 H323 V674 L300 688 L277 674Z" fill="#302609"/>

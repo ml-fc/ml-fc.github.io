@@ -2379,13 +2379,6 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   function availabilityLimitEditorHtml() {
     return `
-      <div class="card">
-        <div class="h1">Availability</div>
-        <div class="small">${isEditLocked || availabilityLocked ? "Availability is closed." : "Availability stays open after kickoff until an admin closes it or scoring starts."}</div>
-        <div class="row" style="margin-top:12px; gap:10px">
-          <button class="btn ${availabilityLocked ? "primary" : "warn"}" id="${availabilityLocked ? "openAvailability" : "closeAvailability"}" type="button" ${isEditLocked ? "disabled" : ""}>${availabilityLocked ? "Reopen availability" : "Close availability"}</button>
-        </div>
-      </div>
       <details class="card">
         <summary style="font-weight:950">Availability limit</summary>
 
@@ -2471,7 +2464,10 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
           <div class="h1 manageCommand__title" id="manageMatchTitle">${safeTitle}</div>
           <div class="manageCommand__meta">${safeWhen}</div>
         </div>
-        <div class="manageCommand__state"><span class="statusDot" aria-hidden="true"></span>${phaseLabel}</div>
+        <div class="manageCommand__statusGroup">
+          <div class="manageCommand__state"><span class="statusDot" aria-hidden="true"></span>${phaseLabel}</div>
+          <button class="btn ${availabilityLocked ? "primary" : "warn"} manageCommand__availabilityBtn" id="${availabilityLocked ? "openAvailability" : "closeAvailability"}" type="button" aria-label="${availabilityLocked ? "Open availability" : "Close availability"}" ${isEditLocked ? "disabled" : ""}>${availabilityLocked ? "Open" : "Close"}</button>
+        </div>
       </div>
       <div class="manageCommand__actions">
         <button class="btn gray" id="backToAdminList">Back to matches</button>
@@ -2718,10 +2714,10 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       .filter(t => String(t.team || "").toUpperCase() === "MLFC")
       .map(t => String(t.playerName || "").trim())
     );
+    const savedOpponent = { squad: [...squad], captain: cap };
 
     // If no saved squad yet, default to all YES players (keeps old behavior simple)
     if (!squad.length && yesPlayers.length) squad = [...yesPlayers];
-    const savedOpponent = { squad: [...squad], captain: cap };
     const opponentDraft = lsGet(setupDraftKey(m.matchId));
     let opponentCaptain = cap;
     if (!isEditLocked && opponentDraft?.type === "OPPONENT") {
@@ -2759,7 +2755,15 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
-        onClear:() => { squad=[]; opponentCaptain=""; fieldPositions={}; updateOpponentDraft(); renderSquadLists(); },
+        onResetDraft:() => {
+          squad = [...savedOpponent.squad];
+          opponentCaptain = savedOpponent.captain;
+          fieldPositions = JSON.parse(savedPositions || "{}");
+          lsDel(setupDraftKey(m.matchId));
+          updateOpponentDraft();
+          renderSquadLists();
+          toastSuccess("Draft cleared. Saved setup restored.");
+        },
         onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); fieldPositions=randomGoalkeeperPositions(squad); updateOpponentDraft(); renderSquadLists(); },
         onChange:updateOpponentDraft,
         onDraft:updateOpponentDraft,
@@ -2853,7 +2857,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
     };
 
     // Close/re-open availability buttons (same behavior as internal)
-    const closeAvailabilityBtn = manageBody.querySelector("#closeAvailability");
+    const closeAvailabilityBtn = manageArea.querySelector("#closeAvailability");
     if (closeAvailabilityBtn) {
       closeAvailabilityBtn.onclick = async () => {
         if (!stillOnAdmin(routeToken)) return;
@@ -2873,7 +2877,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
         }
       };
     }
-    const openAvailabilityBtn = manageBody.querySelector("#openAvailability");
+    const openAvailabilityBtn = manageArea.querySelector("#openAvailability");
     if (openAvailabilityBtn) {
       openAvailabilityBtn.onclick = async () => {
         if (!stillOnAdmin(routeToken)) return;
@@ -3045,7 +3049,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
 
   wireAdminAvailabilityPicker();
 
-  const closeAvailabilityBtn = manageBody.querySelector("#closeAvailability");
+  const closeAvailabilityBtn = manageArea.querySelector("#closeAvailability");
   if (closeAvailabilityBtn) {
     closeAvailabilityBtn.onclick = async () => {
       if (!stillOnAdmin(routeToken)) return;
@@ -3072,7 +3076,7 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       }
     };
   }
- const openAvailabilityBtn = manageBody.querySelector("#openAvailability");
+ const openAvailabilityBtn = manageArea.querySelector("#openAvailability");
   if (openAvailabilityBtn) {
     openAvailabilityBtn.onclick = async () => {
       if (!stillOnAdmin(routeToken)) return;
@@ -3123,7 +3127,18 @@ function renderManageUI(root, data, routeToken, { fromCache, prevView } = { from
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
       positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,
       onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
-      onClear:() => manageBody.querySelector("#clearTeamSelections").click(),
+      onResetDraft:() => {
+        blue = [...savedInternal.blue];
+        orange = [...savedInternal.orange];
+        captainBlue = savedInternal.captainBlue;
+        captainOrange = savedInternal.captainOrange;
+        fieldPositions = JSON.parse(savedPositions || "{}");
+        autoBalanceReport = data.teamBalance || null;
+        lsDel(setupDraftKey(m.matchId));
+        updateInternalDraft();
+        renderAll();
+        toastSuccess("Draft cleared. Saved setup restored.");
+      },
       onChange:updateInternalDraft,
       onDraft:updateInternalDraft,
       onSave:saveInternalField,
