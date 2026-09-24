@@ -85,15 +85,18 @@ function renderTable(root, rows, sortMode, minimumMatches, searchQuery = "") {
   const body = root.querySelector("#lbBody");
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const visibleRows = (rows || []).filter(row => !normalizedQuery || String(row?.playerName || "").toLocaleLowerCase().includes(normalizedQuery));
+  // Awards describe the season leaders, so calculate them from the full
+  // qualified ladder rather than from the current search results.
+  const awardRows = (rows || []).filter(row => playerMatches(row) >= minimumMatches);
   const eligibleRows = visibleRows.filter(row => playerMatches(row) >= minimumMatches);
   const remainingRows = minimumMatches > 0 ? visibleRows.filter(row => playerMatches(row) < minimumMatches) : [];
   const sortedEligible = sortRows(eligibleRows, sortMode);
   const sortedRemaining = sortRows(remainingRows, sortMode);
 
   const cols = 6;
-  const maxGoals = Math.max(0, ...eligibleRows.map(x => Number(x.goals || 0)));
-  const maxAssists = Math.max(0, ...eligibleRows.map(x => Number(x.assists || 0)));
-  const ratedRows = eligibleRows.filter(x => Number(x.matchesRated || 0) > 0);
+  const maxGoals = Math.max(0, ...awardRows.map(x => Number(x.goals || 0)));
+  const maxAssists = Math.max(0, ...awardRows.map(x => Number(x.assists || 0)));
+  const ratedRows = awardRows.filter(x => Number(x.matchesRated || 0) > 0);
   const maxRating = Math.max(0, ...ratedRows.map(x => Number(x.avgRating || 0)));
   const playerRow = (x, rank, isEligible) => {
     const awards = [
