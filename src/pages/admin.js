@@ -204,12 +204,12 @@ function streamDeskHtml(match) {
   const live = status === "LIVE";
   const statusLabel = live ? "Live on MLFC" : status === "READY" ? "Ready to go live" : status === "ENDED" ? "Replay available" : "Not configured";
   const watchUrl = configured ? `https://www.youtube.com/watch?v=${videoId}` : "";
-  const embedUrl = configured ? `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0` : "";
+  const streamVersion = encodeURIComponent(String(match?.streamUpdatedAt || videoId));
+  const embedUrl = configured ? `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&mlfc=${streamVersion}` : "";
   return `<section class="streamDesk${live ? " is-live" : ""}" id="streamDesk" aria-labelledby="streamDeskTitle">
     <header class="streamDesk__head">
       <div class="streamDesk__signal"><span class="${live ? "liveSignal" : "streamStandbyDot"}" aria-hidden="true"></span><span>${live ? "LIVE" : "MATCH STREAM"}</span></div>
       <div><div class="stepEyebrow">Unlisted YouTube coverage</div><div class="h1" id="streamDeskTitle">${statusLabel}</div></div>
-      ${watchUrl ? `<a class="btn gray" href="${watchUrl}" target="_blank" rel="noopener noreferrer">Open YouTube</a>` : `<a class="btn gray" href="https://studio.youtube.com/" target="_blank" rel="noopener noreferrer">Open YouTube Studio</a>`}
     </header>
     ${configured ? `<div class="streamDesk__preview"><iframe src="${embedUrl}" title="YouTube stream preview" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : ""}
     <div class="streamDesk__body">
@@ -1416,7 +1416,7 @@ async function loadAdminMatch(code) {
   return participation?.ok ? { ...detail, potmAdminStatus: participation } : detail;
 }
 
-async function openManageView(root, code, routeToken, prevView, focus = "") {
+async function openManageView(root, code, routeToken, prevView) {
   const listArea = root.querySelector("#listArea");
   const manageArea = root.querySelector("#manageArea");
 
@@ -1444,7 +1444,7 @@ async function openManageView(root, code, routeToken, prevView, focus = "") {
   }
 
   lsSet(manageKey(code), { ts: now(), data: fresh });
-  renderManageUI(root, fresh, routeToken, { fromCache: false, prevView, focusStream: focus === "stream" });
+  renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
 }
 
 function bindTopNav(root, routeToken) {
@@ -2207,6 +2207,102 @@ async function openVotingManager(root, view, match) {
   });
 }
 
+function updateCachedStreamMatch(match, stream) {
+  const updated = {
+    ...match,
+    streamVideoId: String(stream?.videoId || ""),
+    streamStatus: String(stream?.status || "NONE"),
+    streamUpdatedAt: String(stream?.updatedAt || ""),
+  };
+  MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(updated.matchId) ? { ...item, ...updated } : item);
+  lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+  clearPublicMatchDetailCache(updated.publicCode);
+  clearManageCache(updated.publicCode);
+  return updated;
+}
+
+function wireStreamControls(container, match, onUpdated) {
+  const updateStream = async (command, button, busyText) => {
+    const input = container.querySelector("#youtubeStreamUrl");
+    const message = container.querySelector("#streamDeskMessage");
+    const youtubeUrl = command === "SAVE" ? String(input?.value || "").trim() : "";
+    if (command === "SAVE" && !youtubeUrl) {
+      if (message) message.textContent = "Paste the public YouTube watch link.";
+      input?.focus();
+      return;
+    }
+    setDisabled(button, true, busyText);
+    if (message) message.textContent = "";
+    try {
+      const result = await API.adminUpdateMatchStream(match.matchId, command, youtubeUrl);
+      if (!result?.ok) {
+        if (message) message.textContent = result?.error || "Could not update the stream.";
+        return toastError(result?.error || "Could not update the stream.");
+      }
+      const updated = updateCachedStreamMatch(match, result.stream || {});
+      const notice = command === "SAVE"
+        ? "Stream saved. The YouTube player is now on the match page."
+        : command === "START"
+          ? "Live on MLFC. The home banner is now visible."
+          : command === "STOP"
+            ? "Live display stopped. The player remains as a replay."
+            : "Stream removed from this match.";
+      toastSuccess(notice);
+      onUpdated(updated);
+    } catch (error) {
+      if (message) message.textContent = error?.message || "Could not update the stream.";
+      toastError(error?.message || "Could not update the stream.");
+    } finally {
+      setDisabled(button, false);
+    }
+  };
+
+  container.querySelector("#saveStream")?.addEventListener("click", (event) => updateStream("SAVE", event.currentTarget, "Saving…"));
+  container.querySelector("#startStream")?.addEventListener("click", (event) => updateStream("START", event.currentTarget, "Starting…"));
+  container.querySelector("#stopStream")?.addEventListener("click", (event) => {
+    if (!confirm("Stop showing this match as LIVE in MLFC?\n\nThis does not end the camera broadcast in YouTube. The video will remain on the match page as a replay.")) return;
+    updateStream("STOP", event.currentTarget, "Stopping…");
+  });
+  container.querySelector("#removeStream")?.addEventListener("click", (event) => {
+    if (!confirm("Remove the YouTube player from this match?\n\nThis does not delete the video from YouTube.")) return;
+    updateStream("REMOVE", event.currentTarget, "Removing…");
+  });
+}
+
+async function openStreamManager(root, view, match) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "adminStreamDialog";
+  dialog.setAttribute("aria-label", `Stream settings for ${match.title || "match"}`);
+  dialog.innerHTML = `<div class="adminStreamDialog__loading">Loading stream settings…</div>`;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+
+  let current = match;
+  try {
+    const fresh = await API.getPublicMatch(match.publicCode);
+    if (fresh?.ok && fresh.match?.matchId) current = { ...match, ...fresh.match };
+  } catch {}
+  if (!dialog.isConnected) return;
+
+  const render = (nextMatch) => {
+    current = nextMatch;
+    dialog.innerHTML = `<div class="adminStreamDialog__panel">
+      <header><div><div class="stepEyebrow">${escapeHtml(current.title || "Match")}</div><div class="h1">Stream controls</div></div><button class="adminStreamDialog__close" type="button" aria-label="Close stream controls">×</button></header>
+      ${streamDeskHtml(current)}
+    </div>`;
+    dialog.querySelector(".adminStreamDialog__close")?.addEventListener("click", () => dialog.close());
+    wireStreamControls(dialog, current, (updated) => {
+      render(updated);
+      if (currentHashPath() === "#/admin") renderListView(root, view);
+    });
+  };
+  render(current);
+}
+
 function bindListButtons(root, view) {
   root.querySelectorAll('[data-score]:not([disabled])').forEach(btn => {
     btn.onclick = () => {
@@ -2226,7 +2322,8 @@ function bindListButtons(root, view) {
   root.querySelectorAll("[data-stream]").forEach((btn) => {
     btn.onclick = () => {
       const code = btn.getAttribute("data-stream");
-      if (code) location.hash = `#/admin?view=manage&code=${encodeURIComponent(code)}&prev=${encodeURIComponent(view)}&focus=stream`;
+      const match = (MEM.matches || []).find((item) => String(item.publicCode) === String(code));
+      if (match) openStreamManager(root, view, match).catch(() => toastError("Could not open stream controls."));
     };
   });
 
@@ -2356,7 +2453,7 @@ function bindListButtons(root, view) {
    - Admins can close and reopen availability from Manage
    ======================= */
 
-function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "open", focusStream = false } = {}) {
+function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "open" } = {}) {
   if (!stillOnAdmin(routeToken)) return;
 
   const manageArea = root.querySelector("#manageArea");
@@ -2496,7 +2593,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       </div>
       <div class="manageCommand__actions">
         <button class="btn gray" id="backToAdminList">Back to matches</button>
-        <button class="btn ${streamState(m) === "LIVE" ? "streamLiveButton" : "gray"}" id="jumpToStream" type="button">${streamState(m) === "LIVE" ? "Live stream" : "Stream"}</button>
         <button class="btn primary" id="shareMatch">Share match link</button>
         ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
         ${hasBothScores && !locked ? `<button class="btn primary" id="lockRatingsTop">Complete & lock match</button>` : ""}
@@ -2504,7 +2600,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : !potmReady ? "Select Player of the Match before completing." : "Ready to complete once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
-    ${streamDeskHtml(m)}
     <details class="card">
       <summary style="font-weight:950">Team names</summary>
       <div class="formGrid formGrid--two" style="margin-top:12px">
@@ -2516,70 +2611,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
-
-  const streamSection = manageArea.querySelector("#streamDesk");
-  const scrollToStream = () => streamSection?.scrollIntoView({ behavior: "smooth", block: "start" });
-  manageArea.querySelector("#jumpToStream")?.addEventListener("click", scrollToStream);
-
-  const updateStream = async (command, button, busyText) => {
-    if (!stillOnAdmin(routeToken)) return;
-    const input = manageArea.querySelector("#youtubeStreamUrl");
-    const message = manageArea.querySelector("#streamDeskMessage");
-    const youtubeUrl = command === "SAVE" ? String(input?.value || "").trim() : "";
-    if (command === "SAVE" && !youtubeUrl) {
-      if (message) message.textContent = "Paste the public YouTube watch link.";
-      input?.focus();
-      return;
-    }
-    setDisabled(button, true, busyText);
-    if (message) message.textContent = "";
-    try {
-      const result = await API.adminUpdateMatchStream(m.matchId, command, youtubeUrl);
-      if (!result?.ok) {
-        if (message) message.textContent = result?.error || "Could not update the stream.";
-        return toastError(result?.error || "Could not update the stream.");
-      }
-      const next = result.stream || {};
-      Object.assign(m, {
-        streamVideoId: String(next.videoId || ""),
-        streamStatus: String(next.status || "NONE"),
-        streamUpdatedAt: String(next.updatedAt || ""),
-      });
-      MEM.matches = (MEM.matches || []).map((item) => String(item.matchId) === String(m.matchId) ? { ...item, ...m } : item);
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-      const nextData = { ...data, match: { ...m } };
-      lsSet(manageKey(m.publicCode), { ts: now(), data: nextData });
-
-      const notice = command === "SAVE"
-        ? "Stream saved. The YouTube player is now on the match page."
-        : command === "START"
-          ? "Live on MLFC. The home banner is now visible."
-          : command === "STOP"
-            ? "Live display stopped. The player remains as a replay."
-            : "Stream removed from this match.";
-      toastSuccess(notice);
-      renderManageUI(root, nextData, routeToken, { fromCache: false, prevView, focusStream: true });
-    } catch (error) {
-      if (message) message.textContent = error?.message || "Could not update the stream.";
-      toastError(error?.message || "Could not update the stream.");
-    } finally {
-      setDisabled(button, false);
-    }
-  };
-
-  manageArea.querySelector("#saveStream")?.addEventListener("click", (event) => updateStream("SAVE", event.currentTarget, "Saving…"));
-  manageArea.querySelector("#startStream")?.addEventListener("click", (event) => updateStream("START", event.currentTarget, "Starting…"));
-  manageArea.querySelector("#stopStream")?.addEventListener("click", (event) => {
-    if (!confirm("Stop showing this match as LIVE in MLFC?\n\nThis does not end the camera broadcast in YouTube. The video will remain on the match page as a replay.")) return;
-    updateStream("STOP", event.currentTarget, "Stopping…");
-  });
-  manageArea.querySelector("#removeStream")?.addEventListener("click", (event) => {
-    if (!confirm("Remove the YouTube player from this match?\n\nThis does not delete the video from YouTube.")) return;
-    updateStream("REMOVE", event.currentTarget, "Removing…");
-  });
-  if (focusStream) setTimeout(scrollToStream, 0);
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
     const button = manageArea.querySelector("#saveTeamNames");
@@ -3435,7 +3466,7 @@ export async function renderAdminPage(root, query) {
   // matches cache-first (no API)
   loadMatchesFromLocal(MEM.selectedSeasonId);
 
-  const { view, code, prev, focus } = getViewParams(query);
+  const { view, code, prev } = getViewParams(query);
 
   if (view === "users") {
     root.innerHTML = `
@@ -3525,7 +3556,7 @@ export async function renderAdminPage(root, query) {
   }
 
   if (view === "manage" && code) {
-    await openManageView(root, code, routeToken, prev || "open", focus);
+    await openManageView(root, code, routeToken, prev || "open");
   } else {
     renderListView(root, (view === "past") ? "past" : "open");
   }

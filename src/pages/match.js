@@ -273,18 +273,46 @@ function matchStreamPlayerHtml(match) {
     : status === "ENDED"
       ? "The completed broadcast remains available here as a replay."
       : "This player will switch to the live broadcast when the YouTube stream begins.";
-  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0`;
+  const streamVersion = encodeURIComponent(String(match?.streamUpdatedAt || videoId));
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&mlfc=${streamVersion}`;
   return `<section class="matchStreamPlayer${isLive ? " is-live" : ""}" aria-labelledby="matchStreamTitle">
     <header class="matchStreamPlayer__head">
       <div class="matchStreamPlayer__status"><span class="${isLive ? "liveSignal" : "streamStandbyDot"}" aria-hidden="true"></span>${isLive ? "LIVE" : status === "ENDED" ? "REPLAY" : "STREAM READY"}</div>
       <div><h1 id="matchStreamTitle">${heading}</h1><p>${detail}</p></div>
-      <a class="btn matchStreamPlayer__youtube" href="${watchUrl}" target="_blank" rel="noopener noreferrer">Open YouTube</a>
+      <button class="btn matchStreamPlayer__fullscreen" type="button" data-stream-fullscreen>Full screen</button>
     </header>
     <div class="matchStreamPlayer__frame">
-      <iframe src="${embedUrl}" title="${escapeHtml(match?.title || "MLFC match")} YouTube stream" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      <iframe src="${embedUrl}" title="${escapeHtml(match?.title || "MLFC match")} YouTube stream" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>
     </div>
   </section>`;
+}
+
+function wireMatchStreamFullscreen(host) {
+  const player = host?.querySelector?.(".matchStreamPlayer");
+  const frame = player?.querySelector?.(".matchStreamPlayer__frame");
+  const button = player?.querySelector?.("[data-stream-fullscreen]");
+  if (!frame || !button) return;
+
+  const requestFullscreen = frame.requestFullscreen?.bind(frame)
+    || frame.webkitRequestFullscreen?.bind(frame);
+  if (!requestFullscreen) {
+    button.hidden = true;
+    return;
+  }
+
+  button.addEventListener("click", async () => {
+    try {
+      await requestFullscreen();
+      try { await screen.orientation?.lock?.("landscape"); } catch {}
+      const unlockOrientation = () => {
+        try { screen.orientation?.unlock?.(); } catch {}
+      };
+      document.addEventListener("fullscreenchange", unlockOrientation, { once: true });
+      document.addEventListener("webkitfullscreenchange", unlockOrientation, { once: true });
+    } catch {
+      toastInfo("Use the full-screen icon inside the YouTube player on this phone.");
+    }
+  });
 }
 
 function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
@@ -1731,7 +1759,12 @@ async function renderMatchDetail(root, code) {
   } catch {}
 
   // Fetch match details only on browser reload of this match, or if not cached.
-  const shouldFetch = isReloadForMatchCode(code) || !data?.ok || !data?.potm || metaChanged || (!!data?.potm?.openedAt && !data?.potm?.closed);
+  // Stream links can be replaced without changing the match code. Always refresh
+  // streamed matches when they are opened so an old cached iframe cannot survive
+  // after Clubdesk saves a new YouTube video. This is navigation-driven only;
+  // there is no background polling.
+  const streamedMatch = Boolean(validYouTubeVideoId(data?.match?.streamVideoId));
+  const shouldFetch = isReloadForMatchCode(code) || !data?.ok || !data?.potm || metaChanged || streamedMatch || (!!data?.potm?.openedAt && !data?.potm?.closed);
 
   if (shouldFetch) {
     if (!data?.ok) {
@@ -1999,6 +2032,8 @@ const cap = availabilityLimitForMatch(m);
       </div>
     `}
   `;
+
+  wireMatchStreamFullscreen(detail);
 
   const shareBtn = detail.querySelector("#shareBtn");
   if (shareBtn) {
