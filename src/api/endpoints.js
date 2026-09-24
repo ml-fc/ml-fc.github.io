@@ -30,7 +30,7 @@ export const API = {
   publicMatchesMeta: (seasonId) => apiGet({ action: "public_matches_meta", seasonId }),
 
   // players / public match
-  registerPlayer: (name, phone) => apiPost({ action: "register_player", name, phone }),
+  registerPlayer: (name, phone, password) => apiPost({ action: "register_player", name, phone, password }),
   players: () => apiGet({ action: "players" }),
   getPublicMatch: (code) => apiGet({ action: "public_match", code }),
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),

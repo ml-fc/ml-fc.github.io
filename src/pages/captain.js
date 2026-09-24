@@ -328,7 +328,7 @@ export async function renderCaptainPage(root, query) {
 
   const data = await API.getPublicMatch(code);
   if (!data.ok) {
-    root.innerHTML = `<div class="card"><div class="h1">Error</div><div class="small">${data.error}</div></div>`;
+    root.innerHTML = `<div class="card"><div class="h1">Error</div><div class="small">${escapeHtml(data.error)}</div></div>`;
     toastError(data.error || "Failed to load match");
     return;
   }
@@ -348,8 +348,8 @@ export async function renderCaptainPage(root, query) {
   if (locked || status === "COMPLETED") {
     root.innerHTML = `
       <div class="card">
-        <div class="h1">${m.title}</div>
-        <div class="small">${when} • ${m.type}</div>
+        <div class="h1">${escapeHtml(m.title)}</div>
+        <div class="small">${escapeHtml(when)} • ${escapeHtml(m.type)}</div>
         <div class="small" style="margin-top:10px">Ratings are locked.</div>
       </div>
     `;
@@ -359,8 +359,8 @@ export async function renderCaptainPage(root, query) {
   if (status !== "OPEN") {
     root.innerHTML = `
       <div class="card">
-        <div class="h1">${m.title}</div>
-        <div class="small">${when} • ${m.type}</div>
+        <div class="h1">${escapeHtml(m.title)}</div>
+        <div class="small">${escapeHtml(when)} • ${escapeHtml(m.type)}</div>
         <div class="small" style="margin-top:10px">This match is not open for scoring or ratings.</div>
       </div>
     `;
@@ -612,13 +612,13 @@ export async function renderCaptainPage(root, query) {
     </style>
 
     <div class="card captainCommand">
-      <div class="captainHeading"><div class="h1">${m.title}</div>${adminMode ? "" : `<button class="captainInfoButton" id="openCaptainGuide" type="button" aria-label="How captain ratings and boosts work" aria-haspopup="dialog">i</button>`}</div>
+      <div class="captainHeading"><div class="h1">${escapeHtml(m.title)}</div>${adminMode ? "" : `<button class="captainInfoButton" id="openCaptainGuide" type="button" aria-label="How captain ratings and boosts work" aria-haspopup="dialog">i</button>`}</div>
       <div class="row captainCommand__context">
-        <span class="badge">${m.type}</span>
-        <span class="badge">${m.status}</span>
+        <span class="badge">${escapeHtml(m.type)}</span>
+        <span class="badge">${escapeHtml(m.status)}</span>
       </div>
-      <div class="small captainCommand__context" style="margin-top:10px">${when}</div>
-      <div class="small captainCommand__context" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${captain}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${captainTeam}` : ""}`}</div>
+      <div class="small captainCommand__context" style="margin-top:10px">${escapeHtml(when)}</div>
+      <div class="small captainCommand__context" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${escapeHtml(captain)}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${escapeHtml(captainTeam)}` : ""}`}</div>
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote captainCommand__context">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row captainCommand__context" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button class="btn gray" id="openMatch">${adminMode ? "Back to match management" : "Open match"}</button>
@@ -635,7 +635,7 @@ export async function renderCaptainPage(root, query) {
       <div class="small">
         ${type === "INTERNAL" ? `Enter ${homeTeamName} vs ${awayTeamName} score.` : "Enter MLFC vs Opponent score."} ${hint}
       </div>
-      ${hasStarted ? "" : `<div class="small inlineNote">Score entry unlocks at kick-off: ${when}.</div>`}
+      ${hasStarted ? "" : `<div class="small inlineNote">Score entry unlocks at kick-off: ${escapeHtml(when)}.</div>`}
 
       ${
         (type === "INTERNAL" && captainTeam && !adminMode) ? `

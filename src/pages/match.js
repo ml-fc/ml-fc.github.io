@@ -492,7 +492,7 @@ function prefetchOpenMatchDetails(openMatches) {
 }
 
 function seasonsSelectHtml(seasons, selected) {
-  const opts = (seasons||[]).map(s => `<option value="${s.seasonId}" ${s.seasonId===selected?"selected":""}>${s.name}</option>`).join("");
+  const opts = (seasons||[]).map(s => `<option value="${escapeHtml(s.seasonId)}" ${s.seasonId===selected?"selected":""}>${escapeHtml(s.name)}</option>`).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">
       <label class="field__label" for="seasonSelect" style="min-width:64px">Season</label>
@@ -1631,11 +1631,11 @@ function renderPastArea(root, seasonId) {
   pastArea.innerHTML = items.length
     ? items.map(m=>`
         <div style="padding:10px 0; border-bottom:1px solid rgba(11,18,32,0.10)">
-          <div style="font-weight:950">${m.title}</div>
-          <div class="small">${formatHumanDateTime(m.date,m.time)} • ${m.type} • ${m.status}</div>
-          ${formatResultLabel(m) ? `<div class="small" style="margin-top:4px"><b>Result:</b> ${formatResultLabel(m)}</div>` : ``}
+          <div style="font-weight:950">${escapeHtml(m.title)}</div>
+          <div class="small">${escapeHtml(formatHumanDateTime(m.date,m.time))} • ${escapeHtml(m.type)} • ${escapeHtml(m.status)}</div>
+          ${formatResultLabel(m) ? `<div class="small" style="margin-top:4px"><b>Result:</b> ${escapeHtml(formatResultLabel(m))}</div>` : ``}
           <div class="row" style="margin-top:8px">
-            <button class="btn gray" data-open="${m.publicCode}">View</button>
+            <button class="btn gray" data-open="${escapeHtml(m.publicCode)}">View</button>
           </div>
         </div>
       `).join("")
@@ -1678,7 +1678,7 @@ async function renderMatchDetail(root, code) {
 
     const res = await API.getPublicMatch(code);
     if (!res.ok) {
-      detail.innerHTML = `<div class="card"><div class="h1">Error</div><div class="small">${res.error}</div></div>`;
+      detail.innerHTML = `<div class="card"><div class="h1">Error</div><div class="small">${escapeHtml(res.error)}</div></div>`;
       return toastError(res.error||"Failed");
     }
     data = res;
@@ -1716,9 +1716,9 @@ const cap = availabilityLimitForMatch(m);
     const yesHdr = detail.querySelector("#yesHdr");
     if (yesHdr) yesHdr.textContent = `Available (${yesCount}/${cap})`;
 
-    detail.querySelector("#yesList").innerHTML = g.yes.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
-    detail.querySelector("#noList").innerHTML = g.no.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
-    detail.querySelector("#waitList").innerHTML = g.waiting.map(p=>`<li>${p}</li>`).join("") || "<li>-</li>";
+    detail.querySelector("#yesList").innerHTML = g.yes.map(p=>`<li>${escapeHtml(p)}</li>`).join("") || "<li>-</li>";
+    detail.querySelector("#noList").innerHTML = g.no.map(p=>`<li>${escapeHtml(p)}</li>`).join("") || "<li>-</li>";
+    detail.querySelector("#waitList").innerHTML = g.waiting.map(p=>`<li>${escapeHtml(p)}</li>`).join("") || "<li>-</li>";
 
     // Waiting list button is enabled once the confirmed-player quota is reached.
     const btnWait = detail.querySelector("#btnWait");
@@ -1821,8 +1821,8 @@ const cap = availabilityLimitForMatch(m);
 
   detail.innerHTML = `
     <div class="card">
-      <div style="font-weight:950; font-size:18px">${m.title}</div>
-      <div class="small" style="margin-top:6px">${when} • ${m.type} • ${m.status}</div>
+      <div style="font-weight:950; font-size:18px">${escapeHtml(m.title)}</div>
+      <div class="small" style="margin-top:6px">${escapeHtml(when)} • ${escapeHtml(m.type)} • ${escapeHtml(m.status)}</div>
       <div class="small" id="detailMsg" style="margin-top:10px">Refresh your browser to reload match details from the server.</div>
       ${isCaptain ? `
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
@@ -1837,7 +1837,7 @@ const cap = availabilityLimitForMatch(m);
       <div class="card">
         <div class="row" style="justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
           <div class="h1">Match recap</div>
-          <div class="small"><b>${resultInline()}</b></div>
+          <div class="small"><b>${escapeHtml(resultInline())}</b></div>
         </div>
 
         <div class="small" style="margin-top:8px">
@@ -1907,7 +1907,7 @@ const cap = availabilityLimitForMatch(m);
                     : availabilityClosed
                     ? `<div class="small"><b>Availability is closed.</b> You can still switch to <b>NO</b> or join the <b>waiting list</b> if you can't make it.</div>`
                     : (meName
-                        ? `<div class="small">Logged in as <b>${meName}</b>. Tap YES/NO to post your availability. If the match is full (${cap} available), you can join the waiting list.</div>`
+                        ? `<div class="small">Logged in as <b>${escapeHtml(meName)}</b>. Tap YES/NO to post your availability. If the match is full (${cap} available), you can join the waiting list.</div>`
                         : `<div class="small">Login required to post availability.</div>`))}
               ${meName ? `` : `
                 <div class="small" style="margin-top:10px">Go to <b>Login</b> tab to sign in.</div>

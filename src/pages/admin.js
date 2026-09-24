@@ -948,7 +948,7 @@ function pickSelectedSeason(seasonsRes) {
 
 function seasonsSelectHtml(seasons, selected) {
   const opts = (seasons || []).map(s =>
-    `<option value="${s.seasonId}" ${s.seasonId === selected ? "selected" : ""}>${s.name}</option>`
+    `<option value="${escapeHtml(s.seasonId)}" ${s.seasonId === selected ? "selected" : ""}>${escapeHtml(s.name)}</option>`
   ).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">
@@ -1099,20 +1099,20 @@ function matchRowHtml(m, view) {
       <div class="adminMatchRow__head">
         <div class="adminMatchRow__main">
           <div class="adminMatchRow__title">${escapeHtml(m.title)}</div>
-          <div class="adminMatchRow__meta">${when}<span aria-hidden="true">·</span>${m.type}</div>
+          <div class="adminMatchRow__meta">${escapeHtml(when)}<span aria-hidden="true">·</span>${escapeHtml(m.type)}</div>
           <div class="adminMatchRow__progress"><span aria-hidden="true"></span>${escapeHtml(progress)}</div>
           ${potmVotingClosed && !isCompleted ? `<div class="adminMatchRow__votingComplete">✓ Voting completed</div>` : ""}
         </div>
         <div class="adminMatchRow__badges">
-          <span class="badge${status === "OPEN" ? " badge--good" : ""}">${m.status}</span>
+          <span class="badge${status === "OPEN" ? " badge--good" : ""}">${escapeHtml(m.status)}</span>
           ${locked ? `<span class="badge badge--bad">LOCKED</span>` : ""}
         </div>
       </div>
 
       <div class="adminMatchRow__actions">
-        <button class="btn gray" data-manage="${m.publicCode}" ${disableManage ? "disabled" : ""}>Manage</button>
+        <button class="btn gray" data-manage="${escapeHtml(m.publicCode)}" ${disableManage ? "disabled" : ""}>Manage</button>
         ${(!isCompleted && !locked) || potmVotingStarted ? `<button class="btn ${potmVotingClosed ? "whatsappBtn" : hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${potmVotingStarted || (hasStarted && !isEditLocked) ? "" : "disabled"} title="${potmVotingClosed ? "View and share the POTM result" : hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingClosed ? "POTM result" : potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
-        <button class="btn primary" data-score="${m.publicCode}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
+        <button class="btn primary" data-score="${escapeHtml(m.publicCode)}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
         ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
         ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
         <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
@@ -1833,7 +1833,7 @@ async function renderUsers(root, opts = {}) {
     const force = !!opts?.force || firstLoadThisSession || isReloadFor("#/admin");
     users = await getUsersCached(force);
   } catch (e) {
-    area.innerHTML = `<div class="small">${String(e?.message||e)}</div>`;
+    area.innerHTML = `<div class="small">${escapeHtml(String(e?.message||e))}</div>`;
     return;
   }
   users = users || [];

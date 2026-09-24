@@ -12,6 +12,7 @@ export async function renderRegisterPage(root) {
     <div class="card">
       <div class="field"><label class="field__label" for="name">Full name</label><input id="name" class="input" autocomplete="name" /></div>
       <div class="field"><label class="field__label" for="phone">WhatsApp number</label><div class="phoneField"><select id="country" class="input" aria-label="Country code">${COUNTRY_OPTIONS}</select><input id="phone" class="input" inputmode="tel" pattern="[0-9]*" maxlength="14" autocomplete="tel-national" required /></div><div class="field__help">Choose the country code, then enter the number without the leading zero.</div></div>
+      <div class="field"><label class="field__label" for="password">Password</label><input id="password" class="input" type="password" autocomplete="new-password" required /></div>
       <button id="btn" class="btn primary" style="margin-top:10px">Register</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </div>
@@ -19,6 +20,7 @@ export async function renderRegisterPage(root) {
 
   const nameEl = root.querySelector("#name");
   const phoneEl = root.querySelector("#phone");
+  const passwordEl = root.querySelector("#password");
 
   // Phone: allow digits only
   phoneEl.addEventListener("input", () => {
@@ -46,7 +48,13 @@ export async function renderRegisterPage(root) {
       return;
     }
     msgEl.textContent = "Registering player…";
-    const res = await API.registerPlayer(name, phone);
+    if (passwordEl.value.length < 1) {
+      passwordEl.setAttribute("aria-invalid", "true");
+      msgEl.textContent = "Enter a password.";
+      passwordEl.focus();
+      return;
+    }
+    const res = await API.registerPlayer(name, phone, passwordEl.value);
     if (!res.ok) {
       msgEl.textContent = res.error || "Registration could not be completed. Check your details and try again.";
       return;
@@ -58,5 +66,6 @@ export async function renderRegisterPage(root) {
     }
     nameEl.value = "";
     phoneEl.value = "";
+    passwordEl.value = "";
   };
 }

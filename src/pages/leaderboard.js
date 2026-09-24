@@ -44,7 +44,7 @@ function playerMatches(row) {
 
 function seasonSelectHtml(seasons, selectedId) {
   const opts = (seasons||[]).map(s =>
-    `<option value="${s.seasonId}" ${s.seasonId===selectedId?"selected":""}>${s.name}</option>`
+    `<option value="${esc(s.seasonId)}" ${s.seasonId===selectedId?"selected":""}>${esc(s.name)}</option>`
   ).join("");
   return `
     <div class="row" style="gap:10px; align-items:center; margin-top:10px">

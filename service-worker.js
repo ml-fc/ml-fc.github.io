@@ -73,6 +73,7 @@ async function broadcastDismissedNotification(id) {
 const STATIC_ASSETS = [
   "/",
   "/index.html",
+  "/manifest.json",
   "/styles.css",
   "/src/app.js",
   "/src/router.js",
@@ -103,6 +104,9 @@ const STATIC_ASSETS = [
   "/src/pages/season.js",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
+  "/assets/icons/favicon.ico",
+  "/assets/icons/favicon-16.png",
+  "/assets/icons/favicon-32.png",
   "/assets/icons/apple-touch-icon-120.png",
   "/assets/icons/apple-touch-icon-152.png",
   "/assets/icons/apple-touch-icon-167.png",
@@ -259,9 +263,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (event.request.method !== "GET") return;
 
-  // Always fetch fresh manifest (prevents stale icons/install metadata)
+  // Prefer a fresh manifest but retain install metadata when offline.
   if (url.pathname.endsWith("/manifest.json")) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(event.request).catch(() => caches.match("/manifest.json")));
     return;
   }
 
@@ -294,13 +298,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Avoid caching anything with a query string (likely dynamic).
-  if (url.search) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  // Cache-first only for our known static asset list.
+  // Cache-first only for our known static asset list. Match by pathname so
+  // version query strings used by index.html also work offline.
   const path = url.pathname === "/" ? "/" : url.pathname;
   if (!STATIC_ASSETS.includes(path)) {
     event.respondWith(fetch(event.request));
@@ -309,7 +308,12 @@ self.addEventListener("fetch", (event) => {
 
 
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(path);
+    if (cached) return cached;
+    const fresh = await fetch(event.request);
+    if (fresh.ok) await cache.put(path, fresh.clone());
+    return fresh;
+  })());
 });

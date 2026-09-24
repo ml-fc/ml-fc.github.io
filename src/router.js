@@ -19,6 +19,12 @@ const ROUTES = {
 const PAGE_CONTAINERS = {};   // route -> div
 const LAST_HASH_BY_ROUTE = {}; // route -> full hash (includes query)
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+  })[char]);
+}
+
 // Used by pages to cancel stale async UI updates
 export function getRouteToken() {
   return window.__mlfcRouteToken || "";
@@ -133,7 +139,7 @@ async function renderRoute() {
     container.innerHTML = `
       <div class="card">
         <div class="h1">Something went wrong</div>
-        <div class="small">${String(e?.message || e)}</div>
+        <div class="small">${escapeHtml(String(e?.message || e))}</div>
       </div>
     `;
   }
