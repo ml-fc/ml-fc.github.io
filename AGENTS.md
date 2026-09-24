@@ -41,3 +41,5 @@ python3 -m http.server 4173
 ```
 
 Confirm the local root responds, then stop the temporary server. After publishing, verify that `https://ml-fc.github.io/src/config.js` exposes the new `BUILD_ID` and that the GitHub Pages job completed successfully.
+
+The production API explicitly allows `http://localhost:4173` and `http://127.0.0.1:4173`, so the frontend can be exercised directly in a real browser from this local server. Use port 4173 consistently for CORS, service-worker, offline, and installability tests. Localhost is considered a secure context for service workers. Do not add a wildcard CORS origin to make another port work.
