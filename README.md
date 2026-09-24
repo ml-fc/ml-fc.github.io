@@ -42,7 +42,7 @@ For every frontend release:
 3. Add any new offline-critical file to `STATIC_ASSETS` in `service-worker.js`.
 4. Run syntax, browser, XSS, and offline checks.
 
-The current release is `2026-09-24.60`.
+The current release is `2026-09-24.61`.
 
 ## Deployment
 

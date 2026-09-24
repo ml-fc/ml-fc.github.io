@@ -221,7 +221,7 @@ function streamDeskHtml(match) {
       ${live ? `<div class="streamDesk__link"><span>YouTube video</span><code>${escapeHtml(videoId)}</code></div>` : `<div class="field streamDesk__field"><label class="field__label" for="youtubeStreamUrl">YouTube watch link</label><input class="input" id="youtubeStreamUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…" value="${watchUrl}" aria-describedby="streamDeskHelp" /><div class="field__help" id="streamDeskHelp">Only the public video ID is stored. MLFC never receives the YouTube login or stream key.</div></div>`}
       <div class="streamDesk__actions">
         ${!configured ? `<button class="btn primary" id="saveStream" type="button">Save stream</button>` : ""}
-        ${configured && !live ? `<button class="btn primary" id="startStream" type="button">${status === "ENDED" ? "Go live again on MLFC" : "Start live on MLFC"}</button><button class="btn gray" id="saveStream" type="button">Save link</button>` : ""}
+        ${configured && !live ? `<button class="btn primary" id="startStream" type="button">${status === "ENDED" ? "Save new link & go live" : "Save link & start live"}</button><button class="btn gray" id="saveStream" type="button">Save link only</button>` : ""}
         ${live ? `<button class="btn danger" id="stopStream" type="button">Stop live on MLFC</button>` : ""}
         ${configured && !live ? `<button class="btn dangerGhost" id="removeStream" type="button">Remove stream</button>` : ""}
       </div>
@@ -2225,8 +2225,8 @@ function wireStreamControls(container, match, onUpdated) {
   const updateStream = async (command, button, busyText) => {
     const input = container.querySelector("#youtubeStreamUrl");
     const message = container.querySelector("#streamDeskMessage");
-    const youtubeUrl = command === "SAVE" ? String(input?.value || "").trim() : "";
-    if (command === "SAVE" && !youtubeUrl) {
+    const youtubeUrl = ["SAVE", "START"].includes(command) ? String(input?.value || "").trim() : "";
+    if (["SAVE", "START"].includes(command) && !youtubeUrl) {
       if (message) message.textContent = "Paste the public YouTube watch link.";
       input?.focus();
       return;
@@ -2234,12 +2234,23 @@ function wireStreamControls(container, match, onUpdated) {
     setDisabled(button, true, busyText);
     if (message) message.textContent = "";
     try {
-      const result = await API.adminUpdateMatchStream(match.matchId, command, youtubeUrl);
+      let workingMatch = match;
+      if (command === "START") {
+        const saved = await API.adminUpdateMatchStream(match.matchId, "SAVE", youtubeUrl);
+        if (!saved?.ok) {
+          if (message) message.textContent = saved?.error || "Could not save the new stream link.";
+          return toastError(saved?.error || "Could not save the new stream link.");
+        }
+        workingMatch = updateCachedStreamMatch(match, saved.stream || {});
+      }
+
+      const result = await API.adminUpdateMatchStream(match.matchId, command, command === "SAVE" ? youtubeUrl : "");
       if (!result?.ok) {
         if (message) message.textContent = result?.error || "Could not update the stream.";
+        if (command === "START" && workingMatch !== match) onUpdated(workingMatch);
         return toastError(result?.error || "Could not update the stream.");
       }
-      const updated = updateCachedStreamMatch(match, result.stream || {});
+      const updated = updateCachedStreamMatch(workingMatch, result.stream || {});
       const notice = command === "SAVE"
         ? "Stream saved. The YouTube player is now on the match page."
         : command === "START"
