@@ -229,6 +229,64 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function validYouTubeVideoId(value) {
+  const id = String(value || "").trim();
+  return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
+}
+
+function streamStatus(match) {
+  const status = String(match?.streamStatus || "NONE").trim().toUpperCase();
+  return ["READY", "LIVE", "ENDED"].includes(status) ? status : "NONE";
+}
+
+function homeLiveBannerHtml(matches) {
+  const live = (Array.isArray(matches) ? matches : [])
+    .filter((match) => streamStatus(match) === "LIVE" && validYouTubeVideoId(match.streamVideoId))
+    .sort((a, b) => String(b.streamUpdatedAt || "").localeCompare(String(a.streamUpdatedAt || "")));
+  if (!live.length) return "";
+  const featured = live[0];
+  return `<section class="liveMatchBanner" aria-label="Live match">
+    <div class="liveMatchBanner__signal"><span class="liveSignal" aria-hidden="true"></span><strong>LIVE</strong></div>
+    <div class="liveMatchBanner__copy"><span>${live.length > 1 ? `${live.length} matches are live` : "Watch now"}</span><b>${escapeHtml(featured.title || "Manor Lakes FC live")}</b></div>
+    <button class="btn liveMatchBanner__button" type="button" data-live-open="${escapeHtml(featured.publicCode)}">Watch live</button>
+  </section>`;
+}
+
+function renderHomeLiveBanner(host, matches) {
+  const target = host?.querySelector?.("#homeLiveBanner");
+  if (!target) return;
+  target.innerHTML = homeLiveBannerHtml(matches);
+  target.querySelector("[data-live-open]")?.addEventListener("click", (event) => {
+    const code = event.currentTarget.getAttribute("data-live-open");
+    if (code) location.hash = `#/match?code=${encodeURIComponent(code)}`;
+  });
+}
+
+function matchStreamPlayerHtml(match) {
+  const videoId = validYouTubeVideoId(match?.streamVideoId);
+  if (!videoId) return "";
+  const status = streamStatus(match);
+  const isLive = status === "LIVE";
+  const heading = isLive ? "Live from matchday" : status === "ENDED" ? "Match replay" : "Live coverage is ready";
+  const detail = isLive
+    ? "You are watching the club’s unlisted YouTube broadcast."
+    : status === "ENDED"
+      ? "The completed broadcast remains available here as a replay."
+      : "This player will switch to the live broadcast when the YouTube stream begins.";
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0`;
+  return `<section class="matchStreamPlayer${isLive ? " is-live" : ""}" aria-labelledby="matchStreamTitle">
+    <header class="matchStreamPlayer__head">
+      <div class="matchStreamPlayer__status"><span class="${isLive ? "liveSignal" : "streamStandbyDot"}" aria-hidden="true"></span>${isLive ? "LIVE" : status === "ENDED" ? "REPLAY" : "STREAM READY"}</div>
+      <div><h1 id="matchStreamTitle">${heading}</h1><p>${detail}</p></div>
+      <a class="btn matchStreamPlayer__youtube" href="${watchUrl}" target="_blank" rel="noopener noreferrer">Open YouTube</a>
+    </header>
+    <div class="matchStreamPlayer__frame">
+      <iframe src="${embedUrl}" title="${escapeHtml(match?.title || "MLFC match")} YouTube stream" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    </div>
+  </section>`;
+}
+
 function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const rows = [...(teamRows || [])].sort((a, b) => String(a.playerName || "").localeCompare(String(b.playerName || "")));
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
@@ -1403,6 +1461,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
   }
 
   ACTIVE_MATCH.captainCodes = Array.isArray(res.captainCodes) ? res.captainCodes : [];
+  if (Array.isArray(res.liveMatches)) renderHomeLiveBanner(listRoot, res.liveMatches);
 
   // Update CAPTAIN badges in-place so they show up immediately after a hard refresh
   // (the match list is rendered from cache before meta returns).
@@ -1524,6 +1583,7 @@ function renderMatchList(root, seasonId, openMatches) {
   const latestCode = getLatestOpenCode(open);
 
   list.innerHTML = `
+    <div id="homeLiveBanner">${homeLiveBannerHtml(open)}</div>
     <div id="nextMatchDashboard" class="nextMatchHost" aria-live="polite">
       <section class="nextMatch nextMatch--loading" aria-label="Loading your next fixture">
         <div class="nextMatch__eyebrow">Your matchday</div><div class="nextMatch__skeleton"></div>
@@ -1546,13 +1606,14 @@ function renderMatchList(root, seasonId, openMatches) {
               <div class="fixtureRow__body">
                 <div class="fixtureRow__badges">
                 ${m.publicCode === latestCode ? `<span class="badge badge--next">NEXT</span>` : ""}
+                ${streamStatus(m) === "LIVE" && validYouTubeVideoId(m.streamVideoId) ? `<span class="badge badge--live"><span class="liveSignal" aria-hidden="true"></span>LIVE</span>` : ""}
                 <span class="badge" data-captain-badge="${escapeHtml(m.publicCode)}" style="background:#111827;color:#fff; display:${ACTIVE_MATCH.captainCodes?.includes?.(m.publicCode) ? "inline-flex" : "none"}">CAPTAIN</span>
                 </div>
                 <div class="fixtureRow__title">${escapeHtml(m.title || "Match")}</div>
                 <div class="small fixtureRow__meta">${escapeHtml(formatHumanDateTime(m.date,m.time))} <span aria-hidden="true">·</span> ${escapeHtml(m.type)}</div>
                 ${formatResultLabel(m) ? `<div class="fixtureRow__result"><span>Full time</span><b>${escapeHtml(formatResultLabel(m))}</b></div>` : `<div class="fixtureRow__status"><span aria-hidden="true">●</span> ${Number(m.availabilityLocked) === 1 || String(m.availabilityLocked).toUpperCase() === "TRUE" ? "Availability closed" : "Availability open"}</div>`}
               </div>
-              <button class="btn primary fixtureRow__open" data-open="${escapeHtml(m.publicCode)}" aria-label="View ${escapeHtml(m.title || "match")}">View match</button>
+              <button class="btn ${streamStatus(m) === "LIVE" ? "fixtureRow__live" : "primary"} fixtureRow__open" data-open="${escapeHtml(m.publicCode)}" aria-label="${streamStatus(m) === "LIVE" ? "Watch live" : "View"} ${escapeHtml(m.title || "match")}">${streamStatus(m) === "LIVE" ? "Watch live" : "View match"}</button>
             </article>
           `).join("")
           : `<div class="emptyState"><b>No open matches</b><span>New fixtures will appear here when the club desk publishes them.</span></div>`
@@ -1570,6 +1631,7 @@ function renderMatchList(root, seasonId, openMatches) {
 
   `;
 
+  renderHomeLiveBanner(list, open);
   loadNextMatchDashboard(list.querySelector("#nextMatchDashboard")).catch(() => {});
 
   list.querySelectorAll("[data-open]").forEach(btn=>{
@@ -1820,6 +1882,7 @@ const cap = availabilityLimitForMatch(m);
 
 
   detail.innerHTML = `
+    ${matchStreamPlayerHtml(m)}
     <div class="card">
       <div style="font-weight:950; font-size:18px">${escapeHtml(m.title)}</div>
       <div class="small" style="margin-top:6px">${escapeHtml(when)} • ${escapeHtml(m.type)} • ${escapeHtml(m.status)}</div>

@@ -38,6 +38,8 @@ export const API = {
   // admin
   adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
   adminUpdateTeamNames: (payload) => apiPost({ action: "admin_update_team_names", ...payload }),
+  adminUpdateMatchStream: (matchId, command, youtubeUrl = "") =>
+    apiPost({ action: "admin_update_match_stream", matchId, command, youtubeUrl }),
   adminCreateMatch: (payload) => apiPost({ action: "admin_create_match", ...payload }),
   adminCreateSeason: (payload) => apiPost({ action: "admin_create_season", ...payload }),
   adminUpdateSeason: (payload) => apiPost({ action: "admin_update_season", ...payload }),
