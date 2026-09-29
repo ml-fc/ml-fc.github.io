@@ -1,5 +1,5 @@
 import { drawFcCard } from "../ui/fc_card.js";
-import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode, presentationPositions } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -465,13 +465,18 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   context.fillText(teams.map(team=>team.name).join(" VS ").toUpperCase(),540,345,900);
   for(const team of teams) {
     const defaults=defaultPositions(team.players);
+    const savedPositions=Object.fromEntries(team.players.map(name=>[name,positions[name]||defaults[name]||{positionX:50,positionY:50}]));
+    const displayPositions=presentationPositions(team.players,savedPositions);
     team.players.forEach((name)=>{
-        const position=positions[name]||defaults[name]||{positionX:50,positionY:50};
+        const position=savedPositions[name];
+        const displayPosition=displayPositions[name]||position;
         const rawX=Number(position.positionX),rawY=Number(position.positionY);
         const positionX=Math.max(7,Math.min(93,Number.isFinite(rawX)?rawX:50));
         const positionY=Math.max(7,Math.min(93,Number.isFinite(rawY)?rawY:50));
-        const x=left+width*(team.upper ? 100-positionX : positionX)/100;
-        const displayY=teams.length===1 ? 100-positionY : team.upper ? 50-positionY/2 : 50+positionY/2;
+        const displayX=Math.max(7,Math.min(93,Number(displayPosition.positionX)));
+        const displayPositionY=Math.max(7,Math.min(93,Number(displayPosition.positionY)));
+        const x=left+width*(team.upper ? 100-displayX : displayX)/100;
+        const displayY=teams.length===1 ? 100-displayPositionY : team.upper ? 50-displayPositionY/2 : 50+displayPositionY/2;
         const y=top+height*displayY/100;
         const portrait=portraits.get(name);
         const markerRadius=29;

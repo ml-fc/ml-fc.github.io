@@ -365,6 +365,7 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
   const defaults = defaultPositions(players);
   const savedPositions = Object.fromEntries(rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
+  const displayPositions = presentationPositions(players, savedPositions);
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
     <div class="digitalTeam__pitch digitalTeam__pitch--positioned"><span class="digitalTeam__centre" aria-hidden="true"></span>
@@ -372,11 +373,10 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const player = String(row.playerName || "").trim();
         if (!player) return "";
         const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-        const rawX = row.positionX == null || row.positionX === "" ? NaN : Number(row.positionX);
-        const rawY = row.positionY == null || row.positionY === "" ? NaN : Number(row.positionY);
-        const x = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
-        const y = 100 - Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
-        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+        const display = displayPositions[player] || fallback;
+        const x = Math.max(9, Math.min(91, Number(display.positionX)));
+        const y = 100 - Math.max(9, Math.min(91, Number(display.positionY)));
+        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -399,17 +399,17 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
         const players = team.rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
         const defaults = defaultPositions(players);
         const savedPositions = Object.fromEntries(team.rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
+        const displayPositions = presentationPositions(players, savedPositions);
         return team.rows.map((row) => {
           const player = String(row.playerName || "").trim();
           if (!player) return "";
           const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-          const rawX = row.positionX == null || row.positionX === "" ? NaN : Number(row.positionX);
-          const rawY = row.positionY == null || row.positionY === "" ? NaN : Number(row.positionY);
-          const positionX = Math.max(7, Math.min(93, Number.isFinite(rawX) ? rawX : fallback.positionX));
-          const positionY = Math.max(7, Math.min(93, Number.isFinite(rawY) ? rawY : fallback.positionY));
+          const display = displayPositions[player] || fallback;
+          const positionX = Math.max(9, Math.min(91, Number(display.positionX)));
+          const positionY = Math.max(9, Math.min(91, Number(display.positionY)));
           const x = team.upper ? 100 - positionX : positionX;
           const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
-          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
         });
       }).join("")}
     </div>
@@ -490,12 +490,25 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
   for (const team of teams) {
     const players = team.rows.map(row => String(row.playerName || "").trim()).filter(Boolean);
     const defaults = defaultPositions(players);
+    const savedPositions = Object.fromEntries(team.rows.map(row => {
+      const name = String(row.playerName || "").trim();
+      const fallback = defaults[name] || { positionX: 50, positionY: 50 };
+      const rawX = row.positionX == null || row.positionX === "" ? NaN : Number(row.positionX);
+      const rawY = row.positionY == null || row.positionY === "" ? NaN : Number(row.positionY);
+      return [name, {
+        positionX: Number.isFinite(rawX) ? rawX : fallback.positionX,
+        positionY: Number.isFinite(rawY) ? rawY : fallback.positionY,
+      }];
+    }));
+    const displayPositions = presentationPositions(players, savedPositions);
     for (const row of team.rows) {
       const name = String(row.playerName || "").trim();
       if (!name) continue;
       const fallback = defaults[name] || { positionX: 50, positionY: 50 };
-      const px = row.positionX == null || row.positionX === "" ? fallback.positionX : Number(row.positionX);
-      const py = row.positionY == null || row.positionY === "" ? fallback.positionY : Number(row.positionY);
+      const saved = savedPositions[name] || fallback;
+      const display = displayPositions[name] || fallback;
+      const px = Math.max(7, Math.min(93, Number(display.positionX)));
+      const py = Math.max(7, Math.min(93, Number(display.positionY)));
       const singleTeam = teams.length === 1;
       const x = pitch.x + pitch.width * (team.upper ? 100 - Math.max(7, Math.min(93, px)) : Math.max(7, Math.min(93, px))) / 100;
       const displayY = singleTeam ? 100 - Math.max(7, Math.min(93, py)) : team.upper ? 50 - Math.max(7, Math.min(93, py)) / 2 : 50 + Math.max(7, Math.min(93, py)) / 2;
@@ -509,13 +522,14 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
       context.restore();
       context.strokeStyle = team.color; context.lineWidth = 7; context.beginPath(); context.arc(x, y, 30, 0, Math.PI * 2); context.stroke();
       context.strokeStyle = "#fff"; context.lineWidth = 2; context.beginPath(); context.arc(x, y, 26, 0, Math.PI * 2); context.stroke();
-      const role = fieldPositionCode({ positionX: px, positionY: py });
+      const role = fieldPositionCode(saved);
       if (role) { context.fillStyle = "#fff"; context.beginPath(); context.arc(x - 22, y - 21, 13, 0, Math.PI * 2); context.fill(); context.fillStyle = "#132c3b"; context.font = "900 10px Arial"; context.fillText(role, x - 22, y - 17); }
       if (name === team.captain) { context.fillStyle = "#ffe16a"; context.beginPath(); context.arc(x + 22, y - 21, 12, 0, Math.PI * 2); context.fill(); context.fillStyle = "#132c3b"; context.font = "900 14px Arial"; context.fillText("C", x + 22, y - 16); }
       context.font = "900 19px Arial";
-      const labelWidth = Math.min(190, Math.max(90, context.measureText(name).width + 18));
+      const label = fitRecapCanvasText(context, name, 166);
+      const labelWidth = Math.min(184, Math.max(90, context.measureText(label).width + 18));
       context.fillStyle = "rgba(2,19,30,.9)"; context.fillRect(x - labelWidth / 2, y + 36, labelWidth, 29);
-      context.fillStyle = "#fff"; context.fillText(name, x, y + 57, labelWidth - 12);
+      context.fillStyle = "#fff"; context.fillText(label, x, y + 57);
     }
   }
   context.textAlign = "left";
