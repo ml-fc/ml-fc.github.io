@@ -360,6 +360,14 @@ function wireMatchStreamFullscreen(host) {
   });
 }
 
+function compactPitchName(value) {
+  const name = String(value || "").trim();
+  if (name.length <= 9) return name;
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) return `${parts[0]} ${parts.at(-1).slice(0, 1).toUpperCase()}.`;
+  return `${name.slice(0, 8)}…`;
+}
+
 function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const rows = [...(teamRows || [])].sort((a, b) => String(a.playerName || "").localeCompare(String(b.playerName || "")));
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
@@ -376,7 +384,7 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const display = displayPositions[player] || fallback;
         const x = Math.max(9, Math.min(91, Number(display.positionX)));
         const y = 100 - Math.max(9, Math.min(91, Number(display.positionY)));
-        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -409,7 +417,7 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
           const positionY = Math.max(9, Math.min(91, Number(display.positionY)));
           const x = team.upper ? 100 - positionX : positionX;
           const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
-          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(player)}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
         });
       }).join("")}
     </div>
