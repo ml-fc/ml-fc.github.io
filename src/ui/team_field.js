@@ -229,9 +229,11 @@ export function mountTeamField(root, options) {
         ${pitchMarkup(true)}
         <span class="fieldPreview__hint">Tap field to edit</span>
       </button>
+      ${options.note ? `<p class="fieldAutomationNote">${esc(options.note)}</p>` : ''}
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
         <header class="fieldWorkspace__head"><strong>${halfField ? `${esc(groups[0].label)} positions` : 'Team field'}</strong><span class="small">${editable ? halfField ? 'Drag your players on the half-field to their match positions.' : 'Drag an unassigned player onto either half. Drag players on the pitch to update positions.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button></header>
-        <div class="fieldWorkspace__tools">${options.onAuto && editable ? '<button class="btn gray tiny" data-auto>Auto team</button>' : ''}${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onResetDraft && editable ? '<button class="btn gray tiny" data-reset-draft>Clear draft</button>' : ''}${showRoster ? `<span class="small">${unassigned.length} unassigned</span>` : ''}</div>
+        ${options.note ? `<p class="fieldAutomationNote fieldAutomationNote--dialog">${esc(options.note)}</p>` : ''}
+        <div class="fieldWorkspace__tools">${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onResetDraft && editable ? '<button class="btn gray tiny" data-reset-draft>Clear drafts</button>' : ''}${showRoster ? `<span class="small">${unassigned.length} unassigned</span>` : ''}</div>
         <div class="fieldWorkspace__body${showRoster?'':' fieldWorkspace__body--fieldOnly'}">
           ${showRoster ? `<aside class="fieldRoster" aria-label="Unassigned players"><div class="fieldRoster__head"><strong>Unassigned</strong><span>${unassigned.length} players · Drag to field</span></div><table><thead><tr><th scope="col">Player</th></tr></thead><tbody>${unassigned.map(name => `<tr><td><button type="button" class="fieldRoster__tag ${selected===name?'isSelected':''}" data-name="${esc(name)}" aria-pressed="${selected===name}" ${canMove(name)?'':'disabled'}>${esc(name)}</button></td></tr>`).join('')}</tbody></table>${unassigned.length ? '<p class="fieldRoster__empty">Drop a field player here to unassign</p>' : '<p class="fieldRoster__empty">All players assigned<br>Drop here to unassign</p>'}</aside>` : ''}
           <div class="pitchStage">${halfField ? '<span></span>' : attackLabel(upperGroup)}${pitchMarkup(false)}${halfField ? attackLabel(groups[0], true) : attackLabel(lowerGroup)}</div>
@@ -262,7 +264,6 @@ export function mountTeamField(root, options) {
       root.querySelector('[data-position]')?.focus({preventScroll:true});
     };
     dialog.oncancel = event => { event.preventDefault(); saveDraftAndClose(); };
-    bind('[data-auto]', options.onAuto);
     bind('[data-reset-draft]', options.onResetDraft);
     bind('[data-save]', saveAndClose);
     bind('[data-captain]', () => options.onCaptain(selected, owner(selected).team));

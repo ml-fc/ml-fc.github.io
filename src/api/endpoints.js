@@ -33,6 +33,7 @@ export const API = {
   registerPlayer: (name, phone, password) => apiPost({ action: "register_player", name, phone, password }),
   players: () => apiGet({ action: "players" }),
   getPublicMatch: (code) => apiGet({ action: "public_match", code }),
+  publicMatchVersion: (code) => apiGet({ action: "public_match_version", code }),
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
   votePotm: (code, candidateName) => apiPost({ action: "potm_vote", code, candidateName }),
   // admin
@@ -58,7 +59,6 @@ export const API = {
   adminUpdateAvailabilityLimit: (matchId, availabilityLimit) =>
     apiPost({ action: "admin_update_availability_limit", matchId, availabilityLimit }),
   adminDeleteMatch: (matchId) => apiPost({ action: "admin_delete_match", matchId }),
-  adminAutoTeams: (matchId) => apiPost({ action: "admin_auto_teams", matchId }),
   adminSetupInternal: (payload) => apiPost({ action: "admin_setup_internal", ...payload }),
   adminSetupOpponent: (payload) => apiPost({ action: "admin_setup_opponent", ...payload }),
   adminShareTeams: (matchId) => apiPost({ action: "admin_share_teams", matchId }),

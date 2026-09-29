@@ -1,5 +1,5 @@
 import { drawFcCard } from "../ui/fc_card.js";
-import { mountTeamField, positionMap, positionRows, defaultPositions, randomGoalkeeperPositions, fieldPositionCode } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -2459,7 +2459,7 @@ function bindListButtons(root, view) {
    - Opponent: set captain, publish from Manage, and share separately
    - Internal: compact table (player + Blue/Orange), remove enables buttons again,
               captains chosen via checkbox in team lists,
-              Publish teams + Share team sheet buttons after the field,
+              Notify players + Share team sheet buttons after the field,
               Captain links remain available from the Manage screen
    - Admins can close and reopen availability from Manage
    ======================= */
@@ -2622,6 +2622,24 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
+
+  async function clearLocalDraftsAndReload(button) {
+    setDisabled(button, true, "Refreshing…");
+    lsDel(setupDraftKey(m.matchId));
+    clearManageCache(m.publicCode);
+    clearPublicMatchDetailCache(m.publicCode);
+    try {
+      const fresh = await API.getPublicMatch(m.publicCode);
+      if (!fresh?.ok) throw new Error(fresh?.error || "Could not reload this match");
+      if (!stillOnAdmin(routeToken)) return;
+      lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
+      renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
+      toastSuccess("Local drafts cleared. Fresh teams loaded from the database.");
+    } catch (error) {
+      setDisabled(button, false);
+      toastError(error?.message || "Could not reload this match");
+    }
+  }
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
     const button = manageArea.querySelector("#saveTeamNames");
@@ -2879,8 +2897,12 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       opponentCaptain = squad.includes(opponentDraft.captain) ? opponentDraft.captain : "";
     }
 
+    function opponentIsDirty() {
+      return JSON.stringify(fieldPositions) !== savedPositions || !sameNames(squad, savedOpponent.squad) || opponentCaptain.toLowerCase() !== savedOpponent.captain.toLowerCase();
+    }
+
     function updateOpponentDraft() {
-      const dirty = JSON.stringify(fieldPositions) !== savedPositions || !sameNames(squad, savedOpponent.squad) || opponentCaptain.toLowerCase() !== savedOpponent.captain.toLowerCase();
+      const dirty = opponentIsDirty();
       const state = manageArea.querySelector("#draftState");
       if (state) {
         state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
@@ -2902,22 +2924,16 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       clearPublicMatchDetailCache(m.publicCode);
       clearManageCache(m.publicCode);
       updateOpponentDraft();
+      const notifyButton = manageBody.querySelector("#publishOpponent");
+      if (notifyButton) notifyButton.disabled = isEditLocked || !savedOpponent.squad.length;
       toastSuccess("Team-field changes saved.");
     }
 
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
-        onResetDraft:() => {
-          squad = [...savedOpponent.squad];
-          opponentCaptain = savedOpponent.captain;
-          fieldPositions = JSON.parse(savedPositions || "{}");
-          lsDel(setupDraftKey(m.matchId));
-          updateOpponentDraft();
-          renderSquadLists();
-          toastSuccess("Draft cleared. Saved setup restored.");
-        },
-        onAuto:() => { squad=uniqueSorted([...squad,...yesPlayers]); fieldPositions=randomGoalkeeperPositions(squad); updateOpponentDraft(); renderSquadLists(); },
+        note:"Availability changes are reflected automatically. Save field edits before notifying players.",
+        onResetDraft:(event) => clearLocalDraftsAndReload(event?.currentTarget),
         onChange:updateOpponentDraft,
         onDraft:updateOpponentDraft,
         onSave:saveOpponentField,
@@ -2936,7 +2952,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
         <div id="opponentTeamPreview"></div>
 
         <div class="row" style="margin-top:14px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="publishOpponent" ${isEditLocked ? "disabled" : ""}>Publish team</button>
+          <button class="btn primary" id="publishOpponent" ${isEditLocked || !savedOpponent.squad.length ? "disabled" : ""}>Notify players</button>
           <button class="btn whatsappBtn" id="shareSquad" ${squad.length ? "" : "disabled"}>Share team sheet</button>
         </div>
 
@@ -2986,27 +3002,17 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       const msg = manageBody.querySelector("#msg");
       const selCaptain = opponentCaptain;
 
-      if (!squad.length) return toastWarn("Select at least one MLFC player before publishing.");
-      if (!selCaptain) return toastWarn("Select one MLFC captain before publishing.");
+      if (opponentIsDirty()) return toastWarn("Save the team-field changes before notifying players.");
+      if (!savedOpponent.squad.length) return toastWarn("Save the MLFC squad before notifying players.");
+      if (!selCaptain) return toastWarn("Select and save one MLFC captain before notifying players.");
 
-      setDisabled(btn, true, "Publishing…");
-      msg.textContent = "Saving team before publishing…";
-
-      const out = await API.adminSetupOpponent({ matchId: m.matchId, captain: selCaptain, mlfcPlayers: squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
-      if (!out.ok) { setDisabled(btn, false); msg.textContent = out.error || "Failed"; return toastError(out.error || "Failed"); }
+      setDisabled(btn, true, "Notifying…");
+      msg.textContent = "Sending team notification…";
       const published = await API.adminShareTeams(m.matchId);
       setDisabled(btn, false);
-      if (!published?.ok) { msg.textContent = published?.error || "Publishing failed"; return toastError(published?.error || "Team notification could not be sent"); }
-      msg.textContent = "Published ✅";
-      toastSuccess("Team published and players notified.");
-      lsDel(setupDraftKey(m.matchId));
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-      savedOpponent.squad = [...squad];
-      savedOpponent.captain = opponentCaptain;
-      savedPositions = JSON.stringify(fieldPositions);
-      const state = manageArea.querySelector("#draftState");
-      if (state) { state.textContent = "All setup changes saved"; state.classList.remove("isDirty"); }
+      if (!published?.ok) { msg.textContent = published?.error || "Notification failed"; return toastError(published?.error || "Team notification could not be sent"); }
+      msg.textContent = "Players notified ✅";
+      toastSuccess("Players notified about the saved team.");
     };
 
     // Close/re-open availability buttons (same behavior as internal)
@@ -3062,6 +3068,10 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   let captainBlue = String(captains.captain1 || "");
   let captainOrange = String(captains.captain2 || "");
   let autoBalanceReport = data.teamBalance || null;
+  const teamSelectionMode = String(m.teamSelectionMode || "AUTO").toUpperCase() === "MANUAL" ? "MANUAL" : "AUTO";
+  const teamAutomationNote = teamSelectionMode === "MANUAL"
+    ? "Admin adjustments stay fixed. New players are balanced by strength and recent outfield roles; goalkeepers rotate separately."
+    : "Teams balance strength and recent outfield roles automatically. Goalkeepers are rotated randomly and do not affect role balancing.";
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
 
@@ -3074,10 +3084,14 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     captainOrange = orange.includes(internalDraft.captainOrange) ? internalDraft.captainOrange : "";
   }
 
-  function updateInternalDraft() {
-    const dirty = JSON.stringify(fieldPositions) !== savedPositions || !sameNames(blue, savedInternal.blue) || !sameNames(orange, savedInternal.orange) ||
+  function internalIsDirty() {
+    return JSON.stringify(fieldPositions) !== savedPositions || !sameNames(blue, savedInternal.blue) || !sameNames(orange, savedInternal.orange) ||
       captainBlue.toLowerCase() !== savedInternal.captainBlue.toLowerCase() ||
       captainOrange.toLowerCase() !== savedInternal.captainOrange.toLowerCase();
+  }
+
+  function updateInternalDraft() {
+    const dirty = internalIsDirty();
     const state = manageArea.querySelector("#draftState");
     if (state) {
       state.textContent = dirty ? "Unsaved setup · draft saved on this device" : "All setup changes saved";
@@ -3176,19 +3190,15 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     <details class="card" open>
       <summary style="font-weight:950">Internal setup</summary>
 
-      <div class="teamAssignTools" aria-label="Team selection tools">
-        <button class="btn smartTeamBtn" id="autoBalanceTeams" type="button" ${isEditLocked || yesPlayers.length < 2 ? "disabled" : ""}><span aria-hidden="true">✦</span> Auto team</button>
-        <button class="btn gray" id="clearTeamSelections" type="button" ${isEditLocked ? "disabled" : ""}>Clear teams</button>
-        <span id="unassignedCount" class="small"></span>
-      </div>
-      <div class="autoTeamIntro">Uses recent ratings, goals, assists and past team combinations. Review the draft, then save it.</div>
+      <div class="fieldAutomationNote">${escapeHtml(teamAutomationNote)}</div>
+      <div class="small" id="unassignedCount" style="margin-top:8px"></div>
       <div id="autoTeamReport" class="autoTeamReport" role="status" aria-live="polite" hidden></div>
 
       <div id="digitalTeamPreview"></div>
 
-      <!-- Publishing sends notifications; sharing only creates the image. -->
+      <!-- Notify sends notifications; sharing only creates the image. -->
       <div class="row fieldSaveBar" style="margin-top:14px; gap:10px; flex-wrap:wrap">
-        <button class="btn primary" id="publishSetup" ${isEditLocked || !hasAnyTeams ? "disabled" : ""}>Publish teams</button>
+        <button class="btn primary" id="publishSetup" ${isEditLocked || !hasAnyTeams ? "disabled" : ""}>Notify players</button>
         <button class="btn whatsappBtn" id="shareTeams" ${hasAnyTeams ? "" : "disabled"}>Share team sheet</button>
       </div>
 
@@ -3272,26 +3282,16 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
         const rated = Number(autoBalanceReport.ratedPlayers || 0);
         const total = Number(autoBalanceReport.playerCount || yesPlayers.length);
         const history = Number(autoBalanceReport.historicalMatches || 0);
-        report.innerHTML = `<strong>${Number(autoBalanceReport.balancePercent || 0)}% balanced</strong><span>${escapeHtml(homeTeamName)} ${Number(autoBalanceReport.blueStrength || 0).toFixed(1)} · ${escapeHtml(awayTeamName)} ${Number(autoBalanceReport.orangeStrength || 0).toFixed(1)}</span><small>${rated}/${total} players have rating history · ${history} past internal ${history === 1 ? "match" : "matches"} considered</small>`;
+        const positioned = Number(autoBalanceReport.positionPlayers || 0);
+        report.innerHTML = `<strong>${Number(autoBalanceReport.balancePercent || 0)}% balanced</strong><span>${escapeHtml(homeTeamName)} ${Number(autoBalanceReport.blueStrength || 0).toFixed(1)} · ${escapeHtml(awayTeamName)} ${Number(autoBalanceReport.orangeStrength || 0).toFixed(1)}</span><small>${rated}/${total} rating history · ${positioned}/${total} outfield-role history · ${history} past internal ${history === 1 ? "match" : "matches"}</small>`;
       }
     }
     const preview = manageBody.querySelector("#digitalTeamPreview");
     if (preview) mountTeamField(preview, {
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
       positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,
-      onAuto:() => manageBody.querySelector("#autoBalanceTeams").click(),
-      onResetDraft:() => {
-        blue = [...savedInternal.blue];
-        orange = [...savedInternal.orange];
-        captainBlue = savedInternal.captainBlue;
-        captainOrange = savedInternal.captainOrange;
-        fieldPositions = JSON.parse(savedPositions || "{}");
-        autoBalanceReport = data.teamBalance || null;
-        lsDel(setupDraftKey(m.matchId));
-        updateInternalDraft();
-        renderAll();
-        toastSuccess("Draft cleared. Saved setup restored.");
-      },
+      note:teamAutomationNote,
+      onResetDraft:(event) => clearLocalDraftsAndReload(event?.currentTarget),
       onChange:updateInternalDraft,
       onDraft:updateInternalDraft,
       onSave:saveInternalField,
@@ -3313,101 +3313,31 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   renderAll();
   updateInternalDraft();
 
-  const autoBalanceTeams = manageBody.querySelector("#autoBalanceTeams");
-  if (autoBalanceTeams) autoBalanceTeams.onclick = async () => {
-    if (yesPlayers.length < 2) return toastWarn("Mark at least two players as available first.");
-    setDisabled(autoBalanceTeams, true, "Balancing…");
-    try {
-      const out = await API.adminAutoTeams(m.matchId);
-      if (!out?.ok) throw new Error(out?.error || "Could not create balanced teams");
-      if (!stillOnAdmin(routeToken)) return;
-      blue = uniqueSorted(out.bluePlayers || []);
-      orange = uniqueSorted(out.orangePlayers || []);
-      if (!blue.includes(captainBlue)) captainBlue = "";
-      if (!orange.includes(captainOrange)) captainOrange = "";
-      fieldPositions = {
-        ...randomGoalkeeperPositions(blue),
-        ...randomGoalkeeperPositions(orange)
-      };
-      autoBalanceReport = out.balance || null;
-      updateInternalDraft();
-      renderAll();
-      toastSuccess(`Balanced ${blue.length + orange.length} players. Review, then publish the teams.`);
-    } catch (error) {
-      toastError(String(error?.message || error));
-    } finally {
-      setDisabled(autoBalanceTeams, false, "Balancing…");
-    }
-  };
-
-  const clearTeamSelections = manageBody.querySelector("#clearTeamSelections");
-  if (clearTeamSelections) clearTeamSelections.onclick = () => {
-    if (!(blue.length || orange.length)) return;
-    if (!window.confirm("Reset both team selections? The published setup will not change until you select Publish teams.")) return;
-    blue = [];
-    orange = [];
-    captainBlue = "";
-    captainOrange = "";
-    fieldPositions = {};
-    autoBalanceReport = null;
-    updateInternalDraft();
-    renderAll();
-  };
-
-  // Publish teams: save the current draft first, then send notifications.
+  // Notifications are deliberately separate from saving team edits.
   manageBody.querySelector("#publishSetup").onclick = async () => {
     if (!stillOnAdmin(routeToken)) return;
     if (isEditLocked) return toastWarn("Match is locked. Unlock to edit.");
 
     const msg = manageBody.querySelector("#setupMsg");
-    // Requested: allow saving setup even if captains aren't selected yet.
-    // Captains can be assigned later without blocking team setup.
-    if (!captainBlue || !captainOrange) {
-      msg.textContent = "Publishing setup without captains…";
-    }
+    if (internalIsDirty()) return toastWarn("Save the team-field changes before notifying players.");
 
     const btn = manageBody.querySelector("#publishSetup");
-    setDisabled(btn, true, "Publishing…");
-    msg.textContent = "Saving teams before publishing…";
-
-    const out = await API.adminSetupInternal({
-      matchId: m.matchId,
-      bluePlayers: blue,
-      orangePlayers: orange,
-      captainBlue,
-      captainOrange,
-      positions: positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
-    });
-
-    if (!out.ok) {
-      setDisabled(btn, false);
-      msg.textContent = out.error || "Failed";
-      return toastError(out.error || "Failed to publish teams");
-    }
+    setDisabled(btn, true, "Notifying…");
+    msg.textContent = "Sending team notification…";
 
     const published = await API.adminShareTeams(m.matchId);
     setDisabled(btn, false);
     if (!published?.ok) {
-      msg.textContent = published?.error || "Publishing failed";
+      msg.textContent = published?.error || "Notification failed";
       return toastError(published?.error || "Team notification could not be sent");
     }
 
-    msg.textContent = "Published ✅";
-    toastSuccess("Teams published and players notified.");
-    lsDel(setupDraftKey(m.matchId));
-    savedInternal.blue = [...blue];
-    savedInternal.orange = [...orange];
-    savedInternal.captainBlue = captainBlue;
-    savedInternal.captainOrange = captainOrange;
-    savedPositions = JSON.stringify(fieldPositions);
-    clearManageCache(m.publicCode);
-    clearPublicMatchDetailCache(m.publicCode);
-    const state = manageArea.querySelector("#draftState");
-    if (state) { state.textContent = "All setup changes saved"; state.classList.remove("isDirty"); }
+    msg.textContent = "Players notified ✅";
+    toastSuccess("Players notified about the saved teams.");
   };
 
-  // Sharing creates the WhatsApp image only. Publishing is the sole action
-  // that sends team notifications.
+  // Sharing creates the WhatsApp image only. Notify is the sole action that
+  // sends team notifications.
   const shareTeamsBtn = manageBody.querySelector("#shareTeams");
   shareTeamsBtn.onclick = async () => {
     const ok = (blue.length + orange.length) > 0;

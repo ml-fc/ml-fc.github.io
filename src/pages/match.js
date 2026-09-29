@@ -34,9 +34,53 @@ let MATCH_OPEN_AUTO_REFRESH_INSTALLED = false;
 let MATCH_OPEN_REFRESH_INFLIGHT = false;
 let MATCH_OPEN_LAST_REFRESH_TS = 0;
 let NEXT_MATCH_COUNTDOWN_TIMER = null;
+let MATCH_DETAIL_LIVE_TIMER = null;
+let MATCH_DETAIL_LIVE_CODE = "";
+let MATCH_DETAIL_LIVE_VERSION = "";
+let MATCH_DETAIL_LIVE_INFLIGHT = false;
 
 const MATCH_OPEN_CACHE_MAX_AGE_MS = 60 * 1000;
 const MATCH_OPEN_REFRESH_COOLDOWN_MS = 15 * 1000;
+const MATCH_DETAIL_LIVE_INTERVAL_MS = 20 * 1000;
+
+function stopMatchDetailLiveRefresh() {
+  if (MATCH_DETAIL_LIVE_TIMER) clearInterval(MATCH_DETAIL_LIVE_TIMER);
+  MATCH_DETAIL_LIVE_TIMER = null;
+  MATCH_DETAIL_LIVE_CODE = "";
+  MATCH_DETAIL_LIVE_VERSION = "";
+  MATCH_DETAIL_LIVE_INFLIGHT = false;
+}
+
+function startMatchDetailLiveRefresh(root, code) {
+  if (MATCH_DETAIL_LIVE_CODE === code && MATCH_DETAIL_LIVE_TIMER) return;
+  stopMatchDetailLiveRefresh();
+  MATCH_DETAIL_LIVE_CODE = code;
+  const check = async () => {
+    if (document.hidden || MATCH_DETAIL_LIVE_INFLIGHT || !isMatchRouteActive()) return;
+    if (new URLSearchParams(location.hash.split("?")[1] || "").get("code") !== code) return;
+    MATCH_DETAIL_LIVE_INFLIGHT = true;
+    try {
+      const version = await API.publicMatchVersion(code);
+      if (!version?.ok) return;
+      if (!MATCH_DETAIL_LIVE_VERSION) {
+        MATCH_DETAIL_LIVE_VERSION = String(version.version || "");
+        return;
+      }
+      if (MATCH_DETAIL_LIVE_VERSION === String(version.version || "")) return;
+      MATCH_DETAIL_LIVE_VERSION = String(version.version || "");
+      const fresh = await API.getPublicMatch(code);
+      if (!fresh?.ok || MATCH_DETAIL_LIVE_CODE !== code) return;
+      lsSet(detailKey(code), { ts: now(), data: fresh });
+      await renderMatchDetail(root, code);
+    } catch {
+      // Stay on the current data and try again on the next visible interval.
+    } finally {
+      MATCH_DETAIL_LIVE_INFLIGHT = false;
+    }
+  };
+  MATCH_DETAIL_LIVE_TIMER = setInterval(check, MATCH_DETAIL_LIVE_INTERVAL_MS);
+  check().catch(() => {});
+}
 
 function matchTeamLabel(m, side) {
   const t = String(m?.type || "").toUpperCase();
@@ -88,6 +132,7 @@ function ensureMatchMetaActivationListeners() {
   window.addEventListener("hashchange", () => {
     // Only treat this as a "tab enter" when the match route is active.
     if (isMatchRouteActive()) setTimeout(() => scheduleMatchMetaCheck("tab"), 0);
+    else stopMatchDetailLiveRefresh();
   });
 }
 
@@ -1597,6 +1642,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
 
 
 function renderMatchList(root, seasonId, openMatches) {
+  stopMatchDetailLiveRefresh();
   const list = root.querySelector("#matchListView");
   const detail = root.querySelector("#matchDetailView");
   list.style.display = "block";
@@ -1982,6 +2028,7 @@ const cap = availabilityLimitForMatch(m);
           : publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
       </div>
       ${publicTeamBalance(data.teamBalance, teamLabel("HOME"), teamLabel("AWAY"))}
+      ${String(m.type || "").toUpperCase() === "INTERNAL" ? `<p class="fieldAutomationNote">${escapeHtml(String(m.teamSelectionMode || "AUTO").toUpperCase() === "MANUAL" ? "Admin-adjusted teams stay fixed. New players are placed using recent outfield roles; goalkeepers rotate separately." : "Teams use recent outfield roles as well as form. Goalkeepers are selected through a separate random rotation.")}</p>` : ""}
     </div>` : ``}
 
     ${hideAvailability ? `` : `
@@ -2088,6 +2135,8 @@ const cap = availabilityLimitForMatch(m);
     renderAvailLists();
   }
 
+  startMatchDetailLiveRefresh(root, code);
+
   // If admin closed availability, players can still change to NO/WAITING.
   // If ratings are locked (or match isn't open), do not allow changes.
   if (hideAvailability || status !== "OPEN" || ratingsClosed) return;
@@ -2143,6 +2192,12 @@ renderAvailLists();
     saveMsg.textContent = "Saved ✅";
     toastSuccess(`Saved: ${effective}`);
 
+    const fresh = await API.getPublicMatch(code).catch(() => null);
+    if (fresh?.ok) {
+      lsSet(detailKey(code), { ts: now(), data: fresh });
+      await renderMatchDetail(root, code);
+      return;
+    }
     const merged = { ...data, availability };
     lsSet(detailKey(code), { ts: now(), data: merged });
 
