@@ -2631,13 +2631,16 @@ body.hasCompactMatchCommand .appbar {
 .digitalTeam__pitch--positioned .digitalPlayer>span:not(.playerPhoto){box-sizing:border-box;width:72px;min-height:17px;padding:3px 5px;border:1px solid rgba(114,215,250,.58);border-radius:5px;background:rgba(2,19,30,.94);font-size:10px;line-height:1;text-shadow:0 1px 1px #000}
 .digitalTeam__pitch--positioned .digitalPlayer--orange>span:not(.playerPhoto),.digitalTeam--orange .digitalPlayer>span:not(.playerPhoto){border-color:rgba(255,156,85,.72)}
 .digitalTeam__pitch--positioned .digitalPlayer>small{min-width:22px;padding:2px 4px;border:1px solid rgba(255,255,255,.72);box-shadow:0 2px 5px rgba(0,0,0,.3)}
+.digitalTeam__pitch--positioned :is(.digitalPlayer--keeper,.digitalPlayer[data-role="ST"])>span:not(.playerPhoto){position:absolute;left:25px;top:0;transform:translateY(-50%);width:54px;max-width:54px}
+.digitalTeam__pitch--positioned :is(.digitalPlayer--keeper,.digitalPlayer[data-role="ST"])>small{position:absolute;left:8px;top:5px}
+.digitalTeam__pitch--positioned .digitalPlayer--orange:is(.digitalPlayer--keeper,[data-role="ST"])>span:not(.playerPhoto),.digitalTeam--orange .digitalPlayer:is(.digitalPlayer--keeper,[data-role="ST"])>span:not(.playerPhoto){right:25px;left:auto}
 .digitalTeam__pitch--shared{min-height:760px}
 @media(max-width:700px){
   .fieldPlayer>span:not(.playerPhoto),.fieldPlayer--preview>span:not(.playerPhoto),.digitalPlayer>span:not(.playerPhoto),.potmFieldPlayer>span:last-child{max-width:60px;font-size:9px}
   .digitalTeam__pitch--positioned .digitalPlayer{width:60px}
   .digitalTeam__pitch--shared{min-height:680px}
   .digitalTeam__pitch--shared .digitalPlayer{width:56px}
-  .digitalTeam__pitch--shared .digitalPlayer>.playerPhoto{width:32px;height:32px}
+  .digitalTeam__pitch--shared .digitalPlayer>.playerPhoto{width:28px;height:28px}
   .digitalTeam__pitch--shared .digitalPlayer>span:not(.playerPhoto){width:54px;max-width:54px;min-height:15px;padding:3px;font-size:8.5px}
 }
 

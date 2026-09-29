@@ -1,5 +1,5 @@
 import { drawFcCard } from "../ui/fc_card.js";
-import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode, presentationPositions } from "../ui/team_field.js";
+import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/admin.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -466,17 +466,13 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
   for(const team of teams) {
     const defaults=defaultPositions(team.players);
     const savedPositions=Object.fromEntries(team.players.map(name=>[name,positions[name]||defaults[name]||{positionX:50,positionY:50}]));
-    const displayPositions=presentationPositions(team.players,savedPositions);
     team.players.forEach((name)=>{
         const position=savedPositions[name];
-        const displayPosition=displayPositions[name]||position;
         const rawX=Number(position.positionX),rawY=Number(position.positionY);
         const positionX=Math.max(7,Math.min(93,Number.isFinite(rawX)?rawX:50));
-        const positionY=Math.max(7,Math.min(93,Number.isFinite(rawY)?rawY:50));
-        const displayX=Math.max(7,Math.min(93,Number(displayPosition.positionX)));
-        const displayPositionY=Math.max(7,Math.min(93,Number(displayPosition.positionY)));
-        const x=left+width*(team.upper ? 100-displayX : displayX)/100;
-        const displayY=teams.length===1 ? 100-displayPositionY : team.upper ? 50-displayPositionY/2 : 50+displayPositionY/2;
+        const positionY=Math.max(4,Math.min(96,Number.isFinite(rawY)?rawY:50));
+        const x=left+width*(team.upper ? 100-positionX : positionX)/100;
+        const displayY=teams.length===1 ? 100-positionY : team.upper ? 50-positionY/2 : 50+positionY/2;
         const y=top+height*displayY/100;
         const portrait=portraits.get(name);
         const markerRadius=29;
@@ -507,9 +503,13 @@ async function teamSheetImageFile(match, when, homeName, homePlayers, awayName =
         const maxLabelWidth=170;
         const label=fitCanvasLabel(context,name,maxLabelWidth-18);
         const labelWidth=context.measureText(label).width+18;
-        const labelY=y+markerRadius+7;
-        context.fillStyle="rgba(2,19,30,.9)";context.fillRect(x-labelWidth/2,labelY,labelWidth,29);
-        context.fillStyle="#fff";context.fillText(label,x,labelY+21);
+        const sideLabel=role==="GK"||role==="ST";
+        const sideDirection=team.upper?-1:1;
+        const proposedLabelX=x+sideDirection*(50+labelWidth/2);
+        const labelX=sideLabel?Math.max(left+labelWidth/2+8,Math.min(left+width-labelWidth/2-8,proposedLabelX)):x;
+        const labelY=sideLabel?y-13:y+markerRadius+4;
+        context.fillStyle="rgba(2,19,30,.9)";context.fillRect(labelX-labelWidth/2,labelY,labelWidth,26);
+        context.fillStyle="#fff";context.fillText(label,labelX,labelY+19);
     });
   }
   context.textAlign="left";

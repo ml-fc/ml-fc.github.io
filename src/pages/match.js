@@ -373,7 +373,6 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
   const players = rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
   const defaults = defaultPositions(players);
   const savedPositions = Object.fromEntries(rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
-  const displayPositions = presentationPositions(players, savedPositions);
   return `<section class="digitalTeam digitalTeam--${tone}" aria-label="${escapeHtml(teamName)} team sheet">
     <header class="digitalTeam__head"><div><span>Matchday squad</span><strong>${escapeHtml(teamName)}</strong></div><b>${players.length}</b></header>
     <div class="digitalTeam__pitch digitalTeam__pitch--positioned"><span class="digitalTeam__centre" aria-hidden="true"></span>
@@ -381,10 +380,12 @@ function publicTeamSheet(teamName, teamRows, tone = "blue", captain = "") {
         const player = String(row.playerName || "").trim();
         if (!player) return "";
         const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-        const display = displayPositions[player] || fallback;
-        const x = Math.max(9, Math.min(91, Number(display.positionX)));
-        const y = 100 - Math.max(9, Math.min(91, Number(display.positionY)));
-        return `<div class="digitalPlayer digitalPlayer--positioned${player === captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+        const saved = savedPositions[player] || fallback;
+        const rawX = Number(saved.positionX), rawY = Number(saved.positionY);
+        const x = Math.max(8, Math.min(92, Number.isFinite(rawX) ? rawX : fallback.positionX));
+        const y = 100 - Math.max(4, Math.min(96, Number.isFinite(rawY) ? rawY : fallback.positionY));
+        const role = fieldPositionCode(saved);
+        return `<div class="digitalPlayer digitalPlayer--positioned${role === "GK" ? " digitalPlayer--keeper" : ""}${player === captain ? " digitalPlayer--captain" : ""}" data-role="${escapeHtml(role)}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === captain ? "Captain" : "Player"}">${player === captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(role)}</small></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -407,17 +408,18 @@ function publicSharedTeamSheet(homeName, homeRows, awayName, awayRows, homeCapta
         const players = team.rows.map((row) => String(row.playerName || "").trim()).filter(Boolean);
         const defaults = defaultPositions(players);
         const savedPositions = Object.fromEntries(team.rows.map(row => [String(row.playerName || "").trim(), { positionX: Number(row.positionX), positionY: Number(row.positionY) }]));
-        const displayPositions = presentationPositions(players, savedPositions);
         return team.rows.map((row) => {
           const player = String(row.playerName || "").trim();
           if (!player) return "";
           const fallback = defaults[player] || { positionX: 50, positionY: 50 };
-          const display = displayPositions[player] || fallback;
-          const positionX = Math.max(9, Math.min(91, Number(display.positionX)));
-          const positionY = Math.max(9, Math.min(91, Number(display.positionY)));
+          const saved = savedPositions[player] || fallback;
+          const rawX = Number(saved.positionX), rawY = Number(saved.positionY);
+          const positionX = Math.max(8, Math.min(92, Number.isFinite(rawX) ? rawX : fallback.positionX));
+          const positionY = Math.max(4, Math.min(96, Number.isFinite(rawY) ? rawY : fallback.positionY));
           const x = team.upper ? 100 - positionX : positionX;
           const y = team.upper ? 50 - positionY / 2 : 50 + positionY / 2;
-          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${player === team.captain ? " digitalPlayer--captain" : ""}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(fieldPositionCode(savedPositions[player] || fallback))}</small></div>`;
+          const role = fieldPositionCode(saved);
+          return `<div class="digitalPlayer digitalPlayer--positioned digitalPlayer--${team.tone}${role === "GK" ? " digitalPlayer--keeper" : ""}${player === team.captain ? " digitalPlayer--captain" : ""}" data-role="${escapeHtml(role)}" style="left:${x}%;top:${y}%" title="${escapeHtml(player)}" aria-label="${escapeHtml(player)}">${playerPhotoHtml(player, row.photoUrl, "playerPhoto playerPhoto--field")}<i aria-label="${player === team.captain ? "Captain" : "Player"}">${player === team.captain ? "C" : ""}</i><span>${escapeHtml(compactPitchName(player))}</span><small>${escapeHtml(role)}</small></div>`;
         });
       }).join("")}
     </div>
@@ -508,15 +510,13 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
         positionY: Number.isFinite(rawY) ? rawY : fallback.positionY,
       }];
     }));
-    const displayPositions = presentationPositions(players, savedPositions);
     for (const row of team.rows) {
       const name = String(row.playerName || "").trim();
       if (!name) continue;
       const fallback = defaults[name] || { positionX: 50, positionY: 50 };
       const saved = savedPositions[name] || fallback;
-      const display = displayPositions[name] || fallback;
-      const px = Math.max(7, Math.min(93, Number(display.positionX)));
-      const py = Math.max(7, Math.min(93, Number(display.positionY)));
+      const px = Math.max(7, Math.min(93, Number(saved.positionX)));
+      const py = Math.max(4, Math.min(96, Number(saved.positionY)));
       const singleTeam = teams.length === 1;
       const x = pitch.x + pitch.width * (team.upper ? 100 - Math.max(7, Math.min(93, px)) : Math.max(7, Math.min(93, px))) / 100;
       const displayY = singleTeam ? 100 - Math.max(7, Math.min(93, py)) : team.upper ? 50 - Math.max(7, Math.min(93, py)) / 2 : 50 + Math.max(7, Math.min(93, py)) / 2;
@@ -536,8 +536,15 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
       context.font = "900 19px Arial";
       const label = fitRecapCanvasText(context, name, 166);
       const labelWidth = Math.min(184, Math.max(90, context.measureText(label).width + 18));
-      context.fillStyle = "rgba(2,19,30,.9)"; context.fillRect(x - labelWidth / 2, y + 36, labelWidth, 29);
-      context.fillStyle = "#fff"; context.fillText(label, x, y + 57);
+      const sideLabel = role === "GK" || role === "ST";
+      const sideDirection = team.upper ? -1 : 1;
+      const proposedLabelX = x + sideDirection * (52 + labelWidth / 2);
+      const labelX = sideLabel
+        ? Math.max(pitch.x + labelWidth / 2 + 8, Math.min(pitch.x + pitch.width - labelWidth / 2 - 8, proposedLabelX))
+        : x;
+      const labelY = sideLabel ? y - 13 : y + 33;
+      context.fillStyle = "rgba(2,19,30,.9)"; context.fillRect(labelX - labelWidth / 2, labelY, labelWidth, 26);
+      context.fillStyle = "#fff"; context.fillText(label, labelX, labelY + 19);
     }
   }
   context.textAlign = "left";
