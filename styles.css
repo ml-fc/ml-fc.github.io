@@ -2771,7 +2771,7 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 
 /* Single-screen tactics board: roster and full pitch remain side by side. */
 .fieldDialog{width:calc(100vw - 16px);height:calc(100dvh - 16px);max-width:1400px;overflow:hidden}
-.fieldWorkspace{height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;overflow:hidden}
+.fieldWorkspace{height:100%;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;overflow:hidden}
 .fieldWorkspace__head{padding:8px 12px;flex-wrap:nowrap;gap:8px;background:#f3f6f6}
 .fieldWorkspace__head strong{font-size:19px;white-space:nowrap}
 .fieldWorkspace__head .small{flex:1;font-size:12px}
@@ -2814,6 +2814,7 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
  .fieldDialog{width:100vw;height:100dvh;border:0;border-radius:0}
  .fieldWorkspace__head{padding:6px;gap:6px}.fieldWorkspace__head strong{font-size:16px}.fieldWorkspace__head .small{display:none}
  .fieldWorkspace__head .btn{min-height:36px;padding:6px 12px}
+ .fieldAutomationNote--dialog{margin:0 6px 4px;padding:7px 9px;font-size:10px;line-height:1.35}
  .fieldWorkspace__tools{padding:0 6px 4px;gap:4px}.fieldWorkspace__tools .small{display:none}.fieldWorkspace__tools .btn{font-size:10px;padding:5px 7px;min-height:30px}
  .fieldWorkspace__body{grid-template-columns:100px minmax(0,1fr);gap:4px;padding:0 4px}
  .fieldWorkspace__body--fieldOnly{grid-template-columns:minmax(0,1fr)}
