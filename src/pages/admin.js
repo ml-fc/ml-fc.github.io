@@ -2070,7 +2070,6 @@ async function openVotingManager(root, view, match) {
   const pending = Array.isArray(participation.pending) ? participation.pending : [];
   const started = Boolean(String(potm.openedAt || ""));
   const closed = started && Boolean(potm.closed);
-  const hasScores = String(detail.match?.scoreHome ?? "").trim() !== "" && String(detail.match?.scoreAway ?? "").trim() !== "";
   const results = Array.isArray(potm.results) ? potm.results : [];
   const candidates = Array.isArray(potm.candidates) ? potm.candidates : [];
   const voteCount = Number(potm.voteCount || 0);
@@ -2090,15 +2089,14 @@ async function openVotingManager(root, view, match) {
   const resultLocked = isTrueFlag(detail.match?.ratingsLocked) || matchStatus === "CLOSED" || matchStatus === "COMPLETED";
   const canAdminSelect = started && !resultLocked && voteCount === 0 && candidates.length > 0;
   dialog.innerHTML = `<div class="adminVotingDialog__panel">
-    <header><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${escapeHtml(match.title || "Voting")}</div><div class="small">${started ? `${voted.length} of ${voted.length + pending.length} players voted` : hasScores ? "Ready to open voting" : "Add the final score when starting voting"}</div></div><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button></header>
+    <header><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${escapeHtml(match.title || "Voting")}</div><div class="small">${started ? `${voted.length} of ${voted.length + pending.length} players voted` : "Ready to open voting"}</div></div><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button></header>
     ${started ? `<div class="potmParticipation">
       <section><header><b>Voted</b><span>${voted.length}</span></header><div class="potmParticipation__players">${voted.length ? voted.map((row) => `<span class="potmParticipation__player potmParticipation__player--done"><i aria-hidden="true">✓</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">No votes yet.</span>`}</div></section>
       <section><header><b>Not voted</b><span>${pending.length}</span></header><div class="potmParticipation__players">${pending.length ? pending.map((row) => `<span class="potmParticipation__player"><i aria-hidden="true">!</i>${escapeHtml(row.playerName)}<small>${escapeHtml(row.team || "")}</small></span>`).join("") : `<span class="small">Everyone has voted.</span>`}</div></section>
-    </div>` : `<div class="adminVotingDialog__empty"><b>Voting has not started</b><span>Opening this popup does not notify players. ${hasScores ? "Open voting, then use Send notification when you are ready." : "Enter both scores to open voting automatically and notify the match roster."}</span></div>`}
+    </div>` : `<div class="adminVotingDialog__empty"><b>Voting has not started</b><span>Open voting now, then use Send notification when you are ready. Scores and ratings can be updated separately.</span></div>`}
     ${canAdminSelect ? `<div class="field"><label class="field__label" for="adminPotmPlayer">No votes received — select POTM</label><select class="input" id="adminPotmPlayer"><option value="">Choose a player</option>${candidates.map((candidate) => `<option value="${escapeHtml(candidate.playerName)}">${escapeHtml(candidate.playerName)}</option>`).join("")}</select></div>` : ""}
     <div class="adminVotingDialog__actions">
-      ${!started && hasScores ? `<button class="btn good" type="button" data-vote-start>Open voting</button>` : ""}
-      ${!started && !hasScores ? `<button class="btn good" type="button" data-vote-score>Enter scores</button>` : ""}
+      ${!started ? `<button class="btn good" type="button" data-vote-start>Open voting</button>` : ""}
       ${started && !closed && pending.length ? `<button class="btn primary" type="button" data-vote-remind>Send notification</button>` : ""}
       ${canAdminSelect ? `<button class="btn primary" type="button" data-potm-select>Select POTM</button>` : ""}
       ${started && !closed ? `<button class="btn whatsappBtn" type="button" data-vote-share>Share voting link</button>` : ""}
@@ -2129,10 +2127,6 @@ async function openVotingManager(root, view, match) {
     MEM.matches = MEM.matches.map((item) => String(item.matchId) === String(match.matchId) ? { ...item, scoreHome: match.scoreHome, scoreAway: match.scoreAway, potmOpenedAt: out.openedAt, potmClosedAt: "", potmVotingClosed: 0 } : item);
     toastSuccess("Voting opened. No notifications sent yet.");
     refreshList({ reopenVoting: true });
-  });
-  dialog.querySelector("[data-vote-score]")?.addEventListener("click", () => {
-    dialog.close();
-    location.hash = `#/captain?code=${encodeURIComponent(match.publicCode)}&src=admin`;
   });
   dialog.querySelector("[data-vote-remind]")?.addEventListener("click", async (event) => {
     if (!confirm(`Send the voting notification to ${pending.length} ${pending.length === 1 ? "player" : "players"} who have not voted?`)) return;
