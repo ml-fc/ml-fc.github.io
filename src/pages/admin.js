@@ -2604,10 +2604,8 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       <div class="manageCommand__actions">
         <button class="btn gray" id="backToAdminList">Back to matches</button>
         <button class="btn primary" id="shareMatch">Share match link</button>
-        ${isEditLocked ? `<button class="btn gray" id="unlockBtn">Unlock match</button>` : ""}
-        ${hasBothScores && !locked ? `<button class="btn primary" id="lockRatingsTop">Complete & lock match</button>` : ""}
       </div>
-      <div class="manageCommand__notice" id="lockReason">${locked ? "Completed matches are read-only until an admin unlocks them." : !hasBothScores ? "Locking becomes available after both scores are saved." : !potmReady ? "Select Player of the Match before completing." : "Ready to complete once all ratings have been checked."}</div>
+      <div class="manageCommand__notice" id="lockReason">${locked || isCompleted ? "Completed matches are read-only. Return to the match list to unlock." : !hasBothScores ? "Complete & lock becomes available in the match list after both scores are saved." : !potmReady ? "Select Player of the Match before completing from the match list." : "This match can be completed from the match list once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
     <details class="card">
@@ -2670,79 +2668,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   manageArea.querySelector("#shareMatch").onclick = () => {
     waOpenPrefill(`Manor Lakes FC match link:\n${matchLink(m.publicCode)}`);
     toastInfo("WhatsApp opened.");
-  };
-
-  const unlockBtn = manageArea.querySelector("#unlockBtn");
-  if (unlockBtn) {
-    unlockBtn.onclick = async () => {
-      if (!stillOnAdmin(routeToken)) return;
-      setDisabled(unlockBtn, true, "Unlocking…");
-      const out = await API.adminUnlockMatch(m.matchId);
-      setDisabled(unlockBtn, false);
-      if (!out.ok) return toastError(out.error || "Failed");
-
-      toastSuccess("Unlocked.");
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-
-      // Update MEM locally (no API)
-      MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
-        ? { ...x, status: "OPEN", ratingsLocked: "FALSE", availabilityLocked: "FALSE" }
-        : x
-      );
-      lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-
-      // Fetch fresh match once to update manage view (explicit action just happened)
-      const fresh = await API.getPublicMatch(m.publicCode);
-      if (stillOnAdmin(routeToken) && fresh.ok) {
-        lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-        renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-      }
-    };
-  }
-
-
- 
-
-  const lockRatingsTop = manageArea.querySelector("#lockRatingsTop");
-  if (lockRatingsTop) lockRatingsTop.onclick = async () => {
-    if (!stillOnAdmin(routeToken)) return;
-    if (!potmReady) {
-      toastError("Select Player of the Match before completing this match.");
-      const listMatch = (MEM.matches || []).find((item) => String(item.matchId) === String(m.matchId)) || m;
-      openVotingManager(root, prevView || "open", listMatch).catch(() => {});
-      return;
-    }
-
-    const confirmed = confirm(
-      `Complete “${m.title || "this match"}”?\n\nThis will:\n• close POTM voting immediately\n• lock team and availability changes\n• lock scores and ratings\n• publish the final result\n• mark the match completed\n\nAn admin can unlock the match later, but POTM voting will remain closed.`
-    );
-    if (!confirmed) return;
-
-    const btn = manageArea.querySelector("#lockRatingsTop");
-    setDisabled(btn, true, "Locking…");
-
-    const out = await API.adminLockRatings(m.matchId);
-    setDisabled(btn, false);
-    if (!out.ok) return toastError(out.error || "Failed");
-
-    toastSuccess("Ratings locked.");
-    clearPublicMatchDetailCache(m.publicCode);
-    clearManageCache(m.publicCode);
-
-    // Update MEM locally (no API)
-    MEM.matches = (MEM.matches || []).map(x => String(x.matchId) === String(m.matchId)
-      ? { ...x, status: "COMPLETED", ratingsLocked: "TRUE" }
-      : x
-    );
-    lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-
-    // Fetch fresh match once to update manage view
-    const fresh = await API.getPublicMatch(m.publicCode);
-    if (stillOnAdmin(routeToken) && fresh.ok) {
-      lsSet(manageKey(m.publicCode), { ts: now(), data: fresh });
-      renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
-    }
   };
 
   const manageBody = manageArea.querySelector("#manageBody");
