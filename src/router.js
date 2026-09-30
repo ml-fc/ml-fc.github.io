@@ -83,7 +83,8 @@ async function renderRoute() {
 
   // If not logged in, force login page except for leaderboard
   if (!hasToken && route !== "#/login" && route !== "#/leaderboard") {
-    window.location.hash = "#/login";
+    const returnHash = fullHash.startsWith("#/match") ? fullHash : "";
+    window.location.hash = returnHash ? `#/login?return=${encodeURIComponent(returnHash)}` : "#/login";
     return;
   }
 
@@ -96,7 +97,8 @@ async function renderRoute() {
   const isSuperAdmin = String(user?.name || "").trim().toLowerCase() === "admin";
   const profileIncomplete = user && (!String(user.photoUrl || "").trim() || (!isSuperAdmin && (!String(user.phone || "").trim() || !String(user.email || "").trim() || !String(user.emailVerifiedAt || "").trim())));
   if (hasToken && profileIncomplete && route !== "#/login") {
-    window.location.hash = "#/login?profile=required";
+    const returnHash = fullHash.startsWith("#/match") ? fullHash : "";
+    window.location.hash = returnHash ? `#/login?profile=required&return=${encodeURIComponent(returnHash)}` : "#/login?profile=required";
     return;
   }
 

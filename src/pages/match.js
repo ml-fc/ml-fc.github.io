@@ -2036,7 +2036,7 @@ const cap = availabilityLimitForMatch(m);
       </div>
     ` : ``}
 
-    ${hasScore && potm?.openedAt ? `<div class="card potmCard" id="potmVoting">
+    ${potm?.openedAt ? `<div class="card potmCard" id="potmVoting">
       <div class="potmCard__head"><div><div class="stepEyebrow">Player of the Match</div><div class="h1">${potm.closed ? (potmWinnerRows.length ? "Match winner" : "Voting closed") : "Cast your vote"}</div></div><span class="badge">${potm.closed ? "FINAL" : "OPEN"}</span></div>
       ${potm.closed ? `
         ${potmWinnerRows.length ? `<div class="potmWinners">${potmWinnerRows.map((winner) => {
@@ -2254,7 +2254,11 @@ export async function renderMatchPage(root, query) {
   if (code) {
     await renderMatchDetail(root, code);
     if (query.get("focus") === "potm") {
-      setTimeout(() => root.querySelector("#potmVoting")?.scrollIntoView({behavior:"smooth",block:"start"}), 0);
+      setTimeout(() => {
+        const trigger = root.querySelector("#openPotmField");
+        if (trigger) trigger.click();
+        else root.querySelector("#potmVoting")?.scrollIntoView({behavior:"smooth",block:"start"});
+      }, 0);
     }
     return;
   }
