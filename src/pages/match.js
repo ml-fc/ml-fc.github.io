@@ -6,6 +6,7 @@ import { getCachedUser } from "../auth.js";
 import { defaultPositions, fieldPositionCode, presentationPositions } from "../ui/team_field.js";
 import { initials, loadCanvasImage, playerPhotoHtml } from "../ui/player_photo.js";
 import { getActiveWeeklyTheme } from "../themes.js";
+import { openIconCelebration } from "../ui/icon_celebration.js";
 
 const LS_SEASONS_CACHE = "mlfc_seasons_cache_v1";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -1297,6 +1298,8 @@ function wirePotmVoteBanner(host) {
 }
 
 function wireNextMatchLinks(host) {
+  const themeButton = host.querySelector("[data-icon-celebration]");
+  if (themeButton) themeButton.onclick = openIconCelebration;
   host.querySelectorAll("[data-next-open]").forEach((button) => {
     button.onclick = () => {
       const code = button.getAttribute("data-next-open");
@@ -1316,11 +1319,13 @@ function renderNextMatchDashboard(host, data) {
   const match = data?.nextMatch;
   const weeklyTeam = String(document.body.dataset.weeklyTeam || "");
   const themeLabel = document.body.dataset.themeCategory === "GOATS" ? "GOAT" : "Team of the Week";
+  const isIcon = document.body.dataset.themeCategory === "GOATS";
+  const markElement = isIcon ? "button" : "div";
   const weeklyThemeMark = `
-    <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `${themeLabel}: ${weeklyTeam}` : themeLabel)}">
+    <${markElement} ${isIcon ? 'type="button" data-icon-celebration aria-haspopup="dialog"' : ""} class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `${themeLabel}: ${weeklyTeam}${isIcon ? ". Open photo and celebration" : ""}` : themeLabel)}">
       <span class="nextMatch__themeCrest" aria-hidden="true"></span>
       <span><small class="nextMatch__themeTag"><img class="nextMatch__goatIcon" src="./assets/goats/goat.svg" alt="" aria-hidden="true" /><span class="nextMatch__themeLabel">${themeLabel}</span></small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
-    </div>`;
+    </${markElement}>`;
   if (!match) {
     const result = data?.latestResult;
     host.innerHTML = `
