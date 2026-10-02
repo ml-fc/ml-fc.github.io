@@ -1241,7 +1241,7 @@ function renderAdminShell(root, view) {
       <div class="themeSettings__picker">
         <div class="field">
           <label class="field__label" for="themeCategory">Category</label>
-          <select class="input" id="themeCategory"><option value="EPL">EPL</option><option value="GOATS">GOATS</option></select>
+          <select class="input" id="themeCategory"><option value="EPL">EPL</option><option value="GOATS">ICON</option></select>
         </div>
         <div class="field">
           <label class="field__label" for="weeklyThemeTeam" id="themeChoiceLabel">Choose an EPL team</label>
@@ -1343,15 +1343,15 @@ async function bindThemeSettings(root) {
     preview.style.setProperty("--preview-accent", theme.accent);
     preview.style.setProperty("--preview-secondary", theme.accent2);
     preview.style.setProperty("--preview-position", theme.portraitPosition || "center");
-    preview.innerHTML = `<img src="${escapeHtml(theme.crest)}" alt="${escapeHtml(theme.name)}" class="themePreview__portrait ${theme.category === "GOATS" ? "themePreview__portrait--player" : ""}" /><div><small>${escapeHtml(theme.category)} · THEME PREVIEW</small><strong>${escapeHtml(theme.name)}</strong><p>${escapeHtml(theme.kit || "Premier League club colours")}</p><span class="themePreview__swatches" aria-label="Theme colours">${[theme.primary, theme.accent, theme.accent2].map(colour => `<i style="background:${colour}"></i>`).join("")}</span></div>`;
+    preview.innerHTML = `<img src="${escapeHtml(theme.crest)}" alt="${escapeHtml(theme.name)}" class="themePreview__portrait ${theme.category === "GOATS" ? "themePreview__portrait--player" : ""}" /><div><small>${escapeHtml(theme.category === "GOATS" ? "ICON" : theme.category)} · THEME PREVIEW</small><strong>${escapeHtml(theme.name)}</strong><p>${escapeHtml(theme.kit || "Premier League club colours")}</p><span class="themePreview__swatches" aria-label="Theme colours">${[theme.primary, theme.accent, theme.accent2].map(colour => `<i style="background:${colour}"></i>`).join("")}</span></div>`;
     if (theme.collective) preview.querySelector("img").replaceWith(createGoatsCollage("themePreview__collage"));
   };
   const paintCategory = (selectedId) => {
     const goats = categorySelect.value === "GOATS";
     teamSelect.innerHTML = (goats ? GOAT_THEMES : EPL_THEMES).map(theme => `<option value="${theme.teamId}">${escapeHtml(theme.name)}</option>`).join("");
     if (selectedId != null) teamSelect.value = String(selectedId);
-    root.querySelector("#themeChoiceLabel").textContent = goats ? "Choose a GOAT theme" : "Choose an EPL team";
-    root.querySelector("#themeCategoryHelp").textContent = goats ? "GOATS themes use each player’s iconic jersey colours and stay active until you change them." : "EPL themes update automatically on Mondays. A manual club choice stays until the next weekly selection.";
+    root.querySelector("#themeChoiceLabel").textContent = goats ? "Choose an ICON theme" : "Choose an EPL team";
+    root.querySelector("#themeCategoryHelp").textContent = goats ? "ICON themes use each player’s iconic jersey colours and stay active until you change them." : "EPL themes update automatically on Mondays. A manual club choice stays until the next weekly selection.";
     paintPreview();
   };
   categorySelect.onchange = () => paintCategory();
