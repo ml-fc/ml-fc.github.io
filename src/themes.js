@@ -1,7 +1,7 @@
 const CACHE_KEY = "mlfc_weekly_epl_theme_v1";
 const THEME_PROPERTIES = [
   "--bg", "--panel", "--panel-2", "--primary", "--primary-2", "--accent", "--accent-2",
-  "--line", "--focus", "--theme-card-tint", "--theme-card-line", "--weekly-crest",
+  "--line", "--focus", "--theme-card-tint", "--theme-card-line", "--weekly-crest", "--theme-portrait-position",
 ];
 
 export const EPL_THEMES = [
@@ -25,7 +25,26 @@ export const EPL_THEMES = [
   { teamId: 65, slug: "nottingham-forest", name: "Nottingham Forest", aliases: ["Nottingham Forest FC", "Nott'm Forest"], background: "#150b0e", panel: "#291419", panel2: "#3a1c23", primary: "#ae1024", primary2: "#7e0b19", accent: "#ef5261", accent2: "#e9c45b", cardTint: "#fff8f9", cardLine: "#e5c9ce" },
   { teamId: 746, slug: "sunderland", name: "Sunderland", aliases: ["Sunderland AFC"], background: "#140d10", panel: "#29171b", panel2: "#3a2025", primary: "#ac1022", primary2: "#7d0b18", accent: "#e83c4c", accent2: "#d3b45e", cardTint: "#fff8f9", cardLine: "#e6cacf" },
   { teamId: 47, slug: "tottenham-hotspur", name: "Tottenham Hotspur", aliases: ["Tottenham Hotspur FC", "Tottenham", "Spurs"], background: "#071126", panel: "#0d203e", panel2: "#142e54", primary: "#132257", primary2: "#0b1538", accent: "#77b7dc", accent2: "#d7b95d", cardTint: "#f8faff", cardLine: "#cbd5e4" },
-].map((theme) => ({ ...theme, crest: `./assets/epl-2026-27/${theme.slug}.png` }));
+].map((theme) => ({ ...theme, category: "EPL", crest: `./assets/epl-2026-27/${theme.slug}.png` }));
+
+// Negative IDs are reserved for player themes; EPL keeps its API-Football IDs.
+export const GOAT_THEMES = [
+  {"teamId": -1, "slug": "neymar", "name": "Neymar", "kit": "Brazil · Canarinho yellow", "portraitPosition": "50% 28%", "background": "#071b15", "panel": "#103b2a", "panel2": "#155237", "primary": "#126638", "primary2": "#0b4828", "accent": "#f6df35", "accent2": "#2155be", "cardTint": "#fffef2", "cardLine": "#e2dfb3"},
+  {"teamId": -2, "slug": "cristiano", "name": "Cristiano Ronaldo", "kit": "Portugal · Red & green", "portraitPosition": "50% 15%", "background": "#1b090d", "panel": "#351018", "panel2": "#4b1520", "primary": "#aa1428", "primary2": "#7f0e1d", "accent": "#e8c875", "accent2": "#168461", "cardTint": "#fff9f6", "cardLine": "#e6cec6"},
+  {"teamId": -3, "slug": "messi", "name": "Lionel Messi", "kit": "Barcelona · Blaugrana", "portraitPosition": "50% 15%", "background": "#080f25", "panel": "#111f43", "panel2": "#182f59", "primary": "#15458a", "primary2": "#103369", "accent": "#f5d53d", "accent2": "#bd2444", "cardTint": "#f8faff", "cardLine": "#ccd8e9"},
+  {"teamId": -4, "slug": "r9", "name": "Ronaldo (R9)", "kit": "Brazil · 1998 yellow & blue", "portraitPosition": "50% 18%", "background": "#09172c", "panel": "#142f4a", "panel2": "#1b4057", "primary": "#125f39", "primary2": "#0d452a", "accent": "#f5db26", "accent2": "#2871c7", "cardTint": "#fffef1", "cardLine": "#e1deaf"},
+  {"teamId": -5, "slug": "maradona", "name": "Diego Maradona", "kit": "Argentina · Sky blue & white", "portraitPosition": "50% 20%", "background": "#091d2d", "panel": "#14334b", "panel2": "#214b67", "primary": "#1c618a", "primary2": "#134665", "accent": "#91cfec", "accent2": "#ffffff", "cardTint": "#f5fbff", "cardLine": "#c5deed"},
+  {"teamId": -6, "slug": "ronaldinho", "name": "Ronaldinho", "kit": "Barcelona · Blaugrana", "portraitPosition": "50% 17%", "background": "#170d20", "panel": "#2a1635", "panel2": "#3d204a", "primary": "#9c1937", "primary2": "#72112a", "accent": "#ecd342", "accent2": "#2859ad", "cardTint": "#fff8fa", "cardLine": "#e5ccd6"},
+  {"teamId": -7, "slug": "pele", "name": "Pelé", "kit": "Brazil · Classic gold & green", "portraitPosition": "50% 15%", "background": "#0c1c15", "panel": "#193b29", "panel2": "#285238", "primary": "#1b603a", "primary2": "#12442a", "accent": "#edc63d", "accent2": "#2b77ac", "cardTint": "#fffdf2", "cardLine": "#e3dcba"},
+].map((theme) => ({ ...theme, category: "GOATS", crest: `./assets/goats/${theme.slug}.jpg` }));
+
+export const ALL_THEMES = [...EPL_THEMES, ...GOAT_THEMES];
+
+export function resolveTheme(selection = {}) {
+  const slug = String(selection.themeSlug || "").trim().toLowerCase();
+  if (slug) return ALL_THEMES.find((theme) => theme.slug === slug) || null;
+  return ALL_THEMES.find((theme) => theme.teamId === Number(selection.teamId)) || resolveEplTheme(selection);
+}
 
 function normalized(value) {
   return String(value || "").toLowerCase().replace(/&/g, "and").replace(/\b(fc|afc)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -41,10 +60,10 @@ export function resolveEplTheme(selection = {}) {
 
 export function getActiveWeeklyTheme() {
   const slug = String(document.body?.dataset?.weeklyTheme || "").trim();
-  if (slug) return resolveEplTheme({ themeSlug: slug });
+  if (slug) return resolveTheme({ themeSlug: slug });
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (cached?.enabled && cached?.theme) return resolveEplTheme(cached.theme);
+    if (cached?.enabled && cached?.theme) return resolveTheme(cached.theme);
   } catch {}
   return null;
 }
@@ -54,6 +73,9 @@ function clearWeeklyTheme() {
   THEME_PROPERTIES.forEach((property) => root.style.removeProperty(property));
   delete document.body.dataset.weeklyTheme;
   delete document.body.dataset.weeklyTeam;
+  delete document.body.dataset.themeCategory;
+  const brand = document.querySelector(".brand__mark");
+  if (brand) { brand.src = "./assets/icons/icon-192.png"; brand.alt = ""; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#07111e");
   document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = ""; });
   document.querySelectorAll(".nextMatch__themeMark").forEach((element) => { element.removeAttribute("aria-label"); });
@@ -63,7 +85,7 @@ export function applyWeeklyTheme(payload) {
   clearWeeklyTheme();
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ enabled: Boolean(payload?.enabled), theme: payload?.theme || null })); } catch {}
   if (!payload?.enabled || !payload?.theme) return null;
-  const theme = resolveEplTheme(payload.theme);
+  const theme = resolveTheme(payload.theme);
   if (!theme) return null;
   const root = document.documentElement;
   const values = {
@@ -72,14 +94,19 @@ export function applyWeeklyTheme(payload) {
     "--accent-2": theme.accent2, "--line": `${theme.accent}35`, "--focus": `0 0 0 3px ${theme.accent}66`,
     "--theme-card-tint": theme.cardTint, "--theme-card-line": theme.cardLine,
     "--weekly-crest": `url("${theme.crest}")`,
+    "--theme-portrait-position": theme.portraitPosition || "center",
   };
   Object.entries(values).forEach(([property, value]) => root.style.setProperty(property, value));
   document.body.dataset.weeklyTheme = theme.slug;
   document.body.dataset.weeklyTeam = theme.name;
+  document.body.dataset.themeCategory = theme.category;
+  const brand = document.querySelector(".brand__mark");
+  if (brand) { brand.src = theme.crest; brand.alt = `${theme.name} theme`; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.background);
   document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = theme.name; });
+  document.querySelectorAll(".nextMatch__themeLabel").forEach((element) => { element.textContent = theme.category === "GOATS" ? "GOAT" : "Team of the Week"; });
   document.querySelectorAll(".nextMatch__themeMark").forEach((element) => {
-    element.setAttribute("aria-label", `Team of the Week: ${theme.name}`);
+    element.setAttribute("aria-label", `${theme.category === "GOATS" ? "GOAT" : "Team of the Week"}: ${theme.name}`);
   });
   return theme;
 }

@@ -188,7 +188,7 @@ async function captainTeamImageFile(match, when, team, positions) {
     context.fillStyle = weeklyTheme.accent;
     context.font = "900 18px Arial";
     context.textAlign = "right";
-    context.fillText(`TEAM OF THE WEEK · ${weeklyTheme.name.toUpperCase()}`, 1020, 76);
+    context.fillText(`${weeklyTheme.category === "GOATS" ? "GOAT" : "TEAM OF THE WEEK"} · ${weeklyTheme.name.toUpperCase()}`, 1020, 76);
     context.textAlign = "left";
   }
 

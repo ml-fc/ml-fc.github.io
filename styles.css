@@ -2727,7 +2727,7 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 .themeSwitch input:checked + span::after { transform:translateX(24px); }
 .themeSwitch input:focus-visible + span { box-shadow:var(--focus); }
 .themeSwitch input:disabled + span { opacity:.55; cursor:wait; }
-.themeSettings__picker { display:grid; grid-template-columns:minmax(220px,1fr) auto; align-items:end; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid #d6e0e5; }
+.themeSettings__picker { display:grid; grid-template-columns:minmax(110px,.45fr) minmax(180px,1fr) auto; align-items:end; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid #d6e0e5; }
 .themeSettings__picker .field { margin:0; }
 .themeSettings__picker .btn { min-height:44px; }
 @media(max-width:600px){body[data-weekly-theme]::after{width:92vw;right:-30vw;top:20vh;opacity:.07}.themeSettings__body{align-items:flex-start;flex-direction:column}.themeSwitch{width:100%;justify-content:start}.themeSettings__picker{grid-template-columns:1fr}.themeSettings__picker .btn{width:100%}}
@@ -2858,3 +2858,34 @@ body[data-weekly-theme] textarea:focus-visible { outline:none; box-shadow:var(--
 
 @media(max-width:600px){.liveMatchBanner{grid-template-columns:auto minmax(0,1fr);gap:9px 10px}.liveMatchBanner__signal{padding:6px 8px}.liveMatchBanner__button{grid-column:1/-1;width:100%}.matchStreamPlayer{margin-inline:-2px;border-radius:12px}.matchStreamPlayer__head{grid-template-columns:auto minmax(0,1fr);gap:8px 10px;padding:11px 12px}.matchStreamPlayer__fullscreen{grid-column:1/-1;width:100%}.matchStreamPlayer__head h1{font-size:20px}.streamDesk__head{grid-template-columns:auto minmax(0,1fr);padding:12px}.streamDesk__body{padding:13px}.streamDesk__actions .btn{width:100%}.adminStreamDialog__panel{padding:12px}.adminStreamDialog__panel>.streamDesk{border-radius:12px}}
 @media(prefers-reduced-motion:reduce){.liveSignal{animation:none;box-shadow:0 0 0 3px rgba(255,59,79,.2)}.matchStreamPlayer__fullscreen,.liveMatchBanner__button{transition:none}}
+
+/* Career colours and portraits share the existing app theme tokens. */
+.themePreview { display:flex; gap:20px; align-items:center; margin-top:16px; padding:20px; border-radius:12px; color:#fff; background:linear-gradient(115deg,var(--preview-bg),var(--preview-primary)); border-bottom:4px solid var(--preview-accent); }
+.themePreview__portrait { width:88px; height:104px; object-fit:contain; flex-shrink:0; }
+.themePreview__portrait--player { object-fit:cover; object-position:var(--theme-portrait-position,center 20%); border-radius:8px; }
+.themePreview small { display:block; color:var(--preview-accent); font:800 10px/1.5 ui-monospace,monospace; letter-spacing:.1em; }
+.themePreview strong { display:block; margin:5px 0; font-size:24px; line-height:1.15; }
+.themePreview p { margin:0; font-size:12px; line-height:1.5; color:#fff; opacity:.85; }
+.themePreview__swatches { display:flex; gap:5px; margin-top:12px; }
+.themePreview__swatches i { width:26px; height:6px; border-radius:2px; border:1px solid #ffffff55; }
+body[data-theme-category="GOATS"] .brand__mark { object-fit:cover; object-position:var(--theme-portrait-position,center 20%); border-radius:50%; border:2px solid var(--accent); }
+body[data-theme-category="GOATS"] .nextMatch__themeCrest { background-size:cover; background-position:var(--theme-portrait-position,center 20%); border-radius:50%; border:2px solid var(--accent); }
+body[data-theme-category="GOATS"]::after { border-radius:50%; background-size:cover; background-position:var(--theme-portrait-position,center 20%); }
+body[data-weekly-theme] .authWelcome, body[data-weekly-theme] .seasonHero { background:linear-gradient(125deg,var(--bg),var(--panel-2)); }
+body[data-weekly-theme] .matchBoard { border-color:var(--theme-card-line); }
+@media(max-width:600px) { .themePreview { padding:16px; gap:14px; } .themePreview strong { font-size:21px; } }
+
+/* GOATS: jersey colours, a portrait and a compact goat insignia. */
+.nextMatch__themeTag { display:flex; align-items:center; gap:5px; }
+.nextMatch__goatIcon { display:none; width:21px; height:21px; }
+body[data-theme-category="GOATS"] .nextMatch__goatIcon { display:block; }
+body[data-theme-category="GOATS"] .nextMatch__themeTag { color:var(--accent); font-weight:900; letter-spacing:.15em; }
+body[data-theme-category="GOATS"] .nextMatch__themeMark { gap:12px; padding:10px 14px 10px 10px; border:1px solid color-mix(in srgb,var(--accent) 40%,transparent); border-radius:12px; background:color-mix(in srgb,var(--bg) 70%,transparent); box-shadow:0 8px 24px #0002; }
+body[data-theme-category="GOATS"] .nextMatch__themeCrest { width:65px; height:80px; flex-basis:65px; border-radius:7px; }
+body[data-theme-category="GOATS"] .nextMatch__themeName { max-width:160px; font-size:18px; line-height:1.15; white-space:normal; overflow-wrap:normal; }
+body[data-theme-category="GOATS"]::after { opacity:.035; z-index:-1; }
+body[data-theme-category="GOATS"] .nextMatch { border-top:3px solid var(--accent); background:linear-gradient(115deg,var(--bg),var(--panel-2) 60%,color-mix(in srgb,var(--accent-2) 35%,var(--panel))); }
+.themePreview { position:relative; overflow:hidden; min-height:186px; border-bottom:0; box-shadow:inset 0 0 0 1px #ffffff20; }
+.themePreview::after { content:""; position:absolute; bottom:0; left:0; right:0; height:5px; background:linear-gradient(90deg,var(--preview-accent) 0 65%,var(--preview-secondary) 65%); }
+.themePreview__portrait--player { width:108px; height:142px; object-position:var(--preview-position); box-shadow:0 6px 22px #0004; border:1px solid #ffffff40; }
+@media(max-width:600px) { .themePreview__portrait--player { width:90px; height:125px; } body[data-theme-category="GOATS"] .nextMatch__themeCrest { width:52px; height:65px; flex-basis:52px; } body[data-theme-category="GOATS"] .nextMatch__themeName { font-size:16px; } }

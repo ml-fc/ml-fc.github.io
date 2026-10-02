@@ -463,7 +463,7 @@ async function publicTeamSheetImageFile(match, when, homeName, homeRows, awayNam
     context.fillStyle = theme.accent;
     context.font = "900 17px Arial";
     context.textAlign = "right";
-    context.fillText(`TEAM OF THE WEEK · ${theme.name.toUpperCase()}`, 1025, 55);
+    context.fillText(`${theme.category === "GOATS" ? "GOAT" : "TEAM OF THE WEEK"} · ${theme.name.toUpperCase()}`, 1025, 55);
     context.textAlign = "left";
   }
 
@@ -1315,10 +1315,11 @@ function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
   const weeklyTeam = String(document.body.dataset.weeklyTeam || "");
+  const themeLabel = document.body.dataset.themeCategory === "GOATS" ? "GOAT" : "Team of the Week";
   const weeklyThemeMark = `
-    <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `Team of the Week: ${weeklyTeam}` : "Team of the Week")}">
+    <div class="nextMatch__themeMark" aria-label="${escapeHtml(weeklyTeam ? `${themeLabel}: ${weeklyTeam}` : themeLabel)}">
       <span class="nextMatch__themeCrest" aria-hidden="true"></span>
-      <span><small>Team of the Week</small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
+      <span><small class="nextMatch__themeTag"><img class="nextMatch__goatIcon" src="./assets/goats/goat.svg" alt="" aria-hidden="true" /><span class="nextMatch__themeLabel">${themeLabel}</span></small><strong class="nextMatch__themeName">${escapeHtml(weeklyTeam)}</strong></span>
     </div>`;
   if (!match) {
     const result = data?.latestResult;

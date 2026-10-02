@@ -71,7 +71,7 @@ export const API = {
   adminAuditLog: (filters = {}) => apiGet({ action: "admin_audit_log", ...filters }),
   adminThemeSettings: () => apiGet({ action: "admin_theme_settings" }),
   adminSetThemeEnabled: (enabled) => apiPost({ action: "admin_set_theme_enabled", enabled: enabled ? 1 : 0 }),
-  adminSetWeeklyTheme: (teamId) => apiPost({ action: "admin_set_weekly_theme", teamId }),
+  adminSetWeeklyTheme: (teamId, category = "EPL") => apiPost({ action: "admin_set_weekly_theme", teamId, category }),
 
   // admin: match availability management (for adding players who may not have the app)
   adminSetAvailabilityFor: (matchId, playerName, availability, note = "") =>
