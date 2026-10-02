@@ -2903,18 +2903,31 @@ body[data-theme-category="GOATS"] .nextMatch { border-top:3px solid var(--accent
 .themePreview__portrait--player { width:108px; height:142px; object-position:var(--preview-position); box-shadow:0 6px 22px #0004; border:1px solid #ffffff40; }
 @media(max-width:600px) { .themePreview__portrait--player { width:90px; height:125px; } body[data-theme-category="GOATS"] .nextMatch__themeCrest { width:52px; height:65px; flex-basis:52px; } body[data-theme-category="GOATS"] .nextMatch__themeName { font-size:16px; } }
 
-/* Let long fixture names wrap; reserve a separate row for the theme on phones. */
-.nextMatch__head { min-width:0; flex-wrap:wrap; }
-.nextMatch__head > :first-child { min-width:0; flex:1 1 240px; }
+/* Keep the theme beside the fixture; shrink its contents instead of wrapping the aside. */
+.nextMatch__head { display:grid; grid-template-columns:minmax(0,1fr) auto; min-width:0; align-items:start; }
+.nextMatch__head > :first-child { min-width:0; }
 .nextMatch__head h1 { overflow-wrap:anywhere; }
 .nextMatch__aside { min-width:0; max-width:100%; }
 .nextMatch__themeMark { max-width:100%; }
 @media(max-width:760px) {
-  .nextMatch__head { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:16px; }
-  .nextMatch__aside { width:100%; justify-items:start; gap:10px; }
-  .nextMatch__themeMark { min-width:0; }
-  .nextMatch__countdown { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
-  body[data-theme-category="GOATS"] .nextMatch__themeName { max-width:none; overflow-wrap:anywhere; }
+  .nextMatch__head { grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:clamp(8px,2vw,14px); }
+  .nextMatch__aside { width:100%; justify-items:end; gap:8px; }
+  .nextMatch__themeMark,
+  body[data-theme-category="GOATS"] .nextMatch__themeMark {
+    width:100%; min-width:0; gap:clamp(4px,1.2vw,9px); padding:clamp(5px,1.5vw,10px); border-radius:8px;
+  }
+  .nextMatch__themeCrest,
+  body[data-theme-category="GOATS"] .nextMatch__themeCrest {
+    width:clamp(23px,7vw,48px); height:clamp(29px,8.75vw,60px); flex-basis:clamp(23px,7vw,48px); border-width:1px;
+  }
+  .nextMatch__themeMark strong,
+  body[data-theme-category="GOATS"] .nextMatch__themeName {
+    max-width:none; font-size:clamp(10px,2.75vw,16px); line-height:1.15; white-space:normal; overflow-wrap:anywhere;
+  }
+  .nextMatch__themeTag { gap:3px; }
+  .nextMatch__themeMark small { font-size:clamp(6px,1.6vw,8px); letter-spacing:.08em; white-space:normal; }
+  .nextMatch__goatIcon { width:clamp(12px,3.5vw,20px); height:clamp(12px,3.5vw,20px); flex-shrink:0; }
+  .nextMatch__countdown { max-width:100%; padding:6px; font-size:clamp(8px,2.1vw,11px); white-space:normal; overflow-wrap:anywhere; }
 }
 
 /* All seven originals, composed into one collective GOATS theme. */
