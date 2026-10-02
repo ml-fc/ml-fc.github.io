@@ -93,7 +93,7 @@ export function openIconCelebration() {
   dialog.addEventListener("close", () => {
     clearTimeout(cleanupTimer);
     clearTimeout(sequenceTimer);
-    move.stop();
+    move.dispose();
     window.removeEventListener("hashchange", closeOnNavigation);
     document.body.style.overflow = previousOverflow;
     dialog.remove();

@@ -1,5 +1,6 @@
+import { createIconScene } from "./icon_scene.js";
 // Original illustrated tributes: articulated limbs, contact poses and a finite replay clock.
-export const ICON_MOVE_DURATION = 7200;
+export const ICON_MOVE_DURATION = 9000;
 const LOOKS = {
   cristiano: ['#c52336','#075c41','#d7a27c','7','BICYCLE KICK','SIUUU!'],
   messi: ['#1459a3','#a71939','#dfae8b','10','LEFT-FOOT MAGIC','TO THE SKY'],
@@ -19,6 +20,56 @@ const MOVES = {
   ronaldinho:[[0,220,206,0,-18,42,22,40,249,247],[.24,232,206,-8,-18,42,44,31,279.9,230.6],[.32,237,206,8,-18,42,5,39,236.5,245.3],[.52,332,202,12,-23,38,26,38,369,246],[.64,375,206,-8,-18,42,44,22,421.6,221.7],[.76,389,206,0,-20,42,20,42,555,206]],
   pele:[[0,251,206,0,-18,42,18,42,142,88],[.22,272,184,-12,-20,34,25,31,239,150],[.4,291,162,-20,-18,43,48,12,340.2,156.9],[.53,305,181,-10,-20,38,30,30,425,144],[.68,319,206,0,-18,42,18,42,555,192],[.76,324,206,0,-18,42,18,42,560,233]],
 };
+const clamp = value => Math.max(0, Math.min(1, value));
+const smooth = value => { const u = clamp(value); return u*u*(3-2*u); };
+function contactTime(slug) {
+  return { cristiano:.42, pele:.4, messi:.62, ronaldinho:.64, neymar:.65 }[slug] || .63;
+}
+// Monotone cubic Hermite: continuous velocity through poses, with no overshoot at turns.
+function interpolate(keys, time) {
+  let index = keys.findIndex(key => key[0] >= time);
+  if (index < 1) index = time <= keys[0][0] ? 1 : keys.length - 1;
+  const a = keys[index-1], b = keys[index], duration = b[0]-a[0], u = clamp((time-a[0])/duration);
+  function tangent(i, field) {
+    if (i === 0) return (keys[1][field]-keys[0][field])/(keys[1][0]-keys[0][0]);
+    if (i === keys.length-1) return 0;
+    const left=(keys[i][field]-keys[i-1][field])/(keys[i][0]-keys[i-1][0]);
+    const right=(keys[i+1][field]-keys[i][field])/(keys[i+1][0]-keys[i][0]);
+    return left*right <= 0 ? 0 : 2*left*right/(left+right);
+  }
+  return a.map((v,field) => field === 0 ? time :
+    (2*u*u*u-3*u*u+1)*v+(u*u*u-2*u*u+u)*duration*tangent(index-1,field)+
+    (-2*u*u*u+3*u*u)*b[field]+(u*u*u-u*u)*duration*tangent(index,field));
+}
+export function sampleIconPose(slug, time) {
+  if (!MOVES[slug]) slug = "messi";
+  const keys=MOVES[slug] || MOVES.messi, t=clamp(time), action=Math.min(.76,t), contact=contactTime(slug);
+  const pose=interpolate(keys,action);
+  // Stance feet move backwards relative to the hip; the swing foot clears the turf.
+  const runStart={messi:0,maradona:0,r9:.34,ronaldinho:.33,neymar:.54}[slug];
+  if(runStart !== undefined && t<contact) {
+    const weight=smooth((t-runStart)/.045)*(1-smooth((t-contact+.075)/.075));
+    const travel=(pose[1]-keys[0][1])/46, angle=pose[3]*Math.PI/180;
+    for(let side=0;side<2;side++) {
+      const phase=((travel+side*.5)%1+1)%1;
+      const stride=phase<.62 ? 19-phase/.62*33 : -14+smooth((phase-.62)/.38)*33;
+      const lift=phase<.62 ? 0 : Math.sin((phase-.62)/.38*Math.PI)*15;
+      const dx=stride,dy=250-pose[2]-lift;
+      const fx=dx*Math.cos(angle)+dy*Math.sin(angle),fy=-dx*Math.sin(angle)+dy*Math.cos(angle);
+      pose[4+side*2]+=(fx-pose[4+side*2])*weight;
+      pose[5+side*2]+=(fy-pose[5+side*2])*weight;
+    }
+  }
+  if(t>contact) {
+    const hit=keys.find(key=>Math.abs(key[0]-contact)<.001), flight=clamp((t-contact)/(.76-contact));
+    const arc=slug==='cristiano'?38:slug==='pele'?25:15;
+    pose[8]=hit[8]+(630-hit[8])*flight;
+    pose[9]=hit[9]+(232-hit[9])*flight-4*arc*flight*(1-flight);
+    // Small, damped bounce inside the net, rather than a frozen ball after the shot.
+    if(t>.76){const settle=(t-.76)/.24;pose[8]=630-8*(1-Math.exp(-settle*5));pose[9]=242-10*Math.abs(Math.cos(settle*8))*Math.exp(-settle*5);}
+  }
+  return pose;
+}
 export function createIconMove(host) {
   const limb = side => `<g stroke-linecap="round" stroke-linejoin="round" fill="none"><path data-arm-${side} stroke="var(--skin)" stroke-width="9"/><path data-sleeve-${side} stroke="var(--kit)" stroke-width="13"/><path data-leg-${side} stroke="var(--skin)" stroke-width="11"/><path data-sock-${side} stroke="var(--kit)" stroke-width="9"/><path data-boot-${side} stroke="#f7efba" stroke-width="7"/></g>`;
   host.innerHTML = `<svg viewBox="0 0 600 300" role="img" aria-label="Illustrated signature football move">
@@ -55,6 +106,21 @@ export function createIconMove(host) {
     <text data-goal x="300" y="78" text-anchor="middle" fill="var(--celebration-accent)" font-size="32" font-family="Arial" font-weight="900" opacity="0"/>
     <path d="M22 282H578" stroke="#ffffff25" stroke-width="2"/><path data-progress d="M22 282H22" stroke="var(--celebration-accent)" stroke-width="3"/>
   </svg>`;
+  const fallback = host.querySelector("svg");
+  const canvas = document.createElement("canvas");
+  canvas.className = "iconMoveCanvas";
+  canvas.setAttribute("role", "img");
+  const caption = document.createElement("div");
+  caption.className = "iconMoveCaption";
+  const moveLabel = document.createElement("span"), finishLabel = document.createElement("strong");
+  caption.append(moveLabel, finishLabel);
+  host.prepend(canvas);
+  host.append(caption);
+  const scene = createIconScene(canvas);
+  canvas.hidden = !scene;
+  fallback.toggleAttribute("hidden", Boolean(scene));
+  caption.hidden = !scene;
+  canvas.addEventListener("iconcontextlost", () => { fallback.removeAttribute("hidden"); caption.hidden = true; });
   const elements = Object.fromEntries([...host.querySelectorAll('*')].flatMap(el => [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => [a.name.slice(5), el])));
   const get = name => elements[name];
   const attr=(name,key,value)=>get(name).setAttribute(key,value);
@@ -63,10 +129,13 @@ export function createIconMove(host) {
   function stop(){cancelAnimationFrame(frame);}
   function play(slug){
     stop();
-    const look=LOOKS[slug] || LOOKS.messi, keys=MOVES[slug] || MOVES.messi;
+    const look=LOOKS[slug] || LOOKS.messi;
+    moveLabel.textContent = look[4];
+    finishLabel.textContent = look[5];
+    canvas.setAttribute("aria-label", `${look[4]}. Animated 3D football tribute.`);
     ['kit','shorts','skin'].forEach((name,i)=>host.style.setProperty(`--${name}`,look[i]));
     get('number').textContent=look[3];get('label').textContent=look[4];get('goal').textContent=look[5];
-    host.querySelector('svg').setAttribute('aria-label',`${look[4]}, followed by ${look[5]}. Illustrated tribute.`);
+    fallback.setAttribute('aria-label',`${look[4]}, followed by ${look[5]}. Illustrated tribute.`);
     attr('stripe','opacity',['messi','maradona','ronaldinho'].includes(slug)?1:0);
     attr('hair','d',slug==='r9'?'M-7-71Q0-77 7-71L5-68H-6Z':slug==='ronaldinho'?'M-10-61Q-15-80 1-77Q15-76 10-61L13-44 5-49 6-69H-8Z':slug==='maradona'?'M-11-60Q-18-74-9-77Q-5-84 2-78Q16-82 13-64L8-66 5-73-9-69Z':'M-10-65Q-13-78 1-77Q14-76 10-65L5-71-9-69Z');
     attr('hair','fill',slug==='neymar'?'#e5d5a3':'#201c20');
@@ -74,12 +143,10 @@ export function createIconMove(host) {
     const ns='http://www.w3.org/2000/svg';get('confetti').replaceChildren();
     const particles=Array.from({length:28},(_,i)=>{const el=document.createElementNS(ns,'rect');el.setAttribute('width',i%2?3:5);el.setAttribute('height',7);el.setAttribute('fill',i%3===0?'#fff':i%3===1?look[0]:'var(--celebration-accent)');get('confetti').append(el);return el;});
     function draw(t){
-      const action=Math.min(.76,t);let idx=keys.findIndex(k=>k[0]>=action);if(idx<1)idx=1;
-      const a=keys[idx-1],b=keys[idx],raw=Math.max(0,Math.min(1,(action-a[0])/(b[0]-a[0]))),u=raw*raw*(3-2*raw);
-      let [,x,y,angle,lx,ly,rx,ry,bx,by]=a.map((v,i)=>v+(b[i]-v)*u);
+      let [,x,y,angle,lx,ly,rx,ry,bx,by]=sampleIconPose(slug,t);
       const finish=Math.max(0,(t-.76)/.24),jump=Math.sin(Math.min(1,finish*1.6)*Math.PI);
       if(finish){
-        if(slug==='cristiano'){y-=jump*32;lx=-25;rx=25;angle=finish<.6?Math.sin(finish*10)*12:0;}
+        if(slug==='cristiano'){y-=jump*32;lx+=(-25-lx)*smooth(finish*5);rx+=(25-rx)*smooth(finish*5);angle=Math.sin(Math.min(1,finish/.65)*Math.PI)*12;}
         if(slug==='neymar'||slug==='ronaldinho'){x+=Math.sin(finish*14)*6;angle=Math.sin(finish*14)*7;lx=-20+Math.sin(finish*14)*5;rx=20+Math.sin(finish*14)*5;}
         if(slug==='pele'){y-=jump*27;}
       }
@@ -100,17 +167,20 @@ export function createIconMove(host) {
       attr('ball','transform',`translate(${bx} ${by}) rotate(${t*950})`);attr('ball-shadow','cx',bx);attr('ball-shadow','opacity',Math.max(.08,1-(251-by)/160)*.5);
       // Short velocity streak behind the shot, never a trail detached from the ball.
       attr('trail','d',t>.63&&t<.76?`M${bx-28} ${by+5}Q${bx-12} ${by+1} ${bx-9} ${by}`:'');
-      const contact=slug==='cristiano'?.42:slug==='pele'?.4:slug==='messi'?.62:slug==='ronaldinho'?.64:slug==='neymar'?.65:.63;
+      const contact=contactTime(slug);
       const impact=Math.max(0,1-Math.abs(t-contact)/.04);attr('impact','transform',`translate(${bx} ${by}) scale(${1+(1-impact)*.8})`);attr('impact','opacity',impact*.8);
       attr('net','transform',`translate(${finish?Math.sin(finish*24)*Math.exp(-finish*8)*3:0} 0)`);
       attr('goal','opacity',Math.min(1,finish*6));
       particles.forEach((el,i)=>{const age=Math.max(0,finish-i*.006);el.setAttribute('opacity',finish>0?Math.min(1,age*12):0);el.setAttribute('transform',`translate(${30+(i*79%540)+Math.sin(age*8+i)*12} ${-20+age*(210+i%5*25)}) rotate(${age*220+i*31})`);});
       attr('progress','d',`M22 282H${22+t*556}`);
+      finishLabel.style.opacity=String(smooth((t-.77)/.1));
+      host.style.setProperty("--move-progress", String(t));
+      scene?.render({pose:[t,x,y,angle,lx,ly,rx,ry,bx,by],t,look,slug,contact,strikePose:sampleIconPose(slug,contact)});
     }
     if(reduced.matches){draw(.88);return;}
     const start=performance.now();
     function tick(now){const t=Math.min(1,(now-start)/ICON_MOVE_DURATION);draw(t);if(t<1)frame=requestAnimationFrame(tick);}
     frame=requestAnimationFrame(tick);
   }
-  return {play,stop};
+  return {play,stop,dispose(){stop();scene?.dispose();}};
 }
