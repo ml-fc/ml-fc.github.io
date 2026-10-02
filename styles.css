@@ -2995,3 +2995,11 @@ body[data-theme-category="GOATS"] .nextMatch__goatIcon { width:24px; height:24px
 @keyframes iconLanding { 0% { transform:translateY(-45px) scale(.6); opacity:0; } 70% { transform:translateY(3px) scale(1.08); opacity:1; } 100% { transform:none; } }
 @media(prefers-reduced-motion:reduce) { .iconCelebration .iconCelebration__effects { display:none; } .iconCelebration.is-celebrating .iconCelebration__shout { animation:none; } }
 @media(max-width:380px) { .iconCelebration__stage { padding:16px 12px; } .iconCelebration__players { gap:3px; } .iconCelebration__players button { height:44px; } }
+
+/* Short names deserve display scale, independent of the long-name fitting rule. */
+body[data-weekly-theme="cristiano"] .nextMatch__themeName { font-size:clamp(25px,6vw,36px); line-height:1.05; white-space:nowrap; }
+.iconCelebration__move { position:relative; z-index:2; margin:-8px 0 0; border:1px solid #ffffff35; border-radius:10px; overflow:hidden; background:linear-gradient(180deg,#0b182bf5,#143a32); pointer-events:none; }
+.iconCelebration__move svg { display:block; width:100%; height:auto; }
+.iconCelebration__photo img { height:min(36dvh,340px); }
+.iconCelebration__effects span { font-size:26px; }
+@media(prefers-reduced-motion:reduce) { .iconCelebration__move [data-trail] { display:none; } }

@@ -1,14 +1,15 @@
+import { createIconMove } from "./icon_moves.js";
 import { GOAT_THEMES, getActiveWeeklyTheme } from "../themes.js";
 
 // These are playful visual tributes, using the original theme photographs.
 const CELEBRATIONS = {
-  cristiano: { title: "SIUUU!", detail: "The jump. The landing. The roar.", symbol: "7", motion: "siu" },
-  messi: { title: "To the sky", detail: "Two hands raised. A little magic.", symbol: "★", motion: "sky" },
-  neymar: { title: "Joga bonito", detail: "Bring the dance to the pitch.", symbol: "♫", motion: "dance" },
-  r9: { title: "O Fenômeno", detail: "Arms wide. Unstoppable.", symbol: "⚽", motion: "burst" },
-  maradona: { title: "El Pibe de Oro", detail: "A little left-foot magic.", symbol: "10", motion: "orbit" },
-  ronaldinho: { title: "Keep smiling", detail: "A little samba. A little shaka.", symbol: "🤙", motion: "samba" },
-  pele: { title: "O Rei", detail: "A champion’s leap. A king’s crown.", symbol: "♛", motion: "king" },
+  cristiano: { title: "SIUUU!", detail: "Bicycle kick. Airborne. Unstoppable.", symbol: "7", motion: "siu" },
+  messi: { title: "MESSI MAGIC", detail: "Close control. Left foot. Pure magic.", symbol: "★", motion: "sky" },
+  neymar: { title: "Joga bonito", detail: "Over the head. Rainbow flick. Joga bonito.", symbol: "♫", motion: "dance" },
+  r9: { title: "O Fenômeno", detail: "The stepovers. The burst. The finish.", symbol: "⚽", motion: "burst" },
+  maradona: { title: "El Pibe de Oro", detail: "The slalom. That left foot. El Diego.", symbol: "10", motion: "orbit" },
+  ronaldinho: { title: "Keep smiling", detail: "Outside. Inside. The elastico.", symbol: "🤙", motion: "samba" },
+  pele: { title: "O Rei", detail: "Airborne volley. Long live the King.", symbol: "♛", motion: "king" },
 };
 
 export function openIconCelebration() {
@@ -24,23 +25,33 @@ export function openIconCelebration() {
     <button class="iconCelebration__close" type="button" aria-label="Close photo">×</button>
     <header><small>ICON / GOAT</small><h2 id="iconCelebrationName"></h2></header>
     <button class="iconCelebration__photo" type="button" aria-label="Replay celebration"><img alt="" /></button>
+    <div class="iconCelebration__move" aria-label="Signature move"></div>
     <footer><strong class="iconCelebration__shout"></strong><p></p><small>Tap the photo to celebrate again</small></footer>
     <nav class="iconCelebration__players" aria-label="Choose an icon"></nav>
   </div>`;
   const photo = dialog.querySelector(".iconCelebration__photo img");
   const effects = dialog.querySelector(".iconCelebration__effects");
+  const move = createIconMove(dialog.querySelector(".iconCelebration__move"));
   let current;
   let cleanupTimer;
+  let sequenceTimer;
+  function playAll(index = 0) {
+    clearTimeout(sequenceTimer);
+    select(players[index]);
+    dialog.querySelector("footer small").textContent = `${index + 1} / ${players.length} · All icons · Tap photo to restart`;
+    if (index + 1 < players.length) sequenceTimer = setTimeout(() => playAll(index + 1), 5600);
+  }
   function celebrate() {
     clearTimeout(cleanupTimer);
     effects.replaceChildren();
     const style = CELEBRATIONS[current.slug];
+    move.play(current.slug);
     dialog.dataset.motion = style.motion;
     // Restart only finite animations; reduced-motion users see the still tribute.
     dialog.classList.remove("is-celebrating");
     void dialog.offsetWidth;
     dialog.classList.add("is-celebrating");
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 24; i++) {
       const mark = document.createElement("span");
       mark.textContent = style.symbol;
       mark.style.setProperty("--x", `${6 + (i * 29 % 88)}%`);
@@ -48,7 +59,7 @@ export function openIconCelebration() {
       mark.style.setProperty("--turn", `${i % 2 ? 24 : -24}deg`);
       effects.append(mark);
     }
-    cleanupTimer = setTimeout(() => { effects.replaceChildren(); dialog.classList.remove("is-celebrating"); }, 3400);
+    cleanupTimer = setTimeout(() => { effects.replaceChildren(); dialog.classList.remove("is-celebrating"); }, 5600);
   }
   function select(theme) {
     current = theme;
@@ -75,16 +86,22 @@ export function openIconCelebration() {
     image.alt = "";
     image.style.objectPosition = theme.portraitPosition;
     button.append(image);
-    button.onclick = () => select(theme);
+    button.onclick = () => {
+      clearTimeout(sequenceTimer);
+      select(theme);
+      dialog.querySelector("footer small").textContent = "Tap the photo to play all seven icons";
+    };
     nav.append(button);
   });
-  dialog.querySelector(".iconCelebration__photo").onclick = celebrate;
+  dialog.querySelector(".iconCelebration__photo").onclick = () => active.collective ? playAll() : celebrate();
   dialog.querySelector(".iconCelebration__close").onclick = () => dialog.close();
   dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
   const closeOnNavigation = () => dialog.close();
   const previousOverflow = document.body.style.overflow;
   dialog.addEventListener("close", () => {
     clearTimeout(cleanupTimer);
+    clearTimeout(sequenceTimer);
+    move.stop();
     window.removeEventListener("hashchange", closeOnNavigation);
     document.body.style.overflow = previousOverflow;
     dialog.remove();
@@ -94,5 +111,6 @@ export function openIconCelebration() {
   document.body.append(dialog);
   dialog.showModal();
   document.body.style.overflow = "hidden";
-  select(active.collective ? players[0] : active);
+  if (active.collective) playAll();
+  else select(active);
 }
