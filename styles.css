@@ -2886,7 +2886,7 @@ body[data-theme-category="GOATS"] .nextMatch__themeName { max-width:160px; font-
 /* Keep the player visible across opaque cards without intercepting controls. */
 body[data-theme-category="GOATS"]::after {
   top:72px; right:0; width:min(62vw,720px); height:calc(100vh - 72px);
-  aspect-ratio:auto; border-radius:0; z-index:1; opacity:.18;
+  aspect-ratio:auto; border-radius:0; z-index:1; opacity:.207;
   background-size:cover; background-position:var(--theme-portrait-position,center 20%);
   filter:saturate(.85);
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 35%),linear-gradient(180deg,#000 65%,transparent);
@@ -2895,10 +2895,39 @@ body[data-theme-category="GOATS"]::after {
   mask-composite:intersect;
 }
 @media(max-width:600px) {
-  body[data-theme-category="GOATS"]::after { top:58px; right:0; width:100vw; height:calc(100svh - 58px); opacity:.16; }
+  body[data-theme-category="GOATS"]::after { top:58px; right:0; width:100vw; height:calc(100svh - 58px); opacity:.184; }
 }
 body[data-theme-category="GOATS"] .nextMatch { border-top:3px solid var(--accent); background:linear-gradient(115deg,var(--bg),var(--panel-2) 60%,color-mix(in srgb,var(--accent-2) 35%,var(--panel))); }
 .themePreview { position:relative; overflow:hidden; min-height:186px; border-bottom:0; box-shadow:inset 0 0 0 1px #ffffff20; }
 .themePreview::after { content:""; position:absolute; bottom:0; left:0; right:0; height:5px; background:linear-gradient(90deg,var(--preview-accent) 0 65%,var(--preview-secondary) 65%); }
 .themePreview__portrait--player { width:108px; height:142px; object-position:var(--preview-position); box-shadow:0 6px 22px #0004; border:1px solid #ffffff40; }
 @media(max-width:600px) { .themePreview__portrait--player { width:90px; height:125px; } body[data-theme-category="GOATS"] .nextMatch__themeCrest { width:52px; height:65px; flex-basis:52px; } body[data-theme-category="GOATS"] .nextMatch__themeName { font-size:16px; } }
+
+/* Let long fixture names wrap; reserve a separate row for the theme on phones. */
+.nextMatch__head { min-width:0; flex-wrap:wrap; }
+.nextMatch__head > :first-child { min-width:0; flex:1 1 240px; }
+.nextMatch__head h1 { overflow-wrap:anywhere; }
+.nextMatch__aside { min-width:0; max-width:100%; }
+.nextMatch__themeMark { max-width:100%; }
+@media(max-width:760px) {
+  .nextMatch__head { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:16px; }
+  .nextMatch__aside { width:100%; justify-items:start; gap:10px; }
+  .nextMatch__themeMark { min-width:0; }
+  .nextMatch__countdown { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+  body[data-theme-category="GOATS"] .nextMatch__themeName { max-width:none; overflow-wrap:anywhere; }
+}
+
+/* All seven originals, composed into one collective GOATS theme. */
+.goatsCollage { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:3px; overflow:hidden; background:var(--bg); }
+.goatsCollage img { display:block; width:100%; height:100%; min-width:0; min-height:0; object-fit:cover; grid-column:span 3; }
+.goatsCollage img:nth-child(n+5) { grid-column:span 4; }
+.goatsBackdrop { position:fixed; z-index:1; top:72px; right:0; width:min(70vw,820px); height:calc(100vh - 72px); opacity:.207; pointer-events:none; mask-image:linear-gradient(180deg,#000 70%,transparent); -webkit-mask-image:linear-gradient(180deg,#000 70%,transparent); }
+body[data-weekly-theme="goats"]::after { display:none; }
+body[data-weekly-theme="goats"] .brand__mark { object-fit:contain; padding:5px; background:var(--panel); }
+body[data-weekly-theme="goats"] .nextMatch__themeCrest { background-size:75%; background-position:center; background-color:var(--panel); }
+.themePreview__collage { width:210px; height:155px; flex-shrink:0; border-radius:8px; border:1px solid #ffffff40; }
+@media(max-width:600px) {
+  .goatsBackdrop { top:58px; width:100vw; height:calc(100svh - 58px); opacity:.184; }
+  .themePreview:has(.themePreview__collage) { flex-wrap:wrap; }
+  .themePreview__collage { width:100%; height:190px; }
+}

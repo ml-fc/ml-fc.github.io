@@ -29,14 +29,30 @@ export const EPL_THEMES = [
 
 // Negative IDs are reserved for player themes; EPL keeps its API-Football IDs.
 export const GOAT_THEMES = [
+  { teamId: -8, slug: "goats", name: "GOATS", kit: "Neymar · CR7 · Messi · R9 · Maradona · Ronaldinho · Pelé", portraitPosition: "center", background: "#0d1224", panel: "#1a233b", panel2: "#30253d", primary: "#283e69", primary2: "#192b4f", accent: "#edce79", accent2: "#ac3152", cardTint: "#fffdf6", cardLine: "#e2d8bc", crest: "./assets/goats/goat.svg", collective: true },
   {"teamId": -1, "slug": "neymar", "name": "Neymar", "kit": "Brazil · Canarinho yellow", "portraitPosition": "50% 28%", "background": "#071b15", "panel": "#103b2a", "panel2": "#155237", "primary": "#126638", "primary2": "#0b4828", "accent": "#f6df35", "accent2": "#2155be", "cardTint": "#fffef2", "cardLine": "#e2dfb3"},
-  {"teamId": -2, "slug": "cristiano", "name": "Cristiano Ronaldo", "kit": "Portugal · Red & green", "portraitPosition": "50% 15%", "background": "#1b090d", "panel": "#351018", "panel2": "#4b1520", "primary": "#aa1428", "primary2": "#7f0e1d", "accent": "#e8c875", "accent2": "#168461", "cardTint": "#fff9f6", "cardLine": "#e6cec6"},
+  {"teamId": -2, "slug": "cristiano", "name": "CR7", "kit": "Portugal · Red & green", "portraitPosition": "50% 15%", "background": "#1b090d", "panel": "#351018", "panel2": "#4b1520", "primary": "#aa1428", "primary2": "#7f0e1d", "accent": "#e8c875", "accent2": "#168461", "cardTint": "#fff9f6", "cardLine": "#e6cec6"},
   {"teamId": -3, "slug": "messi", "name": "Lionel Messi", "kit": "Barcelona · Blaugrana", "portraitPosition": "50% 15%", "background": "#080f25", "panel": "#111f43", "panel2": "#182f59", "primary": "#15458a", "primary2": "#103369", "accent": "#f5d53d", "accent2": "#bd2444", "cardTint": "#f8faff", "cardLine": "#ccd8e9"},
   {"teamId": -4, "slug": "r9", "name": "Ronaldo (R9)", "kit": "Brazil · 1998 yellow & blue", "portraitPosition": "50% 18%", "background": "#09172c", "panel": "#142f4a", "panel2": "#1b4057", "primary": "#125f39", "primary2": "#0d452a", "accent": "#f5db26", "accent2": "#2871c7", "cardTint": "#fffef1", "cardLine": "#e1deaf"},
   {"teamId": -5, "slug": "maradona", "name": "Diego Maradona", "kit": "Argentina · Sky blue & white", "portraitPosition": "50% 20%", "background": "#091d2d", "panel": "#14334b", "panel2": "#214b67", "primary": "#1c618a", "primary2": "#134665", "accent": "#91cfec", "accent2": "#ffffff", "cardTint": "#f5fbff", "cardLine": "#c5deed"},
   {"teamId": -6, "slug": "ronaldinho", "name": "Ronaldinho", "kit": "Barcelona · Blaugrana", "portraitPosition": "50% 17%", "background": "#170d20", "panel": "#2a1635", "panel2": "#3d204a", "primary": "#9c1937", "primary2": "#72112a", "accent": "#ecd342", "accent2": "#2859ad", "cardTint": "#fff8fa", "cardLine": "#e5ccd6"},
   {"teamId": -7, "slug": "pele", "name": "Pelé", "kit": "Brazil · Classic gold & green", "portraitPosition": "50% 15%", "background": "#0c1c15", "panel": "#193b29", "panel2": "#285238", "primary": "#1b603a", "primary2": "#12442a", "accent": "#edc63d", "accent2": "#2b77ac", "cardTint": "#fffdf2", "cardLine": "#e3dcba"},
-].map((theme) => ({ ...theme, category: "GOATS", crest: `./assets/goats/${theme.slug}.jpg` }));
+].map((theme) => ({ ...theme, category: "GOATS", crest: theme.crest || `./assets/goats/${theme.slug}.jpg` }));
+
+// Render original photos as a responsive collage, without altering the supplied images.
+export function createGoatsCollage(className = "") {
+  const collage = document.createElement("div");
+  collage.className = `goatsCollage ${className}`;
+  collage.setAttribute("aria-hidden", "true");
+  GOAT_THEMES.filter(theme => !theme.collective).forEach(theme => {
+    const image = document.createElement("img");
+    image.src = theme.crest;
+    image.alt = "";
+    image.style.objectPosition = theme.portraitPosition;
+    collage.append(image);
+  });
+  return collage;
+}
 
 export const ALL_THEMES = [...EPL_THEMES, ...GOAT_THEMES];
 
@@ -74,6 +90,7 @@ function clearWeeklyTheme() {
   delete document.body.dataset.weeklyTheme;
   delete document.body.dataset.weeklyTeam;
   delete document.body.dataset.themeCategory;
+  document.querySelectorAll(".goatsBackdrop").forEach(element => element.remove());
   const brand = document.querySelector(".brand__mark");
   if (brand) { brand.src = "./assets/icons/icon-192.png"; brand.alt = ""; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#07111e");
@@ -100,6 +117,7 @@ export function applyWeeklyTheme(payload) {
   document.body.dataset.weeklyTheme = theme.slug;
   document.body.dataset.weeklyTeam = theme.name;
   document.body.dataset.themeCategory = theme.category;
+  if (theme.collective) document.body.append(createGoatsCollage("goatsBackdrop"));
   const brand = document.querySelector(".brand__mark");
   if (brand) { brand.src = theme.crest; brand.alt = `${theme.name} theme`; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.background);

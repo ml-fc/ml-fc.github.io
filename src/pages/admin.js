@@ -7,7 +7,7 @@ import { cleanupCaches } from "../cache_cleanup.js";
 import { isReloadForAdminList, isReloadForAdminMatchCode, isReloadFor, isIOSStandalone } from "../nav_state.js";
 import { clearAuth, updateNavForUser, getCachedUser, getToken, refreshMe } from "../auth.js";
 import { initials, loadCanvasImage } from "../ui/player_photo.js";
-import { EPL_THEMES, GOAT_THEMES, resolveTheme, getActiveWeeklyTheme } from "../themes.js";
+import { EPL_THEMES, GOAT_THEMES, createGoatsCollage, resolveTheme, getActiveWeeklyTheme } from "../themes.js";
 
 const LS_ADMIN_KEY = "mlfc_adminKey";
 const LS_SELECTED_SEASON = "mlfc_selected_season_v1";
@@ -1344,12 +1344,13 @@ async function bindThemeSettings(root) {
     preview.style.setProperty("--preview-secondary", theme.accent2);
     preview.style.setProperty("--preview-position", theme.portraitPosition || "center");
     preview.innerHTML = `<img src="${escapeHtml(theme.crest)}" alt="${escapeHtml(theme.name)}" class="themePreview__portrait ${theme.category === "GOATS" ? "themePreview__portrait--player" : ""}" /><div><small>${escapeHtml(theme.category)} · THEME PREVIEW</small><strong>${escapeHtml(theme.name)}</strong><p>${escapeHtml(theme.kit || "Premier League club colours")}</p><span class="themePreview__swatches" aria-label="Theme colours">${[theme.primary, theme.accent, theme.accent2].map(colour => `<i style="background:${colour}"></i>`).join("")}</span></div>`;
+    if (theme.collective) preview.querySelector("img").replaceWith(createGoatsCollage("themePreview__collage"));
   };
   const paintCategory = (selectedId) => {
     const goats = categorySelect.value === "GOATS";
     teamSelect.innerHTML = (goats ? GOAT_THEMES : EPL_THEMES).map(theme => `<option value="${theme.teamId}">${escapeHtml(theme.name)}</option>`).join("");
     if (selectedId != null) teamSelect.value = String(selectedId);
-    root.querySelector("#themeChoiceLabel").textContent = goats ? "Choose a player" : "Choose an EPL team";
+    root.querySelector("#themeChoiceLabel").textContent = goats ? "Choose a GOAT theme" : "Choose an EPL team";
     root.querySelector("#themeCategoryHelp").textContent = goats ? "GOATS themes use each player’s iconic jersey colours and stay active until you change them." : "EPL themes update automatically on Mondays. A manual club choice stays until the next weekly selection.";
     paintPreview();
   };
@@ -1364,7 +1365,7 @@ async function bindThemeSettings(root) {
     const resolved = theme && resolveTheme(theme);
     if (resolved) { categorySelect.value = resolved.category; paintCategory(resolved.teamId); }
     current.innerHTML = theme
-      ? `<i aria-hidden="true"></i><span><b>${escapeHtml(theme.teamName)}</b><small>${escapeHtml(theme.matchLabel || "Current theme")}</small></span>`
+      ? `<i aria-hidden="true"></i><span><b>${escapeHtml(resolved?.name || theme.teamName)}</b><small>${escapeHtml(theme.matchLabel || "Current theme")}</small></span>`
       : `<span><b>Manor Lakes theme</b><small>${settings?.apiConfigured ? "Waiting for the next completed EPL week." : "Add the API-Football secret to start automatic selection."}</small></span>`;
   };
 
@@ -1404,7 +1405,7 @@ async function bindThemeSettings(root) {
       toastError(message.textContent);
     } else {
       paint(result);
-      message.textContent = `${result.theme?.teamName || "Selected"} theme is now active for everyone.`;
+      message.textContent = `${resolveTheme(result.theme || {})?.name || result.theme?.teamName || "Selected"} theme is now active for everyone.`;
       toastSuccess(message.textContent);
       window.dispatchEvent(new CustomEvent("mlfc:theme-setting-changed", { detail: result }));
     }
