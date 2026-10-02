@@ -1,4 +1,4 @@
-import { createIconMove, ICON_MOVE_DURATION } from "./icon_moves.js";
+import { createIconMove } from "./icon_moves.js";
 import { GOAT_THEMES, getActiveWeeklyTheme } from "../themes.js";
 
 // These are playful visual tributes, using the original theme photographs.
@@ -23,35 +23,51 @@ export function openIconCelebration() {
   dialog.innerHTML = `<div class="iconCelebration__stage">
     <div class="iconCelebration__effects" aria-hidden="true"></div>
     <button class="iconCelebration__close" type="button" aria-label="Close photo">×</button>
-    <header><small>ICON / GOAT</small><h2 id="iconCelebrationName"></h2></header>
-    <button class="iconCelebration__photo" type="button" aria-label="Replay celebration"><img alt="" /></button>
+    <header>
+      <button class="iconCelebration__photo" type="button" aria-label="Expand player photo" aria-expanded="false"><img alt="" /></button>
+      <div><small>ICON / GOAT</small><h2 id="iconCelebrationName"></h2><span class="iconCelebration__subtitle">The signature collection</span></div>
+    </header>
     <div class="iconCelebration__move" aria-label="Signature move"></div>
-    <footer><strong class="iconCelebration__shout"></strong><p></p><small>Tap the photo to celebrate again</small></footer>
+    <div class="iconCelebration__transport">
+      <button type="button" data-replay>↻ Replay</button>
+      <button type="button" data-pause aria-pressed="false">Pause</button>
+      <button type="button" data-speed aria-pressed="false">0.5× slow motion</button>
+      <input type="range" min="0" max="1000" step="1" value="0" aria-label="Animation progress" />
+    </div>
+    <footer><strong class="iconCelebration__shout"></strong><p></p><small>Tap the portrait to view the full photo</small></footer>
     <nav class="iconCelebration__players" aria-label="Choose an icon"></nav>
   </div>`;
   const photo = dialog.querySelector(".iconCelebration__photo img");
   const effects = dialog.querySelector(".iconCelebration__effects");
-  const move = createIconMove(dialog.querySelector(".iconCelebration__move"));
   let current;
-  let cleanupTimer;
   let sequenceTimer;
+  let sequenceIndex=-1,paused=false;
+  const progress=dialog.querySelector('input[type="range"]');
+  const pauseButton=dialog.querySelector('[data-pause]');
+  const move = createIconMove(dialog.querySelector(".iconCelebration__move"), {
+    onProgress(value){progress.value=String(Math.round(value*1000));},
+    onFinish(){
+      pauseButton.textContent="Play";
+      if(sequenceIndex>=0 && sequenceIndex+1<players.length)sequenceTimer=setTimeout(()=>playAll(sequenceIndex+1),650);
+    }
+  });
   function playAll(index = 0) {
     clearTimeout(sequenceTimer);
+    sequenceIndex=index;
     select(players[index]);
-    dialog.querySelector("footer small").textContent = `${index + 1} / ${players.length} · All icons · Tap photo to restart`;
-    if (index + 1 < players.length) sequenceTimer = setTimeout(() => playAll(index + 1), ICON_MOVE_DURATION + 500);
+    dialog.querySelector("footer small").textContent = `${index + 1} / ${players.length} · All icons · Replay starts the collection again`;
   }
   function celebrate() {
-    clearTimeout(cleanupTimer);
+    clearTimeout(sequenceTimer);
     effects.replaceChildren();
     const style = CELEBRATIONS[current.slug];
     move.play(current.slug);
+    paused=false;pauseButton.textContent="Pause";pauseButton.setAttribute("aria-pressed","false");
     dialog.dataset.motion = style.motion;
     // Restart only finite animations; reduced-motion users see the still tribute.
     dialog.classList.remove("is-celebrating");
     void dialog.offsetWidth;
     dialog.classList.add("is-celebrating");
-    cleanupTimer = setTimeout(() => { effects.replaceChildren(); dialog.classList.remove("is-celebrating"); }, ICON_MOVE_DURATION + 500);
   }
   function select(theme) {
     current = theme;
@@ -80,18 +96,33 @@ export function openIconCelebration() {
     button.append(image);
     button.onclick = () => {
       clearTimeout(sequenceTimer);
+      sequenceIndex=-1;
       select(theme);
-      dialog.querySelector("footer small").textContent = "Tap the photo to play all seven icons";
+      dialog.querySelector("footer small").textContent = "Replay plays all seven icons";
     };
     nav.append(button);
   });
-  dialog.querySelector(".iconCelebration__photo").onclick = () => active.collective ? playAll() : celebrate();
+  dialog.querySelector('[data-replay]').onclick=()=>active.collective?playAll():celebrate();
+  pauseButton.onclick=()=>{
+    clearTimeout(sequenceTimer);
+    if(Number(progress.value)>=1000){celebrate();return;}
+    paused=!paused;move.pause(paused);pauseButton.textContent=paused?"Play":"Pause";pauseButton.setAttribute('aria-pressed',String(paused));
+  };
+  dialog.querySelector('[data-speed]').onclick=event=>{
+    const button=event.currentTarget,slow=button.getAttribute('aria-pressed')!=='true';
+    button.setAttribute('aria-pressed',String(slow));move.speed(slow?.5:1);
+  };
+  progress.oninput=()=>{clearTimeout(sequenceTimer);move.seek(Number(progress.value)/1000);};
+  dialog.querySelector(".iconCelebration__photo").onclick=event=>{
+    const expanded=dialog.classList.toggle('is-photo-expanded');
+    event.currentTarget.setAttribute('aria-expanded',String(expanded));
+    event.currentTarget.setAttribute('aria-label',expanded?'Collapse player photo':'Expand player photo');
+  };
   dialog.querySelector(".iconCelebration__close").onclick = () => dialog.close();
   dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
   const closeOnNavigation = () => dialog.close();
   const previousOverflow = document.body.style.overflow;
   dialog.addEventListener("close", () => {
-    clearTimeout(cleanupTimer);
     clearTimeout(sequenceTimer);
     move.dispose();
     window.removeEventListener("hashchange", closeOnNavigation);

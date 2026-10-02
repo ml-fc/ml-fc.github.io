@@ -3047,3 +3047,41 @@ body[data-weekly-theme="goats"] .nextMatch { background:linear-gradient(120deg,#
 .iconMoveCanvas[hidden], .iconMoveCaption[hidden], .iconCelebration__move svg[hidden] { display:none; }
 .iconCelebration__photo img { height:min(23dvh,220px); }
 @media(max-width:420px) { .iconCelebration__stage { padding:18px 12px; } .iconCelebration__move { margin-inline:-6px; } }
+
+/* Signature collection: the performance is the main frame. */
+.iconCelebration { width:min(860px,calc(100vw - 20px)); border-radius:16px; }
+.iconCelebration__stage { padding:20px; background:radial-gradient(ellipse at 0 0,var(--celebration-secondary),#07111d 68%); }
+.iconCelebration header { display:flex; align-items:center; gap:16px; padding:0 48px 18px 0; text-align:left; }
+.iconCelebration h2 { font-size:clamp(23px,4vw,34px); letter-spacing:-.03em; }
+.iconCelebration__subtitle { display:block; margin-top:5px; font-size:12px; color:#becbd6; }
+.iconCelebration__photo { flex:0 0 64px; width:64px; border:1px solid #ffffff55; border-radius:8px; }
+.iconCelebration__photo img { height:84px; object-fit:cover; }
+.iconCelebration__move { margin:0; border-radius:10px; border-color:#b9d9e32e; box-shadow:none; }
+.iconMoveCanvas { aspect-ratio:16/10; }
+.iconMoveCaption { padding:18px 20px; background:linear-gradient(#06132380,transparent 22%,transparent 76%,#06132366); }
+.iconMoveCaption span { font-size:12px; }
+.iconMoveCaption small { display:block; margin-top:5px; color:#ffffffa6; font:700 9px/1.4 ui-monospace,monospace; letter-spacing:.14em; }
+.iconMoveCaption strong { bottom:24px; font-size:clamp(24px,5vw,42px); }
+.iconCelebration__transport { display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:12px 0 0; }
+.iconCelebration__transport button { min-height:40px; border:1px solid #ffffff25; border-radius:7px; background:#ffffff09; color:#ecf1f4; padding:8px 12px; font-family:inherit; font-size:12px; line-height:1.2; font-weight:700; cursor:pointer; }
+.iconCelebration__transport button[aria-pressed="true"] { background:var(--celebration-accent); color:#111c27; }
+.iconCelebration__transport input { flex:1; min-width:90px; width:auto; height:28px; padding:0; margin:0 0 0 8px; accent-color:var(--celebration-accent); cursor:pointer; }
+.iconCelebration footer { padding:15px 0 0; text-align:left; }
+.iconCelebration__shout { font-size:23px; }
+.iconCelebration footer p { margin:5px 0; font-size:13px; color:#d4dde5; }
+.iconCelebration footer small { font-size:11px; color:#9fb1bf; }
+.iconCelebration.is-celebrating .iconCelebration__shout { animation:none; }
+.iconCelebration.is-photo-expanded header { flex-wrap:wrap; }
+.iconCelebration.is-photo-expanded .iconCelebration__photo { flex-basis:100%; width:100%; }
+.iconCelebration.is-photo-expanded .iconCelebration__photo img { height:min(65dvh,580px); object-fit:contain; }
+@media(max-width:480px) {
+  .iconCelebration__stage { padding:13px 10px; }
+  .iconCelebration header { gap:12px; padding-bottom:13px; }
+  .iconCelebration__photo { flex-basis:54px; width:54px; }
+  .iconCelebration__photo img { height:70px; }
+  .iconMoveCanvas { aspect-ratio:1.15; }
+  .iconMoveCaption { padding:13px; }
+  .iconMoveCaption span { font-size:10px; }
+  .iconCelebration__transport button { font-size:11px; padding:7px 9px; }
+  .iconCelebration__transport input { flex-basis:100%; margin:0; }
+}

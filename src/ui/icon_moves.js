@@ -1,4 +1,5 @@
 import { createIconScene } from "./icon_scene.js";
+import { sampleIconMotion } from "./icon_motion.js";
 // Original illustrated tributes: articulated limbs, contact poses and a finite replay clock.
 export const ICON_MOVE_DURATION = 9000;
 const LOOKS = {
@@ -70,7 +71,7 @@ export function sampleIconPose(slug, time) {
   }
   return pose;
 }
-export function createIconMove(host) {
+export function createIconMove(host, { onFinish = () => {}, onProgress = () => {} } = {}) {
   const limb = side => `<g stroke-linecap="round" stroke-linejoin="round" fill="none"><path data-arm-${side} stroke="var(--skin)" stroke-width="9"/><path data-sleeve-${side} stroke="var(--kit)" stroke-width="13"/><path data-leg-${side} stroke="var(--skin)" stroke-width="11"/><path data-sock-${side} stroke="var(--kit)" stroke-width="9"/><path data-boot-${side} stroke="#f7efba" stroke-width="7"/></g>`;
   host.innerHTML = `<svg viewBox="0 0 600 300" role="img" aria-label="Illustrated signature football move">
     <defs>
@@ -113,7 +114,8 @@ export function createIconMove(host) {
   const caption = document.createElement("div");
   caption.className = "iconMoveCaption";
   const moveLabel = document.createElement("span"), finishLabel = document.createElement("strong");
-  caption.append(moveLabel, finishLabel);
+  const phaseLabel = document.createElement("small");
+  caption.append(moveLabel, phaseLabel, finishLabel);
   host.prepend(canvas);
   host.append(caption);
   const scene = createIconScene(canvas);
@@ -125,10 +127,22 @@ export function createIconMove(host) {
   const get = name => elements[name];
   const attr=(name,key,value)=>get(name).setAttribute(key,value);
   let frame=0;
+  let progress=0,paused=false,speed=1,previous=0,renderFrame=null,ended=false;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   function stop(){cancelAnimationFrame(frame);}
+  const resetClock=()=>{previous=performance.now();};
+  document.addEventListener('visibilitychange',resetClock);
+  function tick(now) {
+    const active=!paused && !document.hidden;
+    if(active)progress=Math.min(1,progress+(now-previous)*speed/ICON_MOVE_DURATION);
+    previous=now;
+    if(active){if(!reduced.matches)renderFrame?.(progress);onProgress(progress);}
+    if(progress<1)frame=requestAnimationFrame(tick);
+    else if(!ended){ended=true;onFinish();}
+  }
   function play(slug){
     stop();
+    progress=0;paused=false;ended=false;
     const look=LOOKS[slug] || LOOKS.messi;
     moveLabel.textContent = look[4];
     finishLabel.textContent = look[5];
@@ -173,14 +187,21 @@ export function createIconMove(host) {
       attr('goal','opacity',Math.min(1,finish*6));
       particles.forEach((el,i)=>{const age=Math.max(0,finish-i*.006);el.setAttribute('opacity',finish>0?Math.min(1,age*12):0);el.setAttribute('transform',`translate(${30+(i*79%540)+Math.sin(age*8+i)*12} ${-20+age*(210+i%5*25)}) rotate(${age*220+i*31})`);});
       attr('progress','d',`M22 282H${22+t*556}`);
-      finishLabel.style.opacity=String(smooth((t-.77)/.1));
+      const motion=sampleIconMotion(slug,t);
+      phaseLabel.textContent=motion.phase;
+      finishLabel.style.opacity=String(smooth((t-.79)/.08));
       host.style.setProperty("--move-progress", String(t));
-      scene?.render({pose:[t,x,y,angle,lx,ly,rx,ry,bx,by],t,look,slug,contact,strikePose:sampleIconPose(slug,contact)});
+      scene?.render({t,look,slug});
     }
-    if(reduced.matches){draw(.88);return;}
-    const start=performance.now();
-    function tick(now){const t=Math.min(1,(now-start)/ICON_MOVE_DURATION);draw(t);if(t<1)frame=requestAnimationFrame(tick);}
+    renderFrame=draw;
+    draw(reduced.matches?.9:0);
+    previous=performance.now();
     frame=requestAnimationFrame(tick);
   }
-  return {play,stop,dispose(){stop();scene?.dispose();}};
+  return {play,stop,
+    pause(value){paused=Boolean(value);},
+    speed(value){speed=value===.5?.5:1;},
+    seek(value){progress=clamp(value);ended=progress>=1;renderFrame?.(reduced.matches?.9:progress);onProgress(progress);stop();previous=performance.now();frame=requestAnimationFrame(tick);},
+    dispose(){stop();document.removeEventListener('visibilitychange',resetClock);scene?.dispose();renderFrame=null;}
+  };
 }
