@@ -1,4 +1,4 @@
-import { createIconMove } from "./icon_moves.js";
+import { createIconMove, ICON_MOVE_DURATION } from "./icon_moves.js";
 import { GOAT_THEMES, getActiveWeeklyTheme } from "../themes.js";
 
 // These are playful visual tributes, using the original theme photographs.
@@ -39,7 +39,7 @@ export function openIconCelebration() {
     clearTimeout(sequenceTimer);
     select(players[index]);
     dialog.querySelector("footer small").textContent = `${index + 1} / ${players.length} · All icons · Tap photo to restart`;
-    if (index + 1 < players.length) sequenceTimer = setTimeout(() => playAll(index + 1), 5600);
+    if (index + 1 < players.length) sequenceTimer = setTimeout(() => playAll(index + 1), ICON_MOVE_DURATION + 500);
   }
   function celebrate() {
     clearTimeout(cleanupTimer);
@@ -51,15 +51,7 @@ export function openIconCelebration() {
     dialog.classList.remove("is-celebrating");
     void dialog.offsetWidth;
     dialog.classList.add("is-celebrating");
-    for (let i = 0; i < 24; i++) {
-      const mark = document.createElement("span");
-      mark.textContent = style.symbol;
-      mark.style.setProperty("--x", `${6 + (i * 29 % 88)}%`);
-      mark.style.setProperty("--delay", `${i * 45}ms`);
-      mark.style.setProperty("--turn", `${i % 2 ? 24 : -24}deg`);
-      effects.append(mark);
-    }
-    cleanupTimer = setTimeout(() => { effects.replaceChildren(); dialog.classList.remove("is-celebrating"); }, 5600);
+    cleanupTimer = setTimeout(() => { effects.replaceChildren(); dialog.classList.remove("is-celebrating"); }, ICON_MOVE_DURATION + 500);
   }
   function select(theme) {
     current = theme;

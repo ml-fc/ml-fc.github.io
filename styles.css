@@ -2997,9 +2997,42 @@ body[data-theme-category="GOATS"] .nextMatch__goatIcon { width:24px; height:24px
 @media(max-width:380px) { .iconCelebration__stage { padding:16px 12px; } .iconCelebration__players { gap:3px; } .iconCelebration__players button { height:44px; } }
 
 /* Short names deserve display scale, independent of the long-name fitting rule. */
-body[data-weekly-theme="cristiano"] .nextMatch__themeName { font-size:clamp(25px,6vw,36px); line-height:1.05; white-space:nowrap; }
+
 .iconCelebration__move { position:relative; z-index:2; margin:-8px 0 0; border:1px solid #ffffff35; border-radius:10px; overflow:hidden; background:linear-gradient(180deg,#0b182bf5,#143a32); pointer-events:none; }
 .iconCelebration__move svg { display:block; width:100%; height:auto; }
 .iconCelebration__photo img { height:min(36dvh,340px); }
 .iconCelebration__effects span { font-size:26px; }
 @media(prefers-reduced-motion:reduce) { .iconCelebration__move [data-trail] { display:none; } }
+
+/* One name scale; the badge follows its content rather than filling half the card. */
+body[data-theme-category="GOATS"] .nextMatch__head { grid-template-columns:minmax(0,1fr) max-content; }
+body[data-theme-category="GOATS"] .nextMatch__aside { width:max-content; }
+body[data-theme-category="GOATS"] .nextMatch__themeMark { width:max-content; min-width:0; }
+body[data-theme-category="GOATS"] .nextMatch__themeName { max-width:none; font-size:20px; line-height:1.2; white-space:nowrap; overflow:visible; }
+.iconCelebration { width:min(640px,calc(100vw - 24px)); }
+.iconCelebration__move { margin-top:12px; border-color:#ffffff40; box-shadow:0 12px 30px #0004; }
+.iconCelebration__photo img { height:min(30dvh,280px); }
+@media(max-width:760px) {
+  body[data-theme-category="GOATS"] .nextMatch__themeName { font-size:16px; }
+  body[data-theme-category="GOATS"] .nextMatch__themeCrest { width:30px; height:40px; flex-basis:30px; }
+  body[data-theme-category="GOATS"] .nextMatch__themeMark { min-height:64px; gap:6px; padding:8px; }
+  body[data-theme-category="GOATS"] .nextMatch__goatIcon { width:20px; height:20px; }
+  body[data-theme-category="GOATS"] .nextMatch__themeMark small { font-size:11px; }
+  body[data-theme-category="GOATS"] .nextMatch__countdown { justify-self:end; width:min-content; min-width:100%; box-sizing:border-box; }
+}
+
+/* A single, feathered legends montage; no tile borders or gutters. */
+.goatsCollage { display:block; position:relative; isolation:isolate; background:radial-gradient(ellipse at 50% 35%,#284453,#0b1623 75%); }
+.goatsCollage img { position:absolute; width:48%; height:66%; object-fit:cover; filter:saturate(.8) sepia(.12) contrast(1.06); mask-image:radial-gradient(ellipse 58% 65% at 50% 34%,#000 34%,#000b 53%,transparent 78%),linear-gradient(transparent,#000 12%,#000 75%,transparent); mask-composite:intersect; -webkit-mask-image:radial-gradient(ellipse 58% 65% at 50% 34%,#000 34%,#000b 53%,transparent 78%),linear-gradient(transparent,#000 12%,#000 75%,transparent); }
+.goatsCollage img:nth-child(1) { left:-9%; top:43%; z-index:2; }
+.goatsCollage img:nth-child(2) { left:64%; top:43%; z-index:3; }
+.goatsCollage img:nth-child(3) { left:39%; top:49%; z-index:4; }
+.goatsCollage img:nth-child(4) { left:63%; top:1%; }
+.goatsCollage img:nth-child(5) { left:-9%; top:0; }
+.goatsCollage img:nth-child(6) { left:27%; top:0; }
+.goatsCollage img:nth-child(7) { left:15%; top:47%; z-index:3; }
+.goatsCollage::after { content:""; position:absolute; z-index:5; inset:0; pointer-events:none; background:linear-gradient(125deg,#578aa226,transparent 40%,#b88c3024),linear-gradient(0deg,#0b1623,transparent 40%); }
+.goatsBackdrop { position:fixed; width:min(100vw,1050px); height:calc(100svh - 58px); top:58px; opacity:.32; mask-image:linear-gradient(90deg,transparent,#000 15%,#000 94%,transparent),linear-gradient(#000 75%,transparent); mask-composite:intersect; -webkit-mask-image:linear-gradient(90deg,transparent,#000 15%,#000 94%,transparent),linear-gradient(#000 75%,transparent); }
+body[data-weekly-theme="goats"] .nextMatch { background:linear-gradient(120deg,#0b1926e8,#17362ecc 48%,#362337cc); border-color:#d8bc76; }
+.themePreview__collage { aspect-ratio:1.15; height:auto; min-height:170px; }
+@media(max-width:600px) { .goatsBackdrop { width:100vw; opacity:.29; } }
