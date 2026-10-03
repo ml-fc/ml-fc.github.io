@@ -27,6 +27,7 @@ export function sampleIconPose(slug, time) {
   const [left,right]=pose.feet.map(project);
   const result=[time,x,y,angle*180/Math.PI,...left,...right,215+ball[0]*scale,250-ball[1]*scale];
   result.hands=pose.hands.map(project);
+  result.knees=pose.knees?.map(project);
   return result;
 }
 export function createIconMove(host, { onFinish = () => {}, onProgress = () => {} } = {}) {
@@ -121,9 +122,9 @@ export function createIconMove(host, { onFinish = () => {}, onProgress = () => {
       const finish=Math.max(0,(t-.76)/.24);
       attr('player','transform',`translate(${x} ${y}) rotate(${angle})`);attr('shadow','cx',x);attr('shadow','rx',Math.max(13,28-(206-y)*.12));
       // Two-segment legs: bend the knees while keeping each boot on its keyed contact point.
-      for(const [side,fx,fy,hip] of [['a',lx,ly,-9],['b',rx,ry,9]]){
+      for(const [index,[side,fx,fy,hip]] of [['a',lx,ly,-9],['b',rx,ry,9]].entries()){
         const dx=fx-hip,dy=fy-3,len=Math.max(1,Math.hypot(dx,dy)),bend=Math.sqrt(Math.max(0,27*27-len*len/4));
-        const kx=(hip+fx)/2+dy/len*bend*.65,ky=(3+fy)/2-dx/len*bend*.65;
+        const [kx,ky]=projected.knees?.[index]||[(hip+fx)/2+dy/len*bend*.65,(3+fy)/2-dx/len*bend*.65];
         attr(`leg-${side}`,'d',`M${hip} 3L${kx} ${ky}L${fx} ${fy}`);
         attr(`sock-${side}`,'d',`M${kx*.4+fx*.6} ${ky*.4+fy*.6}L${fx} ${fy}`);
         attr(`boot-${side}`,'d',`M${fx-2} ${fy}l9 1`);

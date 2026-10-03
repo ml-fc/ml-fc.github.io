@@ -38,7 +38,7 @@ function curve(keys, time) {
 // Playback beats are separate from pose keys. A kick must not hang in the air
 // simply because the popup also needs time for approach and celebration.
 const PLAYBACK_BEATS = {
-  cristiano:[[0,0],[.15,.27],[.22,.345],[.24,.375],[.255,.44],[.267,.485],[.30,.555],[.40,.68],[.54,.75],[.58,.79],[.62,.85],[.67,.91],[.74,1],[1,1]],
+  cristiano:[[0,0],[.15,.27],[.22,.345],[.232,.375],[.244,.405],[.258,.44],[.275,.485],[.30,.555],[.40,.68],[.54,.75],[.58,.79],[.62,.85],[.67,.91],[.74,1],[1,1]],
   messi:[[0,0],[.08,.10],[.30,.515],[.34,.59],[.44,.72],[.55,.75],[.64,.83],[.79,1],[1,1]],
   maradona:[[0,0],[.05,.07],[.30,.535],[.35,.61],[.44,.72],[.55,.75],[.64,.83],[.79,1],[1,1]],
   neymar:[[0,0],[.10,.16],[.14,.23],[.19,.32],[.32,.535],[.38,.61],[.49,.72],[.56,.75],[.65,.83],[.80,1],[1,1]],
@@ -60,6 +60,26 @@ export function bodyAxes(yaw, tilt = 0, roll = 0) {
 }
 export function localPoint(root, axes, p) {
   return root.map((v,i) => v + axes[0][i]*p[0] + axes[1][i]*p[1] + axes[2][i]*p[2]);
+}
+
+// A knee bends in the rotating sagittal plane, not towards a fixed world
+// direction. Its perpendicular follows the ankle continuously through the
+// scissor action, including when the torso passes horizontal or inverted.
+export function solveIconKnees(pose) {
+  const {root,axes,height:size,feet}=pose;
+  const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+  return feet.map((foot,i)=>{
+    const side=i?1:-1,hip=localPoint(root,axes,[0,-.025*size,side*.12*size]);
+    const delta=foot.map((v,j)=>v-hip[j]),length=Math.hypot(...delta);
+    const direction=delta.map(v=>v/(length||1));
+    const x=dot(delta,axes[0]),y=dot(delta,axes[1]);
+    const pole=axes[0].map((v,j)=>-y*v+x*axes[1][j]+side*.025*axes[2][j]);
+    const parallel=dot(pole,direction),perpendicular=pole.map((v,j)=>v-parallel*direction[j]);
+    const magnitude=Math.hypot(...perpendicular)||1;
+    const a=.47*size,b=.48*size,d=clamp(length,.025,a+b-.001);
+    const along=(a*a-b*b+d*d)/(2*d),bend=Math.sqrt(Math.max(0,a*a-along*along));
+    return hip.map((v,j)=>v+direction[j]*along+perpendicular[j]/magnitude*bend);
+  });
 }
 
 // Distinct receive/turn/accelerate/keeper-rounding beats instead of a sine slalom.
@@ -131,8 +151,9 @@ function actionPose(slug, t) {
     const backstep=-.65-(v[0]+.65)*.55,shift=backstep-v[0];
     root=[backstep,v[1],0];tilt=v[2];yaw=Math.PI;
     const ankles=curve([[0,-.86,.055,-.43,.055],[.27,-.75,.055,-.27,.055],
-      [.345,-.61,.17,-.27,.055],[.375,.19,1.18,-.36,.31],
-      [.405,.36,1.94,-.36,.85],[.44,-.61,1.28,.16,2.51],
+      [.345,-.61,.17,-.27,.055],[.375,-.65,.92,-.36,.31],
+      [.405,-.50,1.94,-.64,1.05],[.420,-.65,1.72,-.64,1.80],
+      [.430,-.65,1.46,-.25,2.35],[.44,-.61,1.28,.16,2.51],
       [.465,-.29,1.74,.50,2.17],[.485,.06,1.94,.71,1.88],
       [.505,.02,1.51,.87,1.40],[.535,-.02,.68,.87,.69],
       [.555,.11,.28,.79,.28],[.59,.12,.055,.67,.055],
@@ -285,6 +306,7 @@ export function sampleIconMotion(slug, time, aspect = 1.6) {
     pose.bootPitch=pose.bootPitch.map(pitch=>lerp(pitch,0,celebration));
   }
   pose.feet.forEach(foot=>{foot[1]=Math.max(.055,foot[1]);});
+  if(slug==='cristiano')pose.knees=solveIconKnees(pose);
   // Independent spine and neck: the hips carry the gait while the shoulders
   // counter-rotate and the eyes keep following the ball. No rigid whole-body sway.
   const stride=Math.sin(t/gaitPeriod(slug)*TAU),running=slug!=='cristiano'&&slug!=='pele'&&slug!=='ronaldinho';

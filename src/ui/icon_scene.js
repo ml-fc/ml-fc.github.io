@@ -144,13 +144,8 @@ export function createIconScene(canvas){
         const side=i?1:-1,hip=transform([0,-.025,side*.12]);
         const delta=sub(footTargets[i],hip),reach=Math.min(.94*size,Math.hypot(...delta));
         const foot=add(hip,norm(delta).map(v=>v*reach));
-        // Keep the knee hinge in a stable plane as the torso goes horizontal.
-        // A small lateral component prevents the pole becoming collinear with
-        // a straight leg and suddenly flipping the knee to the opposite side.
-        const hinge=featured&&slug==='cristiano'
-          ? [-1,-.15,side*.18]
-          : add(axes[0],axes[2].map(v=>v*side*.18));
-        const knee=joint(hip,foot,hinge,.47*size,.48*size);
+        const hinge=add(axes[0],axes[2].map(v=>v*side*.18));
+        const knee=rig.knees?.[i]||joint(hip,foot,hinge,.47*size,.48*size);
         bone(hip,knee,.078*build,skin);bone(hip,hip.map((v,j)=>mix(v,knee[j],.52)),.093*build,shorts);
         bone(knee,foot,.052,skin);bone(knee.map((v,j)=>mix(v,foot[j],.28)),foot,.055,kit);
         const bootAxes=bodyAxes(rig.yaw||0,rig.bootPitch?.[i]||0),boot=add(foot,bootAxes[0].map(v=>v*.085));
