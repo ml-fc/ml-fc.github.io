@@ -101,7 +101,7 @@ export function createIconScene(canvas){
     }
     const post=[.8,.85,.83],net=[.23,.33,.34],goal=4.9;
     bone([goal,0,-1.4],[goal,2.1,-1.4],.033,post);bone([goal,0,1.4],[goal,2.1,1.4],.033,post);bone([goal,2.1,-1.4],[goal,2.1,1.4],.033,post);
-    const netAge=Math.max(0,(t-.72)*9),ripple=Math.sin(netAge*22)*Math.exp(-netAge*5)*.13;
+    const netAge=Math.max(0,(t-motion.netTime)*9),ripple=Math.sin(netAge*22)*Math.exp(-netAge*5)*.13;
     for(let z=-1.4;z<=1.41;z+=.20)bone([goal+.62,0,z],[goal+.62+ripple,2.1,z],.005,net);
     for(let y=0;y<=2.11;y+=.175){bone([goal+.62,y,-1.4],[goal+.62+ripple,y,1.4],.005,net);bone([goal,y,-1.4],[goal+.62,y,-1.4],.005,net);}
     bone([goal,2.1,-1.4],[goal+.62,2.1,-1.4],.015,post);bone([goal,2.1,1.4],[goal+.62,2.1,1.4],.015,post);
@@ -139,7 +139,7 @@ export function createIconScene(canvas){
         const knee=joint(hip,foot,axes[0],.47*size,.48*size);
         bone(hip,knee,.078*build,skin);bone(hip,hip.map((v,j)=>mix(v,knee[j],.52)),.093*build,shorts);
         bone(knee,foot,.052,skin);bone(knee.map((v,j)=>mix(v,foot[j],.28)),foot,.055,kit);
-        const bootAxes=bodyAxes(rig.yaw||0),boot=add(foot,bootAxes[0].map(v=>v*.085));
+        const bootAxes=bodyAxes(rig.yaw||0,rig.bootPitch?.[i]||0),boot=add(foot,bootAxes[0].map(v=>v*.085));
         draw(shoe,matrix(boot,[1,1,1],[bootAxes[2],bootAxes[0],bootAxes[1]]),featured?(slug==='messi'?[.85,.38,.12]:[.78,.83,.70]):[.17,.23,.28]);
         for(const offset of [-.045,.06])for(const side of [-1,1]) {
           const stud=add(boot,add(bootAxes[0].map(v=>v*offset),[0,-.033,side*.035]));

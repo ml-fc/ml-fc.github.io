@@ -3070,7 +3070,7 @@ body[data-weekly-theme="goats"] .nextMatch { background:linear-gradient(120deg,#
 .iconCelebration__shout { font-size:23px; }
 .iconCelebration footer p { margin:5px 0; font-size:13px; color:#d4dde5; }
 .iconCelebration footer small { font-size:11px; color:#9fb1bf; }
-.iconCelebration.is-celebrating .iconCelebration__shout { animation:none; }
+.iconCelebration.is-celebrating[data-motion] .iconCelebration__shout { animation:none; }
 .iconCelebration.is-photo-expanded header { flex-wrap:wrap; }
 .iconCelebration.is-photo-expanded .iconCelebration__photo { flex-basis:100%; width:100%; }
 .iconCelebration.is-photo-expanded .iconCelebration__photo img { height:min(65dvh,580px); object-fit:contain; }
