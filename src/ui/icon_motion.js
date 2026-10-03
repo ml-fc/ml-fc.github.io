@@ -4,7 +4,7 @@ const TAU = Math.PI * 2;
 export const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, u) => a + (b - a) * u;
 export const blend = (a, b, u) => a.map((v, i) => lerp(v, b[i], u));
-export const ease = v => { const u = clamp(v); return u * u * (3 - 2 * u); };
+export const ease = v => { const u = clamp(v); return u*u*u*(10+u*(-15+6*u)); };
 export const ICON_PROFILES = {
   cristiano: { height: 1.08, build: 1.02, number: '7', name: 'RONALDO', contact: .44, move: 'BICYCLE KICK', finish: 'SIUUU!' },
   messi: { height: .95, build: 1, number: '10', name: 'MESSI', contact: .59, move: 'LEFT-FOOT MAGIC', finish: 'TO THE SKY' },
@@ -15,7 +15,8 @@ export const ICON_PROFILES = {
   pele: { height: 1, build: 1, number: '10', name: 'PELÉ', contact: .44, move: 'FLYING VOLLEY', finish: 'O REI' },
 };
 
-// Cubic interpolation carries velocity across keyframes, with bounded slopes at turns.
+// Quintic Hermite curves carry velocity through each key and share zero
+// acceleration on both sides. This prevents the visible jerk of cubic joins.
 function curve(keys, time) {
   let i = keys.findIndex(key => key[0] >= time);
   if (i < 1) i = time <= keys[0][0] ? 1 : keys.length - 1;
@@ -28,8 +29,9 @@ function curve(keys, time) {
   }
   return a.slice(1).map((value, field) => {
     const f = field + 1;
-    return (2*u*u*u-3*u*u+1)*value + (u*u*u-2*u*u+u)*dt*slope(i-1,f)
-      + (-2*u*u*u+3*u*u)*b[f] + (u*u*u-u*u)*dt*slope(i,f);
+    const u3=u*u*u,u4=u3*u,u5=u4*u;
+    return (1-10*u3+15*u4-6*u5)*value + (u-6*u3+8*u4-3*u5)*dt*slope(i-1,f)
+      + (10*u3-15*u4+6*u5)*b[f] + (-4*u3+7*u4-3*u5)*dt*slope(i,f);
   });
 }
 
@@ -44,7 +46,7 @@ export function localPoint(root, axes, p) {
 
 function runPath(slug, t) {
   const profile = ICON_PROFILES[slug], end = profile.contact - .075;
-  if(slug==='neymar')return [-1.6+3*ease((t-.32)/(end-.32)),.86,0];
+  if(slug==='neymar')return [-1.6+3*ease((t-.32)/(end-.32)),.83,0];
   const u = clamp(t/end);
   const late = slug === 'r9' || slug === 'ronaldinho';
   const start = slug === 'maradona' ? -3.2 : late ? -1.9 : -2.6;
@@ -52,7 +54,7 @@ function runPath(slug, t) {
   const wave = slug === 'maradona' ? .55 : slug === 'messi' ? .28 : .12;
   const z = slug==='ronaldinho' ? curve([[0,0],[.32,.06],[.40,.12],[.49,-.15],[.72,-.35],[1,0]],u)[0]
     : Math.sin(u*TAU*1.4)*wave*Math.sin(u*Math.PI);
-  return [start+distance, (slug==='messi'||slug==='maradona'?.83:.9)*profile.height, z];
+  return [start+distance, (slug==='messi'||slug==='maradona'?.83:.85)*profile.height, z];
 }
 
 // Each left-foot touch is a shared event for the boot and the ball. Between
@@ -74,7 +76,7 @@ function dribbleBall(slug, t) {
 
 // During stance, each ankle stays on the same world-space spot. Only the swing foot travels.
 const GAIT = .095;
-const gaitPeriod = slug => slug==='neymar' ? .060 : GAIT;
+const gaitPeriod = slug => slug==='neymar' ? .050 : slug==='r9'||slug==='ronaldinho' ? .075 : GAIT;
 function runningFeet(slug, time) {
   const size = ICON_PROFILES[slug].height;
   const period=gaitPeriod(slug);
@@ -89,7 +91,7 @@ function runningFeet(slug, time) {
     if (u <= .58) return from;
     const swing = (u - .58) / .42;
     const foot = blend(from, to, ease(swing));
-    foot[1] += .24 * size * Math.pow(Math.sin(swing * Math.PI), 2);
+    foot[1] += .24 * size * Math.pow(Math.sin(swing * Math.PI), 3);
     return foot;
   });
 }
@@ -104,14 +106,17 @@ function actionPose(slug, t) {
       [.36,-.24,1.18,.48],[.405,-.10,1.49,1.12],[.44,.04,1.50,1.63],
       [.48,.18,1.22,1.95],[.535,.29,.43,1.74],[.56,.32,.28,1.48],
       [.59,.34,.33,1.12],[.635,.35,.52,.48],[.69,.36,.94,0],[1,.36,.94,0]],t);
-    root=[v[0],v[1],0];tilt=v[2];
+    // Back to goal (+X), watching the cross: the chest turns skyward as the
+    // head falls toward goal and the right leg strikes over the shoulder.
+    const backstep=-.65-(v[0]+.65)*.55,shift=backstep-v[0];
+    root=[backstep,v[1],0];tilt=v[2];yaw=Math.PI;
     const ankles=curve([[0,-.86,.055,-.43,.055],[.22,-.75,.055,-.27,.055],
       [.30,-.61,.17,-.27,.055],[.36,.30,1.35,-.36,.36],
       [.405,.39,2.03,-.36,1.17],[.44,-.62,1.23,.31,2.32],
       [.48,-.49,.75,.86,1.74],[.535,-.25,.07,1.02,.78],
       [.56,.04,.055,.96,.35],[.59,.17,.055,.82,.055],
       [.635,.11,.055,.62,.055],[.69,.14,.055,.58,.055],[1,.14,.055,.58,.055]],t);
-    feet=[[ankles[0],ankles[1],-.14],[ankles[2],ankles[3],.14]];
+    feet=[[ankles[0]+shift,ankles[1],.14],[ankles[2]+shift,ankles[3],-.14]];
   } else if(slug==='pele') {
     const v=curve([[0,-1.15,.92,0],[.20,-.67,.82,-.12],[.35,-.24,1.25,-.18],
       [.44,.0,1.33,.25],[.55,.25,1.02,.10],[.68,.38,.91,0],[1,.38,.91,0]],t);
@@ -124,7 +129,8 @@ function actionPose(slug, t) {
     root=runPath(slug,t);const start=runPath(slug,0);distance=root[0]-start[0];
     feet=runningFeet(slug,t);
     // Two compressions per stride, with an opposing arm swing.
-    root[1]+=.022*Math.cos(t/gaitPeriod(slug)*TAU*2);
+    const strideWeight=1-ease((t-contact+.10)/.10);
+    root[1]+=.014*Math.cos(t/gaitPeriod(slug)*TAU*2)*strideWeight;
     const headingTime=Math.min(t,contact-.081);
     const before=runPath(slug,Math.max(0,headingTime-.003)),after=runPath(slug,headingTime+.003);
     yaw=Math.atan2(after[2]-before[2],Math.max(.001,after[0]-before[0]))*.65;
@@ -154,7 +160,7 @@ function actionPose(slug, t) {
     if(slug==='neymar'&&t<.32) {
       const weight=1-ease((t-.28)/.04);
       feet=feet.map((foot,i)=>blend(foot,[root[0]+(i?.13:-.12),.055,i?.12:-.12],weight));
-      const scoop=Math.sin(clamp((t-.12)/.14)*Math.PI);
+      const scoop=Math.pow(Math.sin(clamp((t-.12)/.14)*Math.PI),2);
       feet[1]=blend(feet[1],[root[0]-.1-scoop*.16,.055+scoop*.32,.08],ease((t-.10)/.04)*weight);tilt=lerp(tilt,-scoop*.16,weight);
     }
     const kick=ease((t-contact+.075)/.075),recover=ease((t-contact)/.13);
@@ -194,19 +200,21 @@ function actionPose(slug, t) {
   return {root,feet,hands,axes,yaw,tilt,roll,bootPitch,height:s,build:p.build};
 }
 
-export function sampleIconMotion(slug, time) {
+export function sampleIconMotion(slug, time, aspect = 1.6) {
   if(!ICON_PROFILES[slug])slug='messi';
   const t=clamp(time),p=ICON_PROFILES[slug],contact=p.contact,netTime=contact+.105;
   const pose=actionPose(slug,Math.min(t,.72));
   const shot=actionPose(slug,contact),kicking=slug==='messi'||slug==='maradona'?0:1;
   const pitch=shot.bootPitch[kicking];
-  const strike=shot.feet[kicking].map((v,i)=>v+(i===0?.16*Math.cos(pitch):i===1?.07+.16*Math.sin(pitch):0));
+  const bootAxes=bodyAxes(shot.yaw,pitch);
+  const strike=shot.feet[kicking].map((v,i)=>v+.16*bootAxes[0][i]+(i===1?.07:0));
   let ball;
   if(t<contact) {
     if(slug==='cristiano'||slug==='pele') {
-      const u=ease(t/contact);
-      ball=blend(slug==='cristiano'?[1.5,2.6,.1]:[-2.2,2.1,.15],strike,u);
-      ball[1]+=.25*Math.sin(u*Math.PI);
+      const u=t/contact;
+      // A cross keeps moving through contact instead of easing to a halt.
+      ball=blend(slug==='cristiano'?[1.5,2.9,-1.2]:[-2.2,2.1,.15],strike,u);
+      ball[1]+=.35*4*u*(1-u);
     } else if(slug==='neymar'&&t>.12&&t<.46) {
       const normalAt=time=>dribbleBall(slug,time);
       if(t<.2)ball=blend(normalAt(.12),[-1.72,.15,.08],ease((t-.12)/.08));
@@ -228,12 +236,12 @@ export function sampleIconMotion(slug, time) {
   const celebration=ease((t-.75)/.08),age=clamp((t-.75)/.25);
   if(celebration>0) {
     // Turn towards the camera for the final pose, through the ankles rather than at the waist.
-    pose.yaw=lerp(pose.yaw,1.35,celebration);pose.tilt*=1-celebration;
+    pose.yaw=lerp(pose.yaw,1.35,celebration);pose.tilt*=1-celebration;pose.roll*=1-celebration;
     let jump=0;
-    if(slug==='cristiano')jump=.43*Math.sin(clamp((age-.10)/.53)*Math.PI);
+    if(slug==='cristiano')jump=.43*Math.pow(Math.sin(clamp((age-.10)/.53)*Math.PI),2);
     if(slug==='pele')jump=.32*Math.pow(Math.sin(clamp(age/.65)*Math.PI),2);
     const landing=slug==='cristiano'?.14*Math.pow(Math.sin(clamp((age-.63)/.24)*Math.PI),2):0;
-    pose.root[1]+=jump-landing;pose.axes=bodyAxes(pose.yaw,pose.tilt);
+    pose.root[1]+=jump-landing;pose.axes=bodyAxes(pose.yaw,pose.tilt,pose.roll);
     const s=pose.height;
     pose.feet=pose.feet.map((foot,i)=>blend(foot,localPoint(pose.root,pose.axes,[.02,-.88*s+jump*.12,(i?1:-1)*(slug==='cristiano'?.30:.22)]),celebration));
     pose.feet.forEach(foot=>{foot[1]=Math.max(.055+jump,foot[1]);});
@@ -254,8 +262,11 @@ export function sampleIconMotion(slug, time) {
   // One continuous camera move: close during the skill, wider to see the finish.
   const follow=ease((t-contact)/.16)*(1-ease((t-.75)/.10));
   const aerial=slug==='cristiano'||slug==='pele';
-  const target=[lerp(pose.root[0]+.25,ball[0]-.5,follow*.70),aerial?1.35:1.05,pose.root[2]];
-  const distance=lerp(aerial?6.1:5.2,6.8,follow),orbit=lerp(-.26,.16,ease(t));
+  // Pull back to include the landing and the goal together. Chasing the ball
+  // itself used to whip the camera away and crop the player's recovery.
+  const wide=ease((aspect-1.1)/.5);
+  const target=[pose.root[0]+.25+lerp(.9,2.4,wide)*follow,aerial?1.35:1.05,pose.root[2]];
+  const distance=lerp(aerial?6.1:5.2,lerp(7.5,10.4,wide),follow),orbit=lerp(-.26,.16,ease(t));
   const camera={target,eye:[target[0]+Math.sin(orbit)*distance,aerial?2.85:2.5,Math.cos(orbit)*distance]};
   const defenders=['messi','maradona','r9','ronaldinho','neymar'].includes(slug)
     ? (slug==='maradona'?[-2.1,-.65,.75]:[-1.0,.75]).map((x,i)=>{

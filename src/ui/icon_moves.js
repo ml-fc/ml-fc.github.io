@@ -22,11 +22,11 @@ const MOVES = {
   pele:[[0,251,206,0,-18,42,18,42,142,88],[.22,272,184,-12,-20,34,25,31,239,150],[.4,291,162,-20,-18,43,48,12,340.2,156.9],[.53,305,181,-10,-20,38,30,30,425,144],[.68,319,206,0,-18,42,18,42,555,192],[.76,324,206,0,-18,42,18,42,560,233]],
 };
 const clamp = value => Math.max(0, Math.min(1, value));
-const smooth = value => { const u = clamp(value); return u*u*(3-2*u); };
+const smooth = value => { const u = clamp(value); return u*u*u*(10+u*(-15+6*u)); };
 function contactTime(slug) {
   return { cristiano:.42, pele:.4, messi:.62, ronaldinho:.64, neymar:.65 }[slug] || .63;
 }
-// Monotone cubic Hermite: continuous velocity through poses, with no overshoot at turns.
+// Match the main scene's continuous-acceleration curves in the SVG fallback.
 function interpolate(keys, time) {
   let index = keys.findIndex(key => key[0] >= time);
   if (index < 1) index = time <= keys[0][0] ? 1 : keys.length - 1;
@@ -38,9 +38,10 @@ function interpolate(keys, time) {
     const right=(keys[i+1][field]-keys[i][field])/(keys[i+1][0]-keys[i][0]);
     return left*right <= 0 ? 0 : 2*left*right/(left+right);
   }
+  const u3=u*u*u,u4=u3*u,u5=u4*u;
   return a.map((v,field) => field === 0 ? time :
-    (2*u*u*u-3*u*u+1)*v+(u*u*u-2*u*u+u)*duration*tangent(index-1,field)+
-    (-2*u*u*u+3*u*u)*b[field]+(u*u*u-u*u)*duration*tangent(index,field));
+    (1-10*u3+15*u4-6*u5)*v+(u-6*u3+8*u4-3*u5)*duration*tangent(index-1,field)+
+    (10*u3-15*u4+6*u5)*b[field]+(-4*u3+7*u4-3*u5)*duration*tangent(index,field));
 }
 export function sampleIconPose(slug, time) {
   if (!MOVES[slug]) slug = "messi";

@@ -81,7 +81,7 @@ export function createIconScene(canvas){
   function render(state){
     if(disposed||lost)return;lastFrame=state;
     const {t,look,slug}=state;
-    const motion=sampleIconMotion(slug,t),{pose,ball,profile}=motion;
+    const motion=sampleIconMotion(slug,t,aspect),{pose,ball,profile}=motion;
     if(numberSlug!==slug && numberContext){
       numberContext.clearRect(0,0,256,256);numberContext.fillStyle='#fff6d9';numberContext.textAlign='center';numberContext.textBaseline='middle';
       numberContext.font='700 19px Arial';numberContext.fillText(profile.name,128,35);
@@ -136,7 +136,13 @@ export function createIconScene(canvas){
         const side=i?1:-1,hip=transform([0,-.025,side*.12]);
         const delta=sub(footTargets[i],hip),reach=Math.min(.94*size,Math.hypot(...delta));
         const foot=add(hip,norm(delta).map(v=>v*reach));
-        const knee=joint(hip,foot,axes[0],.47*size,.48*size);
+        // Keep the knee hinge in a stable plane as the torso goes horizontal.
+        // A small lateral component prevents the pole becoming collinear with
+        // a straight leg and suddenly flipping the knee to the opposite side.
+        const hinge=featured&&slug==='cristiano'
+          ? [-1,-.15,side*.18]
+          : add(axes[0],axes[2].map(v=>v*side*.18));
+        const knee=joint(hip,foot,hinge,.47*size,.48*size);
         bone(hip,knee,.078*build,skin);bone(hip,hip.map((v,j)=>mix(v,knee[j],.52)),.093*build,shorts);
         bone(knee,foot,.052,skin);bone(knee.map((v,j)=>mix(v,foot[j],.28)),foot,.055,kit);
         const bootAxes=bodyAxes(rig.yaw||0,rig.bootPitch?.[i]||0),boot=add(foot,bootAxes[0].map(v=>v*.085));
@@ -157,6 +163,17 @@ export function createIconScene(canvas){
       }
     }
     function opponent(x,z,reaction,keeper=false) {
+      if(keeper) {
+        const yaw=Math.PI,root=[x,.91-reaction*.39,z],axes=bodyAxes(yaw,0,-reaction*1.1);
+        shadow(x,z,.48,.35);
+        const at=p=>localPoint(root,axes,p);
+        const feet=[at([.08,-.85,-.20]),at([-.18,-.85,.20])];
+        feet.forEach(foot=>{foot[1]=Math.max(.055,foot[1]);});
+        person({root,axes,yaw,feet,
+          hands:[at([.12,.65,-.40]),at([.12,.77,-.22])]},
+          [[.83,.39,.17],[.08,.13,.20],[.49,.34,.24]]);
+        return;
+      }
       const root=[x,.91-reaction*.12,z],axes=bodyAxes(keeper?Math.PI:.4,-reaction*.08);
       shadow(x,z,.45,.40);
       person({root,axes,yaw:.4,feet:[[x-.20,.055,z-.16-reaction*.2],[x+.18,.055,z+.17]],
@@ -164,7 +181,7 @@ export function createIconScene(canvas){
       [keeper?[.83,.39,.17]:[.32,.41,.50],[.08,.13,.20],[.49,.34,.24]]);
     }
     for(const defender of motion.defenders)opponent(defender.x,defender.z,defender.reaction);
-    opponent(4.65,-.45-ease((t-motion.contact)/.18)*.64,ease((t-motion.contact)/.12),true);
+    opponent(4.65,-.45+ease((t-motion.contact)/.18)*.95,ease((t-motion.contact)/.12),true);
     shadow(pose.root[0],pose.root[2],.47+Math.max(0,pose.root[1]-1)*.12,.50/(1+Math.max(0,pose.root[1]-1)));
     for(const foot of pose.feet)shadow(foot[0],foot[2],.17,.25/(1+foot[1]*4));
     person(pose,colors,true);
