@@ -8,11 +8,11 @@ export const ease = v => { const u = clamp(v); return u*u*u*(10+u*(-15+6*u)); };
 export const ICON_PROFILES = {
   cristiano: { height: 1.08, build: 1.02, number: '7', name: 'RONALDO', contact: .44, move: 'BICYCLE KICK', finish: 'SIUUU!' },
   messi: { height: .95, build: 1, number: '10', name: 'MESSI', contact: .59, move: 'LEFT-FOOT MAGIC', finish: 'TO THE SKY' },
-  neymar: { height: 1, build: .93, number: '10', name: 'NEYMAR JR', contact: .61, move: 'RAINBOW FLICK', finish: 'JOGA BONITO' },
-  r9: { height: 1.03, build: 1.12, number: '9', name: 'RONALDO', contact: .59, move: 'DOUBLE STEPOVER', finish: 'O FENÔMENO' },
+  neymar: { height: 1, build: .93, number: '11', name: 'NEYMAR JR', contact: .61, move: 'THE SANTOS SOLO', finish: 'JOGA BONITO' },
+  r9: { height: 1.03, build: 1.12, number: '9', name: 'RONALDO', contact: .59, move: 'THE FINAL FINISH', finish: 'O FENÔMENO' },
   maradona: { height: .93, build: 1.12, number: '10', name: 'MARADONA', contact: .61, move: 'THE SLALOM', finish: 'EL DIEGO' },
-  ronaldinho: { height: 1.04, build: 1.03, number: '10', name: 'RONALDINHO', contact: .61, move: 'ELASTICO', finish: 'KEEP SMILING' },
-  pele: { height: 1, build: 1, number: '10', name: 'PELÉ', contact: .44, move: 'FLYING VOLLEY', finish: 'O REI' },
+  ronaldinho: { height: 1.04, build: 1.03, number: '10', name: 'RONALDINHO', contact: .61, move: 'THE CHELSEA TOE-POKE', finish: 'KEEP SMILING' },
+  pele: { height: 1, build: 1, number: '10', name: 'PELÉ', contact: .55, move: 'CHEST · FLICK · VOLLEY', finish: 'O REI' },
 };
 
 // Quintic Hermite curves carry velocity through each key and share zero
@@ -44,17 +44,18 @@ export function localPoint(root, axes, p) {
   return root.map((v,i) => v + axes[0][i]*p[0] + axes[1][i]*p[1] + axes[2][i]*p[2]);
 }
 
+// Distinct receive/turn/accelerate/keeper-rounding beats instead of a sine slalom.
+const RUN_PATHS = {
+  messi:[[0,-2.6,.24],[.10,-1.98,.20],[.18,-1.34,-.28],[.27,-.65,-.36],[.36,.04,.12],[.44,.68,.26],[.515,1.4,-.30],[.59,1.4,-.30]],
+  maradona:[[0,-3.2,.20],[.07,-3.0,.34],[.14,-2.63,-.24],[.23,-1.80,-.42],[.32,-.88,-.16],[.42,.03,.15],[.535,1.25,-.40],[.61,1.25,-.40]],
+  neymar:[[0,-2.6,-.32],[.12,-2.05,.02],[.20,-1.5,.20],[.30,-.98,.20],[.39,-.40,-.32],[.46,.28,-.42],[.535,1.22,.08],[.61,1.22,.08]],
+};
 function runPath(slug, t) {
-  const profile = ICON_PROFILES[slug], end = profile.contact - .075;
-  if(slug==='neymar')return [-1.6+3*ease((t-.32)/(end-.32)),.83,0];
-  const u = clamp(t/end);
-  const late = slug === 'r9' || slug === 'ronaldinho';
-  const start = slug === 'maradona' ? -3.2 : late ? -1.9 : -2.6;
-  const distance = late ? curve([[0,0],[.40,.12],[.52,.35],[.76,1.7],[1,3]],u)[0] : (u*1.18-u*u*.18)*4;
-  const wave = slug === 'maradona' ? .55 : slug === 'messi' ? .28 : .12;
-  const z = slug==='ronaldinho' ? curve([[0,0],[.32,.06],[.40,.12],[.49,-.15],[.72,-.35],[1,0]],u)[0]
-    : Math.sin(u*TAU*1.4)*wave*Math.sin(u*Math.PI);
-  return [start+distance, (slug==='messi'||slug==='maradona'?.83:.85)*profile.height, z];
+  const profile = ICON_PROFILES[slug];
+  if(RUN_PATHS[slug]){const [x,z]=curve(RUN_PATHS[slug],t);return [x,.81*profile.height,z];}
+  if(slug==='ronaldinho')return [-1.05+.12*ease(t/.61),.83*profile.height,0];
+  if(slug==='r9')return [-.75+1.75*ease((t-.20)/.315),.84*profile.height,.18*(1-ease((t-.32)/.195))];
+  return [0,.85*profile.height,0];
 }
 
 // Each left-foot touch is a shared event for the boot and the ball. Between
@@ -76,7 +77,7 @@ function dribbleBall(slug, t) {
 
 // During stance, each ankle stays on the same world-space spot. Only the swing foot travels.
 const GAIT = .095;
-const gaitPeriod = slug => slug==='neymar' ? .050 : slug==='r9'||slug==='ronaldinho' ? .075 : GAIT;
+const gaitPeriod = slug => slug==='maradona' ? .055 : slug==='neymar' ? .070 : slug==='messi' ? .075 : GAIT;
 function runningFeet(slug, time) {
   const size = ICON_PROFILES[slug].height;
   const period=gaitPeriod(slug);
@@ -98,35 +99,40 @@ function runningFeet(slug, time) {
 
 function actionPose(slug, t) {
   const p=ICON_PROFILES[slug], contact=p.contact;
-  let root, tilt=0, yaw=0, roll=0, feet, distance=0;
+  let root, tilt=0, yaw=0, roll=0, feet;
   if(slug==='cristiano') {
     // Load the supporting right leg, drive the left knee, then scissor the right
     // boot above the hips. The back/forearms absorb the landing before recovery.
-    const v=curve([[0,-.65,.94,0],[.22,-.50,.94,-.06],[.30,-.38,.77,-.16],
-      [.36,-.24,1.18,.48],[.405,-.10,1.49,1.12],[.44,.04,1.50,1.63],
-      [.48,.18,1.22,1.95],[.535,.29,.43,1.74],[.56,.32,.28,1.48],
-      [.59,.34,.33,1.12],[.635,.35,.52,.48],[.69,.36,.94,0],[1,.36,.94,0]],t);
+    const v=curve([[0,-.65,.94,0],[.27,-.50,.94,-.04],[.345,-.38,.80,-.12],
+      [.375,-.24,1.12,.38],[.405,-.10,1.43,.92],[.44,.04,1.55,1.45],
+      [.465,.18,1.35,2.12],[.485,.24,1.13,2.55],[.505,.29,.82,2.30],
+      [.535,.32,.38,1.68],[.555,.34,.30,1.42],[.59,.35,.43,.86],
+      [.64,.36,.74,.22],[.68,.36,.94,0],[1,.36,.94,0]],t);
     // Back to goal (+X), watching the cross: the chest turns skyward as the
     // head falls toward goal and the right leg strikes over the shoulder.
     const backstep=-.65-(v[0]+.65)*.55,shift=backstep-v[0];
     root=[backstep,v[1],0];tilt=v[2];yaw=Math.PI;
-    const ankles=curve([[0,-.86,.055,-.43,.055],[.22,-.75,.055,-.27,.055],
-      [.30,-.61,.17,-.27,.055],[.36,.30,1.35,-.36,.36],
-      [.405,.39,2.03,-.36,1.17],[.44,-.62,1.23,.31,2.32],
-      [.48,-.49,.75,.86,1.74],[.535,-.25,.07,1.02,.78],
-      [.56,.04,.055,.96,.35],[.59,.17,.055,.82,.055],
-      [.635,.11,.055,.62,.055],[.69,.14,.055,.58,.055],[1,.14,.055,.58,.055]],t);
+    const ankles=curve([[0,-.86,.055,-.43,.055],[.27,-.75,.055,-.27,.055],
+      [.345,-.61,.17,-.27,.055],[.375,.19,1.18,-.36,.31],
+      [.405,.36,1.94,-.36,.85],[.44,-.61,1.28,.16,2.51],
+      [.465,-.29,1.74,.50,2.17],[.485,.06,1.94,.71,1.88],
+      [.505,.02,1.51,.87,1.40],[.535,-.02,.68,.87,.69],
+      [.555,.11,.28,.79,.28],[.59,.12,.055,.67,.055],
+      [.64,.14,.055,.58,.055],[1,.14,.055,.58,.055]],t);
     feet=[[ankles[0]+shift,ankles[1],.14],[ankles[2]+shift,ankles[3],-.14]];
   } else if(slug==='pele') {
-    const v=curve([[0,-1.15,.92,0],[.20,-.67,.82,-.12],[.35,-.24,1.25,-.18],
-      [.44,.0,1.33,.25],[.55,.25,1.02,.10],[.68,.38,.91,0],[1,.38,.91,0]],t);
-    root=[v[0],v[1],0];tilt=v[2];
-    const ankles=curve([[0,-1.30,.055,-.98,.055],[.20,-.78,.055,-.45,.12],
-      [.35,-.52,.52,.12,.87],[.44,-.31,.69,.84,1.36],[.55,.08,.09,.72,.45],
-      [.68,.18,.055,.60,.055],[1,.18,.055,.60,.055]],t);
+    const v=curve([[0,-1.2,.89,.06],[.12,-1.15,.85,.20],[.22,-1.1,.83,-.16],
+      [.31,-.86,.87,-.08],[.43,-.32,.88,-.15],[.55,.10,.86,-.19],
+      [.60,.18,.83,.06],[.67,.28,.90,0],[1,.28,.90,0]],t);
+    root=[v[0],v[1],0];tilt=v[2];yaw=-.55*(1-ease((t-.12)/.22));
+    const ankles=curve([[0,-1.40,.055,-.94,.055],[.12,-1.34,.055,-.97,.055],
+      [.22,-1.35,.055,-.74,.45],[.31,-1.02,.055,-.79,.22],
+      [.43,-.55,.055,-.09,.055],[.49,-.32,.055,-.38,.22],
+      [.55,-.20,.055,.73,.44],[.60,-.14,.055,.69,.50],
+      [.67,.08,.055,.48,.055],[1,.08,.055,.48,.055]],t);
     feet=[[ankles[0],ankles[1],-.14],[ankles[2],ankles[3],.14]];
   } else {
-    root=runPath(slug,t);const start=runPath(slug,0);distance=root[0]-start[0];
+    root=runPath(slug,t);
     feet=runningFeet(slug,t);
     // Two compressions per stride, with an opposing arm swing.
     const strideWeight=1-ease((t-contact+.10)/.10);
@@ -137,37 +143,26 @@ function actionPose(slug, t) {
     yaw*=1-ease((t-contact+.075)/.075);
     tilt=slug==='messi'||slug==='maradona'?-.18:-.09;
     roll=-.16*Math.sin(t/gaitPeriod(slug)*TAU)*(1-ease((t-contact+.075)/.075));
-    if(slug==='r9'&&t<.28) {
-      // Two complete inside-to-outside circles around a stationary ball.
-      const phase=clamp((t-.06)/.085,0,2),side=phase<1?1:0,u=phase%1;
-      const sign=side?1:-1,weight=ease((t-.025)/.035)*(1-ease((t-.23)/.05));
-      const right=curve([[0,-.08,.055,.2],[.06,-.08,.055,.2],[.082,.33,.13,-.25],
-        [.102,.61,.24,0],[.125,.35,.13,.31],[.15,-.08,.055,.2],[1,-.08,.055,.2]],t);
-      const left=curve([[0,-.08,.055,-.2],[.145,-.08,.055,-.2],[.165,.33,.13,.25],
-        [.187,.61,.24,0],[.21,.35,.13,-.31],[.235,-.08,.055,-.2],[1,-.08,.055,-.2]],t);
-      feet=feet.map((foot,i)=>{const target=i?right:left;return blend(foot,[root[0]+target[0],target[1],target[2]],weight);});
-      root[1]-=.055*weight;root[2]-=sign*.055*Math.sin(u*Math.PI)*weight;
-      yaw+=sign*.18*Math.sin(u*Math.PI)*weight;
+    if(slug==='r9') {
+      const weight=1-ease((t-.43)/.07),at=curve([[0,-.08,.055],[.25,-.08,.055],[.32,.20,.12],[.38,.31,.09],[.43,.16,.055],[1,.16,.055]],t);
+      feet[1]=blend(feet[1],[root[0]+at[0],at[1],root[2]+.14],weight);
+      feet[0]=blend(feet[0],[root[0]-.18,.055,root[2]-.14],weight);
     }
-    if(slug==='ronaldinho'&&t>.10&&t<.29) {
-      // One right boot: outside push, sharp inside cut, then acceleration.
-      const weight=ease((t-.10)/.035)*(1-ease((t-.245)/.045));
-      const side=curve([[.10,.13],[.145,.14],[.18,.46],[.205,.43],[.235,-.29],[.29,-.18]],t)[0];
-      feet[1]=blend(feet[1],[root[0]+.34,.065,side],weight);
-      feet[0]=blend(feet[0],[-2.01,.055,-.20],weight);
-      yaw=lerp(yaw,-side*.65,weight);root[1]-=.07*weight;
-    }
-    if(slug==='neymar'&&t<.32) {
-      const weight=1-ease((t-.28)/.04);
-      feet=feet.map((foot,i)=>blend(foot,[root[0]+(i?.13:-.12),.055,i?.12:-.12],weight));
-      const scoop=Math.pow(Math.sin(clamp((t-.12)/.14)*Math.PI),2);
-      feet[1]=blend(feet[1],[root[0]-.1-scoop*.16,.055+scoop*.32,.08],ease((t-.10)/.04)*weight);tilt=lerp(tilt,-scoop*.16,weight);
+    if(slug==='ronaldinho') {
+      feet=[[root[0]-.13,.055,-.17],[root[0]+.13,.055,.17]];
+      const shimmy=ease((t-.12)/.05)*(1-ease((t-.48)/.08));
+      yaw=.16*Math.sin((t-.12)*TAU/.18)*shimmy;
+      roll=.10*Math.sin((t-.12)*TAU/.18)*shimmy;
+      root[1]-=.035*shimmy;tilt=-.06;
     }
     const kick=ease((t-contact+.075)/.075),recover=ease((t-contact)/.13);
     if(t>contact-.075) {
       const end=runPath(slug,contact),side=slug==='messi'||slug==='maradona'?0:1;
       root=blend(root,[end[0],.88*p.height,end[2]],kick);
-      const footArc=curve([[0,-.15,.055],[.32,-.38,.28],[.62,-.05,.40],[1,.61,.27]],kick);
+      const footArc=slug==='ronaldinho'
+        ? curve([[0,.13,.055],[.50,.14,.065],[.75,.28,.065],[1,.48,.065]],kick)
+        : slug==='r9' ? curve([[0,-.15,.055],[.32,-.29,.13],[.62,.04,.13],[1,.59,.12]],kick)
+        : curve([[0,-.15,.055],[.32,-.38,.23],[.62,-.05,.30],[1,.61,.18]],kick);
       const goalFoot=[root[0]+footArc[0],footArc[1],root[2]+(side?1:-1)*.13];
       feet[side]=blend(feet[side],goalFoot,kick);
       feet[side]=blend(feet[side],[root[0]+.24,.055,root[2]+(side?1:-1)*.14],recover);
@@ -197,6 +192,13 @@ function actionPose(slug, t) {
       [.44,-.7,1.10],[.48,-.35,.7],[.56,0,.2],[.62,0,0],[1,0,0]],t);
     bootPitch.splice(0,2,...pitch);
   }
+  // Use the rendered limb reach for contact targets too: the ball must meet
+  // the boot that is visible, rather than an unreachable IK target.
+  feet.forEach((foot,i)=>{
+    const hip=localPoint(root,axes,[0,-.025*s,(i?1:-1)*.12*s]);
+    const delta=foot.map((v,j)=>v-hip[j]),length=Math.hypot(...delta);
+    if(length>.94*s)feet[i]=hip.map((v,j)=>v+delta[j]*.94*s/length);
+  });
   return {root,feet,hands,axes,yaw,tilt,roll,bootPitch,height:s,build:p.build};
 }
 
@@ -210,20 +212,26 @@ export function sampleIconMotion(slug, time, aspect = 1.6) {
   const strike=shot.feet[kicking].map((v,i)=>v+.16*bootAxes[0][i]+(i===1?.07:0));
   let ball;
   if(t<contact) {
-    if(slug==='cristiano'||slug==='pele') {
+    if(slug==='cristiano') {
       const u=t/contact;
       // A cross keeps moving through contact instead of easing to a halt.
       ball=blend(slug==='cristiano'?[1.5,2.9,-1.2]:[-2.2,2.1,.15],strike,u);
       ball[1]+=.35*4*u*(1-u);
-    } else if(slug==='neymar'&&t>.12&&t<.46) {
-      const normalAt=time=>dribbleBall(slug,time);
-      if(t<.2)ball=blend(normalAt(.12),[-1.72,.15,.08],ease((t-.12)/.08));
-      else {const u=(t-.2)/.26;ball=blend([-1.72,.15,.08],normalAt(.46),u);ball[1]+=2.15*4*u*(1-u);}
-    } else if(slug==='ronaldinho'&&t>.10&&t<.29) {
-      const weight=ease((t-.10)/.035)*(1-ease((t-.245)/.045));
-      ball=blend(dribbleBall(slug,t),[pose.feet[1][0]+.13,.12,pose.feet[1][2]],weight);
-    } else if(slug==='r9'&&t<.28) {
-      ball=blend(dribbleBall(slug,t),[pose.root[0]+.35,.12,0],ease((t-.025)/.035)*(1-ease((t-.23)/.05)));
+    } else if(slug==='pele') {
+      const chest=[-1.04,1.40,.05],flick=[-.59,.57,.14];
+      if(t<.12)ball=blend([-1.8,2.25,-.55],chest,t/.12);
+      else if(t<.22)ball=blend(chest,flick,ease((t-.12)/.10));
+      else {const u=(t-.22)/(contact-.22);ball=blend(flick,strike,u);ball[1]+=1.25*4*u*(1-u);}
+    } else if(slug==='neymar'&&t>.16&&t<.32) {
+      // Borges receives the one-two; the return meets Neymar's next stride.
+      const a=dribbleBall(slug,.16),b=[-.82,.12,1.30],c=dribbleBall(slug,.32);
+      ball=t<.23?blend(a,b,(t-.16)/.07):blend(b,c,(t-.23)/.09);
+    } else if(slug==='r9'&&t<.40) {
+      const receive=actionPose(slug,.32).feet[1],touch=[receive[0]+.14,.12,receive[2]];
+      ball=t<.32?blend([-1.9,.12,1.5],touch,ease(t/.32))
+        :blend(touch,dribbleBall(slug,t),ease((t-.32)/.08));
+    } else if(slug==='ronaldinho') {
+      ball=[-.65,.12,.13];
     } else {
       ball=dribbleBall(slug,t);
     }
@@ -268,11 +276,12 @@ export function sampleIconMotion(slug, time, aspect = 1.6) {
   const target=[pose.root[0]+.25+lerp(.9,2.4,wide)*follow,aerial?1.35:1.05,pose.root[2]];
   const distance=lerp(aerial?6.1:5.2,lerp(7.5,10.4,wide),follow),orbit=lerp(-.26,.16,ease(t));
   const camera={target,eye:[target[0]+Math.sin(orbit)*distance,aerial?2.85:2.5,Math.cos(orbit)*distance]};
-  const defenders=['messi','maradona','r9','ronaldinho','neymar'].includes(slug)
-    ? (slug==='maradona'?[-2.1,-.65,.75]:[-1.0,.75]).map((x,i)=>{
+  const obstacles={messi:[-1.95,-1.30,-.12,.70],maradona:[-2.75,-2.35,-1.25,-.35,.72],
+    neymar:[-1.72,.48],r9:[1.9],ronaldinho:[-.25,.70],pele:[-.34]};
+  const defenders=(obstacles[slug]||[]).map((x,i)=>{
       const reaction=Math.exp(-Math.pow((pose.root[0]-x)*2.5,2));
-      return {x:x-reaction*.22,z:-.55+(i%2)*.55,reaction};
-    }):[];
+      return {x:x-reaction*.22,z:slug==='pele'?-.05:-.60+(i%2)*.65,reaction};
+    });
   return {slug,t,pose,ball,camera,defenders,contact,netTime,celebration,profile:p,
     phase:t<(aerial?.30:.10)?'THE APPROACH':t<contact+.035?'SIGNATURE MOVE':t<.75?'THE FINISH':'THE CELEBRATION'};
 }

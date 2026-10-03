@@ -5,72 +5,29 @@ export const ICON_MOVE_DURATION = 9000;
 const LOOKS = {
   cristiano: ['#c52336','#075c41','#d7a27c','7','BICYCLE KICK','SIUUU!'],
   messi: ['#1459a3','#a71939','#dfae8b','10','LEFT-FOOT MAGIC','TO THE SKY'],
-  neymar: ['#f4d72e','#18449b','#b98058','10','RAINBOW FLICK','JOGA BONITO'],
-  r9: ['#f6d82e','#1d489b','#b98259','9','DOUBLE STEPOVER','O FENÔMENO'],
+  neymar: ['#f5f5ec','#e8e9e3','#b98058','11','THE SANTOS SOLO','JOGA BONITO'],
+  r9: ['#f6d82e','#1d489b','#b98259','9','THE FINAL FINISH','O FENÔMENO'],
   maradona: ['#94d9f5','#f5f7fa','#c89473','10','THE SLALOM','EL DIEGO'],
-  ronaldinho: ['#164c9b','#a71c35','#a46a43','10','ELASTICO','KEEP SMILING'],
-  pele: ['#f2cd35','#1a4799','#825238','10','FLYING VOLLEY','O REI'],
-};
-// time, hip x/y, torso angle, left/right ankle x/y (relative to hip), ball x/y.
-const MOVES = {
-  cristiano:[[0,230,206,0,-16,42,18,42,340,72],[.2,251,181,-25,-23,35,22,28,320,80],[.34,263,155,-65,-32,27,24,37,314,95],[.42,270,145,-100,-36,25,30,45,309.1,107.6],[.49,277,172,-115,-30,22,27,37,383,92],[.65,288,219,-65,-22,22,27,20,554,144],[.76,295,206,0,-18,42,18,42,560,233]],
-  messi:[[0,92,206,8,-15,42,20,39,118,246],[.14,155,194,-9,21,42,-18,39,174,239],[.27,212,209,12,-18,39,22,42,239,247],[.4,274,195,-12,23,41,-16,39,297,240],[.54,350,206,9,-18,40,24,40,379,247],[.62,376,206,-8,45,22,-16,42,417.5,221.5],[.76,391,206,0,-18,42,18,42,555,226]],
-  neymar:[[0,214,206,0,-11,42,12,42,215,245],[.18,224,204,-8,-9,24,8,30,219,235],[.3,237,197,10,-23,30,10,38,215,193],[.43,264,192,8,-22,37,24,34,260,103],[.57,303,206,5,-16,42,26,36,336,199],[.65,340,206,-8,-18,42,44,22,386.6,221.7],[.76,356,206,0,-18,42,18,42,555,207]],
-  r9:[[0,149,206,4,-18,41,26,38,183,247],[.14,167,206,-8,35,34,-18,42,194,247],[.25,179,206,8,-19,42,36,33,204,247],[.34,190,206,-7,35,35,-16,42,215,247],[.52,324,202,12,-26,37,29,38,367,246],[.63,375,206,-8,-18,42,44,22,421.6,221.7],[.76,394,206,0,-20,42,20,42,555,218]],
-  maradona:[[0,80,205,9,-18,42,20,38,107,246],[.12,141,187,-13,23,42,-17,40,164,233],[.25,208,209,15,-18,40,23,40,237,249],[.39,270,189,-15,23,42,-18,39,291,235],[.53,352,207,11,-18,40,26,39,380,247],[.63,379,206,-8,45,22,-18,42,420.5,221.5],[.76,394,206,0,-18,42,18,42,555,224]],
-  ronaldinho:[[0,220,206,0,-18,42,22,40,249,247],[.24,232,206,-8,-18,42,44,31,279.9,230.6],[.32,237,206,8,-18,42,5,39,236.5,245.3],[.52,332,202,12,-23,38,26,38,369,246],[.64,375,206,-8,-18,42,44,22,421.6,221.7],[.76,389,206,0,-20,42,20,42,555,206]],
-  pele:[[0,251,206,0,-18,42,18,42,142,88],[.22,272,184,-12,-20,34,25,31,239,150],[.4,291,162,-20,-18,43,48,12,340.2,156.9],[.53,305,181,-10,-20,38,30,30,425,144],[.68,319,206,0,-18,42,18,42,555,192],[.76,324,206,0,-18,42,18,42,560,233]],
+  ronaldinho: ['#164c9b','#a71c35','#a46a43','10','THE CHELSEA TOE-POKE','KEEP SMILING'],
+  pele: ['#f2cd35','#1a4799','#825238','10','CHEST · FLICK · VOLLEY','O REI'],
 };
 const clamp = value => Math.max(0, Math.min(1, value));
 const smooth = value => { const u = clamp(value); return u*u*u*(10+u*(-15+6*u)); };
-function contactTime(slug) {
-  return { cristiano:.42, pele:.4, messi:.62, ronaldinho:.64, neymar:.65 }[slug] || .63;
-}
-// Match the main scene's continuous-acceleration curves in the SVG fallback.
-function interpolate(keys, time) {
-  let index = keys.findIndex(key => key[0] >= time);
-  if (index < 1) index = time <= keys[0][0] ? 1 : keys.length - 1;
-  const a = keys[index-1], b = keys[index], duration = b[0]-a[0], u = clamp((time-a[0])/duration);
-  function tangent(i, field) {
-    if (i === 0) return (keys[1][field]-keys[0][field])/(keys[1][0]-keys[0][0]);
-    if (i === keys.length-1) return 0;
-    const left=(keys[i][field]-keys[i-1][field])/(keys[i][0]-keys[i-1][0]);
-    const right=(keys[i+1][field]-keys[i][field])/(keys[i+1][0]-keys[i][0]);
-    return left*right <= 0 ? 0 : 2*left*right/(left+right);
-  }
-  const u3=u*u*u,u4=u3*u,u5=u4*u;
-  return a.map((v,field) => field === 0 ? time :
-    (1-10*u3+15*u4-6*u5)*v+(u-6*u3+8*u4-3*u5)*duration*tangent(index-1,field)+
-    (10*u3-15*u4+6*u5)*b[field]+(-4*u3+7*u4-3*u5)*duration*tangent(index,field));
-}
+function contactTime(slug) { return sampleIconMotion(slug,0).contact; }
+// Both renderers use the same choreography; loss of WebGL cannot restore the
+// obsolete generic skills or reverse CR7's kick. Project metres into the SVG pitch.
 export function sampleIconPose(slug, time) {
-  if (!MOVES[slug]) slug = "messi";
-  const keys=MOVES[slug] || MOVES.messi, t=clamp(time), action=Math.min(.76,t), contact=contactTime(slug);
-  const pose=interpolate(keys,action);
-  // Stance feet move backwards relative to the hip; the swing foot clears the turf.
-  const runStart={messi:0,maradona:0,r9:.34,ronaldinho:.33,neymar:.54}[slug];
-  if(runStart !== undefined && t<contact) {
-    const weight=smooth((t-runStart)/.045)*(1-smooth((t-contact+.075)/.075));
-    const travel=(pose[1]-keys[0][1])/46, angle=pose[3]*Math.PI/180;
-    for(let side=0;side<2;side++) {
-      const phase=((travel+side*.5)%1+1)%1;
-      const stride=phase<.62 ? 19-phase/.62*33 : -14+smooth((phase-.62)/.38)*33;
-      const lift=phase<.62 ? 0 : Math.sin((phase-.62)/.38*Math.PI)*15;
-      const dx=stride,dy=250-pose[2]-lift;
-      const fx=dx*Math.cos(angle)+dy*Math.sin(angle),fy=-dx*Math.sin(angle)+dy*Math.cos(angle);
-      pose[4+side*2]+=(fx-pose[4+side*2])*weight;
-      pose[5+side*2]+=(fy-pose[5+side*2])*weight;
-    }
-  }
-  if(t>contact) {
-    const hit=keys.find(key=>Math.abs(key[0]-contact)<.001), flight=clamp((t-contact)/(.76-contact));
-    const arc=slug==='cristiano'?38:slug==='pele'?25:15;
-    pose[8]=hit[8]+(630-hit[8])*flight;
-    pose[9]=hit[9]+(232-hit[9])*flight-4*arc*flight*(1-flight);
-    // Small, damped bounce inside the net, rather than a frozen ball after the shot.
-    if(t>.76){const settle=(t-.76)/.24;pose[8]=630-8*(1-Math.exp(-settle*5));pose[9]=242-10*Math.abs(Math.cos(settle*8))*Math.exp(-settle*5);}
-  }
-  return pose;
+  const motion=sampleIconMotion(slug,time),{pose,ball}=motion,scale=62;
+  const x=215+pose.root[0]*scale,y=250-pose.root[1]*scale;
+  const angle=Math.atan2(pose.axes[1][0],pose.axes[1][1]),c=Math.cos(angle),s=Math.sin(angle);
+  const project=point=>{
+    const dx=(point[0]-pose.root[0])*scale,dy=(pose.root[1]-point[1])*scale;
+    return [dx*c+dy*s,-dx*s+dy*c];
+  };
+  const [left,right]=pose.feet.map(project);
+  const result=[time,x,y,angle*180/Math.PI,...left,...right,215+ball[0]*scale,250-ball[1]*scale];
+  result.hands=pose.hands.map(project);
+  return result;
 }
 export function createIconMove(host, { onFinish = () => {}, onProgress = () => {} } = {}) {
   const limb = side => `<g stroke-linecap="round" stroke-linejoin="round" fill="none"><path data-arm-${side} stroke="var(--skin)" stroke-width="9"/><path data-sleeve-${side} stroke="var(--kit)" stroke-width="13"/><path data-leg-${side} stroke="var(--skin)" stroke-width="11"/><path data-sock-${side} stroke="var(--kit)" stroke-width="9"/><path data-boot-${side} stroke="#f7efba" stroke-width="7"/></g>`;
@@ -153,18 +110,15 @@ export function createIconMove(host, { onFinish = () => {}, onProgress = () => {
     fallback.setAttribute('aria-label',`${look[4]}, followed by ${look[5]}. Illustrated tribute.`);
     attr('stripe','opacity',['messi','maradona','ronaldinho'].includes(slug)?1:0);
     attr('hair','d',slug==='r9'?'M-7-71Q0-77 7-71L5-68H-6Z':slug==='ronaldinho'?'M-10-61Q-15-80 1-77Q15-76 10-61L13-44 5-49 6-69H-8Z':slug==='maradona'?'M-11-60Q-18-74-9-77Q-5-84 2-78Q16-82 13-64L8-66 5-73-9-69Z':'M-10-65Q-13-78 1-77Q14-76 10-65L5-71-9-69Z');
-    attr('hair','fill',slug==='neymar'?'#e5d5a3':'#201c20');
-    get('defenders').style.display=['messi','maradona','r9','ronaldinho'].includes(slug)?'':'none';
+    if(slug==='neymar')attr('hair','d','M-6-66L-4-82Q0-87 4-82L6-66L3-71H-3Z');
+    attr('hair','fill','#201c20');
+    get('defenders').style.display=slug==='cristiano'?'none':'';
     const ns='http://www.w3.org/2000/svg';get('confetti').replaceChildren();
     const particles=Array.from({length:28},(_,i)=>{const el=document.createElementNS(ns,'rect');el.setAttribute('width',i%2?3:5);el.setAttribute('height',7);el.setAttribute('fill',i%3===0?'#fff':i%3===1?look[0]:'var(--celebration-accent)');get('confetti').append(el);return el;});
     function draw(t){
-      let [,x,y,angle,lx,ly,rx,ry,bx,by]=sampleIconPose(slug,t);
-      const finish=Math.max(0,(t-.76)/.24),jump=Math.sin(Math.min(1,finish*1.6)*Math.PI);
-      if(finish){
-        if(slug==='cristiano'){y-=jump*32;lx+=(-25-lx)*smooth(finish*5);rx+=(25-rx)*smooth(finish*5);angle=Math.sin(Math.min(1,finish/.65)*Math.PI)*12;}
-        if(slug==='neymar'||slug==='ronaldinho'){x+=Math.sin(finish*14)*6;angle=Math.sin(finish*14)*7;lx=-20+Math.sin(finish*14)*5;rx=20+Math.sin(finish*14)*5;}
-        if(slug==='pele'){y-=jump*27;}
-      }
+      const projected=sampleIconPose(slug,t);
+      let [,x,y,angle,lx,ly,rx,ry,bx,by]=projected;
+      const finish=Math.max(0,(t-.76)/.24);
       attr('player','transform',`translate(${x} ${y}) rotate(${angle})`);attr('shadow','cx',x);attr('shadow','rx',Math.max(13,28-(206-y)*.12));
       // Two-segment legs: bend the knees while keeping each boot on its keyed contact point.
       for(const [side,fx,fy,hip] of [['a',lx,ly,-9],['b',rx,ry,9]]){
@@ -174,10 +128,7 @@ export function createIconMove(host, { onFinish = () => {}, onProgress = () => {
         attr(`sock-${side}`,'d',`M${kx*.4+fx*.6} ${ky*.4+fy*.6}L${fx} ${fy}`);
         attr(`boot-${side}`,'d',`M${fx-2} ${fy}l9 1`);
       }
-      let arms=[[-29,-23,-34,-36],[29,-23,35,-15]];
-      if(finish){
-        arms=slug==='messi'?[[-24,-60,-24,-81],[24,-60,24,-81]]:slug==='cristiano'?[[-29,-27,-44,-12],[29,-27,44,-12]]:slug==='pele'?[[-25,-58,-26,-80],[25,-25,32,-15]]:slug==='ronaldinho'?[[-25,-35,-35,-49],[25,-35,35,-49]]:slug==='neymar'?[[-24,-53,-18,-66],[24,-53,18,-66]]:[[-29,-40,-48,-43],[29,-40,48,-43]];
-      }
+      const arms=projected.hands.map(([hx,hy],i)=>[(i?14:-14)+(hx-(i?14:-14))*.5,-39+(hy+39)*.5,hx,hy]);
       for(const [i,side] of ['a','b'].entries()){const [ex,ey,hx,hy]=arms[i],sx=i?14:-14;attr(`arm-${side}`,'d',`M${sx}-39L${ex} ${ey}L${hx} ${hy}`);attr(`sleeve-${side}`,'d',`M${sx}-39L${sx+(ex-sx)*.45} ${-39+(ey+39)*.45}`);}
       attr('ball','transform',`translate(${bx} ${by}) rotate(${t*950})`);attr('ball-shadow','cx',bx);attr('ball-shadow','opacity',Math.max(.08,1-(251-by)/160)*.5);
       // Short velocity streak behind the shot, never a trail detached from the ball.

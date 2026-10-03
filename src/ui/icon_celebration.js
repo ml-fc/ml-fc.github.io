@@ -5,11 +5,20 @@ import { GOAT_THEMES, getActiveWeeklyTheme } from "../themes.js";
 const CELEBRATIONS = {
   cristiano: { title: "SIUUU!", detail: "Bicycle kick. Airborne. Unstoppable.", symbol: "7", motion: "siu" },
   messi: { title: "MESSI MAGIC", detail: "Close control. Left foot. Pure magic.", symbol: "★", motion: "sky" },
-  neymar: { title: "Joga bonito", detail: "Over the head. Rainbow flick. Joga bonito.", symbol: "♫", motion: "dance" },
-  r9: { title: "O Fenômeno", detail: "The stepovers. The burst. The finish.", symbol: "⚽", motion: "burst" },
+  neymar: { title: "Joga bonito", detail: "The one-two. The cut. The Santos solo.", symbol: "♫", motion: "dance" },
+  r9: { title: "O Fenômeno", detail: "Receive. Set. Finish. The 2002 final.", symbol: "⚽", motion: "burst" },
   maradona: { title: "El Pibe de Oro", detail: "The slalom. That left foot. El Diego.", symbol: "10", motion: "orbit" },
-  ronaldinho: { title: "Keep smiling", detail: "Outside. Inside. The elastico.", symbol: "🤙", motion: "samba" },
-  pele: { title: "O Rei", detail: "Airborne volley. Long live the King.", symbol: "♛", motion: "king" },
+  ronaldinho: { title: "Keep smiling", detail: "The body feint. The Chelsea toe-poke.", symbol: "🤙", motion: "samba" },
+  pele: { title: "O Rei", detail: "Chest. Flick. Volley. Sweden, 1958.", symbol: "♛", motion: "king" },
+};
+const ORIGINAL_CLIPS = {
+  cristiano: 'https://www.youtube.com/watch?v=Nt8198a0acA',
+  messi: 'https://www.youtube.com/watch?v=_OlTuc_t_BY',
+  neymar: 'https://www.youtube.com/watch?v=aV3W_DLMko8',
+  r9: 'https://www.youtube.com/watch?v=O8dUhMGtUtw',
+  maradona: 'https://www.youtube.com/watch?v=Da_CDPRG2j0',
+  ronaldinho: 'https://www.youtube.com/watch?v=fygu4KrxJqc',
+  pele: 'https://www.youtube.com/watch?v=TYNsrKtV6Mc',
 };
 
 export function openIconCelebration() {
@@ -34,7 +43,7 @@ export function openIconCelebration() {
       <button type="button" data-speed aria-pressed="false">0.5× slow motion</button>
       <input type="range" min="0" max="1000" step="1" value="0" aria-label="Animation progress" />
     </div>
-    <footer><strong class="iconCelebration__shout"></strong><p></p><small>Tap the portrait to view the full photo</small></footer>
+    <footer><strong class="iconCelebration__shout"></strong><p></p><small>Tap the portrait to view the full photo</small><a class="iconCelebration__reference" target="_blank" rel="noopener noreferrer">Watch the original move ↗</a></footer>
     <nav class="iconCelebration__players" aria-label="Choose an icon"></nav>
   </div>`;
   const photo = dialog.querySelector(".iconCelebration__photo img");
@@ -79,6 +88,9 @@ export function openIconCelebration() {
     photo.alt = `${theme.name} in ${theme.kit}`;
     dialog.querySelector(".iconCelebration__shout").textContent = CELEBRATIONS[theme.slug].title;
     dialog.querySelector("footer p").textContent = CELEBRATIONS[theme.slug].detail;
+    const reference=dialog.querySelector('.iconCelebration__reference');
+    reference.href=ORIGINAL_CLIPS[theme.slug];
+    reference.setAttribute('aria-label',`Watch ${theme.name}'s original move (opens a new tab)`);
     dialog.querySelectorAll("nav button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.slug === theme.slug)));
     celebrate();
   }

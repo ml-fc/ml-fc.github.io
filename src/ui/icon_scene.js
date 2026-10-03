@@ -123,8 +123,9 @@ export function createIconScene(canvas){
       body([.01,.56,0],[.065,.077,.064],skin);
       draw(face,matrix(transform([.016,.745,0]),[size,size,size],axes),skin);
       body([.122,.73,0],[.035,.033,.031],skin);body([-.014,.735,.100],[.024,.037,.018],skin);
-      const hair=slug==='neymar'&&featured?[.65,.59,.4]:[.022,.018,.019];
-      body([.005,.84,0],[.104,featured&&slug==='r9'?.022:.048,.091],hair);
+      const hair=[.022,.018,.019];
+      body([.005,.84,0],[.104,featured&&slug==='r9'?.022:.048,featured&&slug==='neymar'?.033:.091],hair);
+      if(featured&&slug==='neymar')body([-.005,.895,0],[.087,.060,.025],hair);
       body([.099,.772,.057],[.009,.011,.013],[.018,.02,.022]);
       bone(transform([.08,.792,.045]),transform([.107,.79,.067]),.008,hair);
       if(featured&&(slug==='ronaldinho'||slug==='maradona'||slug==='messi'))body([-.083,.765,0],[.046,.115,.101],hair);
@@ -181,7 +182,16 @@ export function createIconScene(canvas){
       [keeper?[.83,.39,.17]:[.32,.41,.50],[.08,.13,.20],[.49,.34,.24]]);
     }
     for(const defender of motion.defenders)opponent(defender.x,defender.z,defender.reaction);
-    opponent(4.65,-.45+ease((t-motion.contact)/.18)*.95,ease((t-motion.contact)/.12),true);
+    if(slug==='neymar') {
+      const root=[-.82,.86,1.30],yaw=-Math.PI/2,axes=bodyAxes(yaw);
+      shadow(root[0],root[2],.42,.35);
+      const at=p=>localPoint(root,axes,p),returnPass=ease((t-.21)/.04)*(1-ease((t-.25)/.06));
+      person({root,axes,yaw,feet:[at([0,-.805,-.14]),at([.27*returnPass,-.805,.14])],
+        hands:[at([.08,.2,-.35]),at([-.08,.2,.35])]},colors);
+    }
+    const rounded=slug==='messi'||slug==='maradona';
+    const keeperStart=rounded?motion.contact-.15:motion.contact;
+    opponent(rounded?1.15:4.65,-.45+ease((t-keeperStart)/.18)*.95,ease((t-keeperStart)/.12),true);
     shadow(pose.root[0],pose.root[2],.47+Math.max(0,pose.root[1]-1)*.12,.50/(1+Math.max(0,pose.root[1]-1)));
     for(const foot of pose.feet)shadow(foot[0],foot[2],.17,.25/(1+foot[1]*4));
     person(pose,colors,true);
