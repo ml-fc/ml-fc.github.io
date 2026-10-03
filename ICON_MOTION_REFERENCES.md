@@ -20,3 +20,10 @@ tracks. Both WebGL and the SVG fallback use those tracks, including scrubbing,
 slow motion and replay. The 9-second popup time compresses the longer dribbles
 and expands the brief kicks so the signature beats remain visible. Existing
 theme portraits and palettes remain independent of the action references.
+
+The playback beat map is separate from the pose map: CR7's take-off through
+landing occupies 0.72 seconds at normal speed, with a short deceleration around
+contact. Celebrations settle into a held final pose. The hips, deforming shirt,
+shoulders and head have independent transforms, with counter-rotation through
+the gait and bounded ball tracking through the neck. Body motion is sampled
+directly from timeline time rather than accumulated from previous frames.

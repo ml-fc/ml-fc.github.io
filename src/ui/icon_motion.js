@@ -35,6 +35,24 @@ function curve(keys, time) {
   });
 }
 
+// Playback beats are separate from pose keys. A kick must not hang in the air
+// simply because the popup also needs time for approach and celebration.
+const PLAYBACK_BEATS = {
+  cristiano:[[0,0],[.15,.27],[.22,.345],[.24,.375],[.255,.44],[.267,.485],[.30,.555],[.40,.68],[.54,.75],[.58,.79],[.62,.85],[.67,.91],[.74,1],[1,1]],
+  messi:[[0,0],[.08,.10],[.30,.515],[.34,.59],[.44,.72],[.55,.75],[.64,.83],[.79,1],[1,1]],
+  maradona:[[0,0],[.05,.07],[.30,.535],[.35,.61],[.44,.72],[.55,.75],[.64,.83],[.79,1],[1,1]],
+  neymar:[[0,0],[.10,.16],[.14,.23],[.19,.32],[.32,.535],[.38,.61],[.49,.72],[.56,.75],[.65,.83],[.80,1],[1,1]],
+  r9:[[0,0],[.06,.20],[.13,.32],[.24,.515],[.30,.59],[.43,.72],[.52,.75],[.61,.83],[.76,1],[1,1]],
+  ronaldinho:[[0,0],[.10,.12],[.32,.50],[.35,.535],[.39,.61],[.47,.72],[.55,.75],[.64,.83],[.79,1],[1,1]],
+  pele:[[0,0],[.12,.12],[.21,.22],[.38,.49],[.42,.55],[.51,.72],[.58,.75],[.67,.83],[.82,1],[1,1]],
+};
+export const iconActionTime=(slug,progress)=>curve(PLAYBACK_BEATS[slug]||PLAYBACK_BEATS.messi,clamp(progress))[0];
+export function iconActionProgress(slug,time) {
+  let a=0,b=1;
+  for(let i=0;i<28;i++){const m=(a+b)/2;if(iconActionTime(slug,m)<time)a=m;else b=m;}
+  return (a+b)/2;
+}
+
 export function bodyAxes(yaw, tilt = 0, roll = 0) {
   const c = Math.cos(yaw), s = Math.sin(yaw), a = Math.cos(tilt), b = Math.sin(tilt);
   const up=[-c*b,a,-s*b],side=[-s,0,c],cr=Math.cos(roll),sr=Math.sin(roll);
@@ -151,8 +169,8 @@ function actionPose(slug, t) {
     if(slug==='ronaldinho') {
       feet=[[root[0]-.13,.055,-.17],[root[0]+.13,.055,.17]];
       const shimmy=ease((t-.12)/.05)*(1-ease((t-.48)/.08));
-      yaw=.16*Math.sin((t-.12)*TAU/.18)*shimmy;
-      roll=.10*Math.sin((t-.12)*TAU/.18)*shimmy;
+      yaw=.04*Math.sin((t-.12)*TAU/.18)*shimmy;
+      roll=.025*Math.sin((t-.12)*TAU/.18)*shimmy;
       root[1]-=.035*shimmy;tilt=-.06;
     }
     const kick=ease((t-contact+.075)/.075),recover=ease((t-contact)/.13);
@@ -204,7 +222,7 @@ function actionPose(slug, t) {
 
 export function sampleIconMotion(slug, time, aspect = 1.6) {
   if(!ICON_PROFILES[slug])slug='messi';
-  const t=clamp(time),p=ICON_PROFILES[slug],contact=p.contact,netTime=contact+.105;
+  const progress=clamp(time),t=iconActionTime(slug,progress),p=ICON_PROFILES[slug],contact=p.contact,netTime=contact+.105;
   const pose=actionPose(slug,Math.min(t,.72));
   const shot=actionPose(slug,contact),kicking=slug==='messi'||slug==='maradona'?0:1;
   const pitch=shot.bootPitch[kicking];
@@ -267,6 +285,27 @@ export function sampleIconMotion(slug, time, aspect = 1.6) {
     pose.bootPitch=pose.bootPitch.map(pitch=>lerp(pitch,0,celebration));
   }
   pose.feet.forEach(foot=>{foot[1]=Math.max(.055,foot[1]);});
+  // Independent spine and neck: the hips carry the gait while the shoulders
+  // counter-rotate and the eyes keep following the ball. No rigid whole-body sway.
+  const stride=Math.sin(t/gaitPeriod(slug)*TAU),running=slug!=='cristiano'&&slug!=='pele'&&slug!=='ronaldinho';
+  const runWeight=running?(1-ease((t-contact+.10)/.10))*(1-celebration):0;
+  const coil=ease((t-contact+.10)/.10)*(1-ease((t-contact)/.16))*(1-celebration);
+  const footSign=slug==='messi'||slug==='maradona'?-1:1;
+  let spineYaw=-.14*stride*runWeight+footSign*.23*Math.sin((t-contact)*Math.PI/.16)*coil;
+  let spineTilt=-.045*runWeight,spineRoll=-pose.roll*.65*runWeight;
+  if(slug==='ronaldinho') {
+    const feint=ease((t-.12)/.05)*(1-ease((t-.48)/.08));
+    spineYaw+=.22*Math.sin((t-.12)*TAU/.18)*feint;
+    spineRoll+=.12*Math.sin((t-.12)*TAU/.18)*feint;
+  }
+  if(slug==='cristiano')spineTilt=curve([[0,0],[.345,-.10],[.405,.10],[.44,.16],[.485,-.12],[.555,-.15],[.68,0],[1,0]],t)[0]*(1-celebration);
+  if(slug==='pele')spineTilt+=.12*Math.exp(-Math.pow((t-.12)/.06,2))-.10*Math.exp(-Math.pow((t-.49)/.05,2));
+  pose.spine=[spineYaw,spineTilt,spineRoll];
+  const gaze=localPoint(pose.root,pose.axes,[.02,.73*pose.height,0]);
+  const toBall=ball.map((v,i)=>v-gaze[i]);
+  const local=pose.axes.map(axis=>axis.reduce((sum,v,i)=>sum+v*toBall[i],0));
+  pose.head=[clamp(Math.atan2(local[2],Math.max(.12,local[0]))-spineYaw,-.55,.55)*(1-celebration),
+    clamp(Math.atan2(local[1],Math.hypot(local[0],local[2]))-spineTilt,-.32,.40)*(1-celebration)];
   // One continuous camera move: close during the skill, wider to see the finish.
   const follow=ease((t-contact)/.16)*(1-ease((t-.75)/.10));
   const aerial=slug==='cristiano'||slug==='pele';
@@ -282,6 +321,6 @@ export function sampleIconMotion(slug, time, aspect = 1.6) {
       const reaction=Math.exp(-Math.pow((pose.root[0]-x)*2.5,2));
       return {x:x-reaction*.22,z:slug==='pele'?-.05:-.60+(i%2)*.65,reaction};
     });
-  return {slug,t,pose,ball,camera,defenders,contact,netTime,celebration,profile:p,
+  return {slug,t,progress,pose,ball,camera,defenders,contact,netTime,celebration,profile:p,
     phase:t<(aerial?.30:.10)?'THE APPROACH':t<contact+.035?'SIGNATURE MOVE':t<.75?'THE FINISH':'THE CELEBRATION'};
 }

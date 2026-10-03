@@ -8,6 +8,7 @@ const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const norm=a=>{const n=Math.hypot(...a)||1;return a.map(v=>v/n);};
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+const composeAxes=(a,b)=>b.map(axis=>axis.map((_,i)=>a[0][i]*axis[0]+a[1][i]*axis[1]+a[2][i]*axis[2]));
 function matrix(center,scale,axes=[[1,0,0],[0,1,0],[0,0,1]]){
   return [...axes[0].map(v=>v*scale[0]),0,...axes[1].map(v=>v*scale[1]),0,...axes[2].map(v=>v*scale[2]),0,...center,1];
 }
@@ -22,7 +23,7 @@ function loft(rings) {
   for(let i=0;i<rings.length-1;i++)for(let j=0;j<segments;j++)for(const [r,s] of [[i,j],[i+1,j],[i,j+1],[i,j+1],[i+1,j],[i+1,j+1]])vertices.push(...point(r,s),...normal(r,s));
   return vertices;
 }
-const VERTEX=`attribute vec3 position,normal;uniform mat4 model,view,projection;uniform mat3 normals;varying vec3 world,n,local;void main(){vec4 p=model*vec4(position,1.);world=p.xyz;n=normalize(normals*normal);local=position;gl_Position=projection*view*p;}`;
+const VERTEX=`attribute vec3 position,normal;uniform mat4 model,view,projection;uniform mat3 normals,spineRotation;uniform mediump float material;varying vec3 world,n,local;void main(){vec3 vertex=position,vertexNormal=normal;if(material==7.){float w=smoothstep(.12,.42,position.y);vec3 pivot=vec3(0.,.18,0.);vertex=mix(position,pivot+spineRotation*(position-pivot),w);vertexNormal=mix(normal,spineRotation*normal,w);}vec4 p=model*vec4(vertex,1.);world=p.xyz;n=normalize(normals*vertexNormal);local=position;gl_Position=projection*view*p;}`;
 const FRAGMENT=`precision mediump float;varying vec3 world,n,local;uniform vec3 color,eye,secondary;uniform float material,alpha,stripes;uniform sampler2D shirtNumber;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 void main(){vec3 base=color;float a=alpha;vec3 normal=normalize(n);
@@ -46,7 +47,7 @@ export function createIconScene(canvas){
   try{program=gl.createProgram();resources.push(['Program',program]);gl.attachShader(program,shader(gl.VERTEX_SHADER,VERTEX));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FRAGMENT));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('Icon shader link failed');}
   catch{resources.forEach(([type,res])=>gl[`delete${type}`](res));return null;}
   gl.useProgram(program);
-  const uniforms=Object.fromEntries(['model','view','projection','normals','color','eye','material','alpha','shirtNumber','secondary','stripes'].map(key=>[key,gl.getUniformLocation(program,key)]));
+  const uniforms=Object.fromEntries(['model','view','projection','normals','spineRotation','color','eye','material','alpha','shirtNumber','secondary','stripes'].map(key=>[key,gl.getUniformLocation(program,key)]));
   const pos=gl.getAttribLocation(program,'position'),normal=gl.getAttribLocation(program,'normal');
   function mesh(data){const buffer=gl.createBuffer();resources.push(['Buffer',buffer]);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);return {buffer,count:data.length/6};}
   const orb=mesh(sphere()),rod=mesh(sphere(4,6)),floor=mesh(plane());
@@ -80,8 +81,8 @@ export function createIconScene(canvas){
   canvas.addEventListener('webglcontextlost',onLoss);
   function render(state){
     if(disposed||lost)return;lastFrame=state;
-    const {t,look,slug}=state;
-    const motion=sampleIconMotion(slug,t,aspect),{pose,ball,profile}=motion;
+    const {t:progress,look,slug}=state;
+    const motion=sampleIconMotion(slug,progress,aspect),{t,pose,ball,profile}=motion;
     if(numberSlug!==slug && numberContext){
       numberContext.clearRect(0,0,256,256);numberContext.fillStyle='#fff6d9';numberContext.textAlign='center';numberContext.textBaseline='middle';
       numberContext.font='700 19px Arial';numberContext.fillText(profile.name,128,35);
@@ -115,24 +116,30 @@ export function createIconScene(canvas){
     function person(rig,palette,featured=false) {
       const {root:center,axes,feet:footTargets,hands,height:size=1,build=1}=rig;
       const [kit,shorts,skin]=palette,transform=p=>localPoint(center,axes,p.map(v=>v*size));
-      const body=(p,s,c)=>ellipsoid(transform(p),s,c,axes);
+      const spine=bodyAxes(...(rig.spine||[0,0,0])),upperAxes=composeAxes(axes,spine);
+      const pivot=transform([0,.18,0]);
+      const upper=p=>localPoint(pivot,upperAxes,[p[0]*size,(p[1]-.18)*size,p[2]*size]);
+      const headAxes=composeAxes(upperAxes,bodyAxes(...(rig.head||[0,0]))),neck=upper([.01,.56,0]);
+      const headAt=p=>localPoint(neck,headAxes,[(p[0]-.01)*size,(p[1]-.56)*size,p[2]*size]);
+      const body=(p,s,c)=>ellipsoid(p[1]>=.60?headAt(p):p[1]>.18?upper(p):transform(p),s,c,p[1]>=.60?headAxes:p[1]>.18?upperAxes:axes);
       gl.uniform3fv(uniforms.secondary,slug==='maradona'&&featured?[.93,.94,.92]:shorts);
       gl.uniform1f(uniforms.stripes,featured&&['messi','maradona','ronaldinho'].includes(slug)?7:0);
+      gl.uniformMatrix3fv(uniforms.spineRotation,false,spine.flat());
       draw(jersey,matrix(center,[size*build,size,size*build],axes),kit,7);
       body([0,-.03,0],[.15*build,.125,.19*build],shorts);
       body([.01,.56,0],[.065,.077,.064],skin);
-      draw(face,matrix(transform([.016,.745,0]),[size,size,size],axes),skin);
+      draw(face,matrix(headAt([.016,.745,0]),[size,size,size],headAxes),skin);
       body([.122,.73,0],[.035,.033,.031],skin);body([-.014,.735,.100],[.024,.037,.018],skin);
       const hair=[.022,.018,.019];
       body([.005,.84,0],[.104,featured&&slug==='r9'?.022:.048,featured&&slug==='neymar'?.033:.091],hair);
       if(featured&&slug==='neymar')body([-.005,.895,0],[.087,.060,.025],hair);
       body([.099,.772,.057],[.009,.011,.013],[.018,.02,.022]);
-      bone(transform([.08,.792,.045]),transform([.107,.79,.067]),.008,hair);
+      bone(headAt([.08,.792,.045]),headAt([.107,.79,.067]),.008,hair);
       if(featured&&(slug==='ronaldinho'||slug==='maradona'||slug==='messi'))body([-.083,.765,0],[.046,.115,.101],hair);
       if(featured&&slug==='maradona')for(let i=0;i<7;i++)body([Math.cos(i)*.075,.83+Math.sin(i)*.018,Math.sin(i)*.074],[.042,.034,.041],hair);
       if(featured&&slug==='ronaldinho'){body([-.12,.60,0],[.041,.13,.07],hair);body([.008,.817,0],[.108,.014,.094],[.02,.025,.03]);}
       body([.045,.52,0],[.07,.021,.080],shorts);
-      if(featured)draw(floor,matrix(transform([-.147,.29,0]),[.16,1,.19],[axes[2],axes[0],axes[1]]),[1,1,1],6);
+      if(featured)draw(floor,matrix(upper([-.147,.29,0]),[.16,1,.19],[upperAxes[2],upperAxes[0],upperAxes[1]]),[1,1,1],6);
       for(let i=0;i<2;i++){
         const side=i?1:-1,hip=transform([0,-.025,side*.12]);
         const delta=sub(footTargets[i],hip),reach=Math.min(.94*size,Math.hypot(...delta));
@@ -152,9 +159,9 @@ export function createIconScene(canvas){
           const stud=add(boot,add(bootAxes[0].map(v=>v*offset),[0,-.033,side*.035]));
           ellipsoid(stud,[.013,.018,.013],[.10,.14,.19]);
         }
-        const a=transform([0,.44,side*.22]),hand=hands[i],direction=sub(hand,a);
+        const a=upper([0,.44,side*.22]),hand=hands[i],direction=sub(hand,a);
         const end=add(a,norm(direction).map(v=>v*Math.min(.60*size,Math.hypot(...direction))));
-        const elbow=joint(a,end,add(axes[0].map(v=>-v),axes[2].map(v=>v*side*.6)),.30*size,.30*size);
+        const elbow=joint(a,end,add(upperAxes[0].map(v=>-v),upperAxes[2].map(v=>v*side*.6)),.30*size,.30*size);
         bone(a,elbow,.052,skin);bone(a,a.map((v,j)=>mix(v,elbow[j],.56)),.072,kit);
         bone(elbow,end,.039,skin);ellipsoid(end,[.035,.056,.025],skin,axes);
         if(featured&&motion.celebration>.5&&(slug==='messi'||slug==='ronaldinho')) {

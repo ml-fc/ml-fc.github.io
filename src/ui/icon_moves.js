@@ -115,8 +115,8 @@ export function createIconMove(host, { onFinish = () => {}, onProgress = () => {
     get('defenders').style.display=slug==='cristiano'?'none':'';
     const ns='http://www.w3.org/2000/svg';get('confetti').replaceChildren();
     const particles=Array.from({length:28},(_,i)=>{const el=document.createElementNS(ns,'rect');el.setAttribute('width',i%2?3:5);el.setAttribute('height',7);el.setAttribute('fill',i%3===0?'#fff':i%3===1?look[0]:'var(--celebration-accent)');get('confetti').append(el);return el;});
-    function draw(t){
-      const projected=sampleIconPose(slug,t);
+    function draw(progress){
+      const projected=sampleIconPose(slug,progress),motion=sampleIconMotion(slug,progress),t=motion.t;
       let [,x,y,angle,lx,ly,rx,ry,bx,by]=projected;
       const finish=Math.max(0,(t-.76)/.24);
       attr('player','transform',`translate(${x} ${y}) rotate(${angle})`);attr('shadow','cx',x);attr('shadow','rx',Math.max(13,28-(206-y)*.12));
@@ -138,12 +138,11 @@ export function createIconMove(host, { onFinish = () => {}, onProgress = () => {
       attr('net','transform',`translate(${finish?Math.sin(finish*24)*Math.exp(-finish*8)*3:0} 0)`);
       attr('goal','opacity',Math.min(1,finish*6));
       particles.forEach((el,i)=>{const age=Math.max(0,finish-i*.006);el.setAttribute('opacity',finish>0?Math.min(1,age*12):0);el.setAttribute('transform',`translate(${30+(i*79%540)+Math.sin(age*8+i)*12} ${-20+age*(210+i%5*25)}) rotate(${age*220+i*31})`);});
-      attr('progress','d',`M22 282H${22+t*556}`);
-      const motion=sampleIconMotion(slug,t);
+      attr('progress','d',`M22 282H${22+progress*556}`);
       phaseLabel.textContent=motion.phase;
       finishLabel.style.opacity=String(smooth((t-.79)/.08));
-      host.style.setProperty("--move-progress", String(t));
-      scene?.render({t,look,slug});
+      host.style.setProperty("--move-progress", String(progress));
+      scene?.render({t:progress,look,slug});
     }
     renderFrame=draw;
     draw(reduced.matches?.9:0);
