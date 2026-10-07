@@ -1216,7 +1216,7 @@ function renderAdminShell(root, view) {
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="createSeason">Create season</button>
         <button class="btn primary" id="updateSeason" style="display:none">Update season</button>
-        <button class="btn gray" id="cancelSeasonEdit" style="display:none">Cancel</button>
+        <button class="btn gray" id="cancelSeasonEdit" type="button" style="display:none">Cancel</button>
       </div>
 
       <div class="hr"></div>
@@ -2091,7 +2091,7 @@ async function openVotingManager(root, view, match) {
 
   const detail = await loadAdminMatch(match.publicCode);
   if (!detail?.ok) {
-    dialog.innerHTML = `<div class="adminVotingDialog__panel"><button class="adminVotingDialog__close" type="button">×</button><div class="h1">Voting unavailable</div><div class="small">${escapeHtml(detail?.error || "Could not load voting status.")}</div></div>`;
+    dialog.innerHTML = `<div class="adminVotingDialog__panel"><button class="adminVotingDialog__close" type="button" aria-label="Close">×</button><div class="h1">Voting unavailable</div><div class="small">${escapeHtml(detail?.error || "Could not load voting status.")}</div></div>`;
     dialog.querySelector(".adminVotingDialog__close").onclick = () => dialog.close();
     return;
   }

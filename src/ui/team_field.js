@@ -231,7 +231,7 @@ export function mountTeamField(root, options) {
       </button>
       ${options.note ? `<p class="fieldAutomationNote">${esc(options.note)}</p>` : ''}
       <dialog class="fieldDialog" aria-label="Team assignment and positions"><div class="fieldWorkspace">
-        <header class="fieldWorkspace__head"><strong>${halfField ? `${esc(groups[0].label)} positions` : 'Team field'}</strong><span class="small">${editable ? halfField ? 'Drag your players on the half-field to their match positions.' : 'Drag an unassigned player onto either half. Drag players on the pitch to update positions.' : 'Saved positions'}</span><button class="btn gray tiny" data-back>Back</button></header>
+        <header class="fieldWorkspace__head"><strong>${halfField ? `${esc(groups[0].label)} positions` : 'Team field'}</strong><span class="small">${editable ? halfField ? 'Drag your players on the half-field to their match positions.' : 'Drag an unassigned player onto either half. Drag players on the pitch to update positions.' : 'Saved positions'}</span><button class="btn gray tiny" type="button" data-back>Back</button></header>
         ${options.note ? `<p class="fieldAutomationNote fieldAutomationNote--dialog">${esc(options.note)}</p>` : ''}
         <div class="fieldWorkspace__tools">${editable ? '<button class="btn gray tiny" data-reset>Auto positions</button>' : ''}${options.onResetDraft && editable ? '<button class="btn gray tiny" data-reset-draft>Clear drafts</button>' : ''}${showRoster ? `<span class="small">${unassigned.length} unassigned</span>` : ''}</div>
         <div class="fieldWorkspace__body${showRoster?'':' fieldWorkspace__body--fieldOnly'}">

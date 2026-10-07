@@ -143,7 +143,7 @@ function renderPlayerHistory(dialog, data) {
   const avg = rated.length ? rated.reduce((n, m) => n + Number(m.rating || 0), 0) / rated.length : null;
   dialog.innerHTML = `
     <div class="playerSheet">
-      <div class="playerSheet__head"><div><div class="small">Season player card</div><div class="h1">${esc(data.playerName)}</div></div><button class="btn gray" data-close-history aria-label="Close player history">Close</button></div>
+      <div class="playerSheet__head"><div><div class="small">Season player card</div><div class="h1">${esc(data.playerName)}</div></div><button class="btn gray" type="button" data-close-history aria-label="Close player history">Close</button></div>
       <div class="playerSummary">
         <div><b>${matches.length}</b><span>Played</span></div><div><b>${goals}</b><span>Goals</span></div><div><b>${assists}</b><span>Assists</span></div><div><b>${matches.reduce((n,m)=>n+Number(m.potmAward||0),0)}</b><span>POTM</span></div><div><b>${avg == null ? "—" : avg.toFixed(2)}</b><span>Rating</span></div>
       </div>

@@ -95,7 +95,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
         <button class="btn gray notificationMore" id="showMoreNotifications" type="button" hidden>Show more</button>
       </div>
       <dialog id="announcementDialog" class="playerDialog" aria-label="Registration page">
-        <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
+        <div class="announcementViewer"><div class="announcementViewer__head"><div><div class="small">Club announcement</div><div class="h1" id="announcementDialogTitle">Registration</div></div><button class="btn gray" id="closeAnnouncementDialog" type="button">Close</button></div><iframe id="announcementFrame" title="External registration page" sandbox="allow-forms allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe></div>
       </dialog>
       <dialog id="profileEmailDialog" class="requiredPhotoDialog" aria-labelledby="profileEmailTitle">
         <div class="requiredPhotoSheet">
@@ -648,7 +648,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
       <div class="field"><label class="field__label" for="rpass">Password</label><input id="rpass" type="password" class="input" autocomplete="new-password" aria-describedby="rpassHelp rmsg" /><div class="field__help" id="rpassHelp">Any non-empty password is accepted.</div></div>
       <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
         <button id="regBtn" class="btn primary">Create account</button>
-        <button id="hideReg" class="btn gray">Cancel</button>
+        <button id="hideReg" class="btn gray" type="button">Cancel</button>
       </div>
       <div id="rmsg" class="field__message" role="status" aria-live="polite"></div>
     </div>

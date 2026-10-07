@@ -1239,8 +1239,8 @@ async function openPotmFieldDialog(code, onSaved = null, initialPotm = null) {
     Object.assign(displayPositions, presentationPositions(names, saved));
   }
   let selected = String(potm.myVote || "");
-  modal.innerHTML = `<form method="dialog" class="potmFieldDialog__panel">
-    <header><div><div class="stepEyebrow">Player of the Match</div><h2>Pick a player from the field</h2><p>Tap a player, then confirm your vote.</p></div><button class="potmFieldDialog__close" value="cancel" aria-label="Close">×</button></header>
+  modal.innerHTML = `<div class="potmFieldDialog__panel">
+    <header><div><div class="stepEyebrow">Player of the Match</div><h2>Pick a player from the field</h2><p>Tap a player, then confirm your vote.</p></div><button class="potmFieldDialog__close" type="button" aria-label="Close">×</button></header>
     <div class="potmFieldDialog__pitch" role="listbox" aria-label="Players in this match">
       <span class="potmFieldDialog__halfway" aria-hidden="true"></span>
       ${candidates.map((candidate) => {
@@ -1256,7 +1256,8 @@ async function openPotmFieldDialog(code, onSaved = null, initialPotm = null) {
       }).join("")}
     </div>
     <footer><span data-potm-choice>${selected ? `Selected: ${escapeHtml(selected)}` : "Select a player on the field"}</span><button class="btn primary" type="button" data-potm-confirm ${selected ? "" : "disabled"}>${potm.myVote ? "Change vote" : "Confirm vote"}</button></footer>
-  </form>`;
+  </div>`;
+  modal.querySelector(".potmFieldDialog__close").addEventListener("click", () => modal.close());
   modal.querySelectorAll("[data-potm-player]").forEach((button) => {
     button.onclick = () => {
       selected = button.getAttribute("data-potm-player") || "";
@@ -1623,7 +1624,7 @@ async function checkMetaAndShowBanner(pageRoot, seasonId) {
         <div class="row" style="gap:10px; align-items:center">
           <button class="btn primary" id="metaUpdateBtn">Update</button>
           ${next.latestCode ? `<button class="btn gray" id="metaOpenBtn">Open</button>` : ""}
-          <button class="btn gray iconButton" id="metaCloseBtn" aria-label="Dismiss update notice">×</button>
+          <button class="btn gray iconButton" id="metaCloseBtn" type="button" aria-label="Dismiss update notice">×</button>
         </div>
       </div>
     </div>
