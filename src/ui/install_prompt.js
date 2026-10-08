@@ -1,4 +1,21 @@
 let deferredInstallPrompt = null;
+const APPLE_INSTALL_DISMISSED_AT = "mlfc_apple_install_dismissed_at";
+const APPLE_INSTALL_CONFIRMED = "mlfc_apple_install_confirmed";
+const APPLE_INSTALL_REMINDER_MS = 30 * 24 * 60 * 60 * 1000;
+
+function rememberAppleInstall(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
+function shouldShowAppleInstallPrompt() {
+  try {
+    if (localStorage.getItem(APPLE_INSTALL_CONFIRMED) === "true") return false;
+    const dismissedAt = Number(localStorage.getItem(APPLE_INSTALL_DISMISSED_AT));
+    return !dismissedAt || Date.now() - dismissedAt >= APPLE_INSTALL_REMINDER_MS;
+  } catch {
+    return true;
+  }
+}
 
 export function isInstalledApp() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -42,16 +59,25 @@ function buildDialog(mode) {
       </div>
       <div class="installPrompt__actions">
         <button class="btn" type="button" data-install-later>Not now</button>
-        ${mode === "native" ? `<button class="btn primary" type="button" data-install>Install</button>` : `<button class="btn primary" type="button" data-install-done>Got it</button>`}
+        ${mode === "native" ? `<button class="btn primary" type="button" data-install>Install</button>` : `<button class="btn primary" type="button" data-install-done>Already installed</button>`}
       </div>
     </div>`;
 
   const close = () => dialog.close();
   dialog.querySelector(".installPrompt__close")?.addEventListener("click", close);
-  dialog.querySelector("[data-install-later]")?.addEventListener("click", close);
-  dialog.querySelector("[data-install-done]")?.addEventListener("click", close);
+  dialog.querySelector("[data-install-later]")?.addEventListener("click", () => {
+    if (mode === "apple") rememberAppleInstall(APPLE_INSTALL_DISMISSED_AT, String(Date.now()));
+    close();
+  });
+  dialog.querySelector("[data-install-done]")?.addEventListener("click", () => {
+    rememberAppleInstall(APPLE_INSTALL_CONFIRMED, "true");
+    close();
+  });
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) close();
+    if (event.target === dialog) {
+      if (mode === "apple") rememberAppleInstall(APPLE_INSTALL_DISMISSED_AT, String(Date.now()));
+      close();
+    }
   });
   dialog.addEventListener("close", () => dialog.remove());
 
@@ -85,7 +111,7 @@ export function initInstallPrompt() {
   // iOS does not expose beforeinstallprompt, so explain its manual install flow.
   if (isAppleMobile()) {
     window.setTimeout(() => {
-      if (!isInstalledApp() && !document.querySelector(".installPrompt")) buildDialog("apple");
+      if (!isInstalledApp() && shouldShowAppleInstallPrompt() && !document.querySelector(".installPrompt")) buildDialog("apple");
     }, 700);
   }
 }
