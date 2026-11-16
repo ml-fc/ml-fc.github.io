@@ -2611,26 +2611,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   const captains = data.captains || {};
   const teams = data.teams || [];
   const captainEditLocked = locked || status !== "OPEN";
-  const captainGroups = type === "INTERNAL"
-    ? [{ team:"BLUE", label:homeTeamName, field:"captainBlue", value:captains.captain1 }, { team:"ORANGE", label:awayTeamName, field:"captainOrange", value:captains.captain2 }]
-    : [{ team:"MLFC", label:homeTeamName, field:"captain", value:captains.captain1 }];
-  const captainEditor = scoreStarted ? `
-    <section class="card" aria-labelledby="captainEditorTitle">
-      <h2 class="h2" id="captainEditorTitle">Captains</h2>
-      <p class="small">Update captains after scores have been saved. Choose a player from each saved team.</p>
-      ${captainEditLocked ? '<p class="small">Unlock the match from the match list to change captains.</p>' : ''}
-      <div class="formGrid formGrid--two" style="margin-top:12px">
-        ${captainGroups.map(group => `<div class="field">
-          <label class="field__label" for="edit-${group.field}">${escapeHtml(group.label)} captain</label>
-          <select class="input" id="edit-${group.field}" ${captainEditLocked ? 'disabled' : ''}>
-            <option value="">No captain</option>
-            ${uniqueSorted(teams.filter(row => String(row.team).toUpperCase() === group.team).map(row => row.playerName)).map(name => `<option value="${escapeHtml(name)}" ${String(group.value || '').toLowerCase() === name.toLowerCase() ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}
-          </select>
-        </div>`).join('')}
-      </div>
-      <button class="btn primary" type="button" id="saveCaptains" ${captainEditLocked ? 'disabled' : ''}>Save captains</button>
-      <p class="small" id="captainSaveStatus" role="status" aria-live="polite"></p>
-    </section>` : "";
   const playerPhotos = Object.fromEntries(teams
     .filter(row => row.photoUrl)
     .flatMap(row => [[row.playerName, row.photoUrl], [String(row.playerName || "").trim().toLowerCase(), row.photoUrl]]));
@@ -2660,7 +2640,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       <div class="manageCommand__notice" id="lockReason">${locked || isCompleted ? "Completed matches are read-only. Return to the match list to unlock." : !hasBothScores ? "Complete & lock becomes available in the match list after both scores are saved." : !potmReady ? "Select Player of the Match before completing from the match list." : "This match can be completed from the match list once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
     </section>
-    ${captainEditor}
     <details class="card">
       <summary style="font-weight:950">Team names</summary>
       <div class="formGrid formGrid--two" style="margin-top:12px">
@@ -2672,31 +2651,6 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     <div id="manageBody"></div>
   `;
   installManageCommandScrollBehavior(manageArea);
-
-  const saveCaptains = manageArea.querySelector("#saveCaptains");
-  if (saveCaptains) saveCaptains.onclick = async () => {
-    if (captainEditLocked || !stillOnAdmin(routeToken)) return;
-    const payload = { matchId:m.matchId };
-    captainGroups.forEach(group => { payload[group.field] = manageArea.querySelector(`#edit-${group.field}`).value; });
-    const message = manageArea.querySelector("#captainSaveStatus");
-    setDisabled(saveCaptains, true, "Saving…");
-    message.textContent = "Saving captains…";
-    try {
-      const out = await API.adminUpdateCaptains(payload);
-      if (!out?.ok) throw new Error(out?.error || "Could not save captains");
-      data.captains = { ...captains, ...out.captains };
-      // Old team drafts may contain the previous captain assignments.
-      lsDel(setupDraftKey(m.matchId));
-      clearPublicMatchDetailCache(m.publicCode);
-      clearManageCache(m.publicCode);
-      lsSet(manageKey(m.publicCode), { ts:now(), data });
-      if (stillOnAdmin(routeToken)) renderManageUI(root, data, routeToken, { fromCache:false, prevView });
-      toastSuccess("Captains updated.");
-    } catch (error) {
-      message.textContent = error.message || "Could not save captains";
-      toastError(message.textContent);
-    } finally { setDisabled(saveCaptains, false); }
-  };
 
   async function clearLocalDraftsAndReload(button) {
     setDisabled(button, true, "Refreshing…");
@@ -2915,10 +2869,14 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     }
 
     async function saveOpponentField() {
+      if (captainEditLocked) return toastWarn("Unlock the match before changing captains.");
       if (!squad.length) return toastWarn("Select at least one MLFC player before saving.");
       if (!opponentCaptain) return toastWarn("Select one MLFC captain before saving.");
-      const out = await API.adminSetupOpponent({ matchId:m.matchId, captain:opponentCaptain, mlfcPlayers:squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
+      const out = scoreStarted
+        ? await API.adminUpdateCaptains({ matchId:m.matchId, captain:opponentCaptain })
+        : await API.adminSetupOpponent({ matchId:m.matchId, captain:opponentCaptain, mlfcPlayers:squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
       if (!out?.ok) return toastError(out?.error || "Team changes could not be saved.");
+      if (out.captains) data.captains = out.captains;
       savedOpponent.squad = [...squad];
       savedOpponent.captain = opponentCaptain;
       savedPositions = JSON.stringify(fieldPositions);
@@ -2928,12 +2886,12 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       updateOpponentDraft();
       const notifyButton = manageBody.querySelector("#publishOpponent");
       if (notifyButton) notifyButton.disabled = isEditLocked || !savedOpponent.squad.length;
-      toastSuccess("Team-field changes saved.");
+      toastSuccess(scoreStarted ? "Captain updated." : "Team-field changes saved.");
     }
 
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
-        groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,
+        groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,captainEditable:!captainEditLocked,
         note:"Availability changes are reflected automatically. Save field edits before notifying players.",
         onResetDraft:(event) => clearLocalDraftsAndReload(event?.currentTarget),
         onChange:updateOpponentDraft,
@@ -3104,13 +3062,17 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   }
 
   async function saveInternalField() {
+    if (captainEditLocked) return toastWarn("Unlock the match before changing captains.");
     if (!(blue.length + orange.length)) return toastWarn("Assign at least one player before saving.");
-    const out = await API.adminSetupInternal({
+    const out = scoreStarted
+      ? await API.adminUpdateCaptains({ matchId:m.matchId, captainBlue, captainOrange })
+      : await API.adminSetupInternal({
       matchId:m.matchId, bluePlayers:blue, orangePlayers:orange,
       captainBlue, captainOrange,
       positions:positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
     });
     if (!out?.ok) return toastError(out?.error || "Team changes could not be saved.");
+    if (out.captains) data.captains = out.captains;
     savedInternal.blue = [...blue];
     savedInternal.orange = [...orange];
     savedInternal.captainBlue = captainBlue;
@@ -3120,7 +3082,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     clearManageCache(m.publicCode);
     clearPublicMatchDetailCache(m.publicCode);
     updateInternalDraft();
-    toastSuccess("Team-field changes saved.");
+    toastSuccess(scoreStarted ? "Captains updated." : "Team-field changes saved.");
   }
 
   // Links can be generated as soon as we know the captain names.
@@ -3291,7 +3253,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     const preview = manageBody.querySelector("#digitalTeamPreview");
     if (preview) mountTeamField(preview, {
       groups: [{team:"BLUE",label:homeTeamName,players:blue,captain:captainBlue},{team:"ORANGE",label:awayTeamName,players:orange,captain:captainOrange}],
-      positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,
+      positions:fieldPositions, photos:playerPhotos, pool:yesPlayers, disabled:isEditLocked,captainEditable:!captainEditLocked,
       note:teamAutomationNote,
       onResetDraft:(event) => clearLocalDraftsAndReload(event?.currentTarget),
       onChange:updateInternalDraft,
