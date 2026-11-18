@@ -7,12 +7,28 @@ export const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'
 export const awardUrl = seasonId => `${location.origin}${location.pathname}#/awards?seasonId=${encodeURIComponent(seasonId)}`;
 const dateLabel = value => value ? new Date(value).toLocaleString('en-AU', {timeZone:'Australia/Melbourne',dateStyle:'medium',timeStyle:'short'}) + ' Melbourne' : 'Set a voting deadline';
 const stateLabel = state => ({DRAFT:'Draft',OPEN:'Voting open',CLOSED:'Final'})[state] || 'Unknown';
+export function liveSeasonLeaders(rows) {
+  const source=Array.isArray(rows)?rows:[];
+  return [
+    ['Golden Boot','goals','goals'], ['Most Assists','assists','assists'],
+    ['Highest Rated','avgRating','avg'], ['Most MOM','potmAwards','awards'],
+    ['Most Appearances','matchesPlayed','matches'],
+  ].map(([name,metric,unit])=>{
+    const eligible=source.filter(r=>metric!=='avgRating' || Number(r.matchesRated)>=10);
+    const value=Math.max(0,...eligible.map(r=>Number(r[metric]) || 0));
+    return {name,metric,unit,value,winners:value>0?eligible.filter(r=>Number(r[metric])===value).map(r=>String(r.playerName || '')):[]};
+  });
+}
+function leadersHtml(result) {
+  if(!result?.ok)return '<section class="awardLeaders"><div class="awardLeaders__head"><h2>Season leaders</h2></div><p class="small">Could not load leaders. Refresh to try again.</p></section>';
+  return `<section class="awardLeaders" aria-label="Current season leaders"><div class="awardLeaders__head"><h2>Season leaders</h2><span>Recorded match stats</span></div><dl class="awardLeaders__grid">${liveSeasonLeaders(result.rows).map(a=>`<div><dt>${esc(a.name)}</dt><dd><strong>${esc(a.winners.join(' · ') || (a.metric==='avgRating'?'No qualifying player':'No stats yet'))}</strong><span>${a.winners.length?`${a.metric==='avgRating'?a.value.toFixed(2):a.value} ${a.unit}`:'—'}${a.metric==='avgRating'?'<small>10 rated matches minimum</small>':''}</span></dd></div>`).join('')}</dl></section>`;
+}
 function dialog(title, subtitle = '') {
   const el = document.createElement('dialog');
   el.className = 'awardsDialog';
   const titleId = `award-title-${crypto.randomUUID()}`;
   el.setAttribute('aria-labelledby',titleId);
-  el.innerHTML = `<header class="awardsDialog__head"><div><div class="stepEyebrow">Season awards</div><h2 id="${titleId}">${esc(title)}</h2><p>${esc(subtitle)}</p></div><button class="awardsClose" type="button" aria-label="Close dialog">×</button></header><div class="awardsDialog__body"></div>`;
+  el.innerHTML = `<header class="awardsDialog__head"><div>${title==='Season awards'?'':'<div class="stepEyebrow">Season awards</div>'}<h2 id="${titleId}">${esc(title)}</h2><p>${esc(subtitle)}</p></div><button class="awardsClose" type="button" aria-label="Close dialog">×</button></header><div class="awardsDialog__body"></div>`;
   el.querySelector('.awardsClose').onclick = () => el.close();
   const returnFocus=document.activeElement;
   const onNavigate=()=>el.close();
@@ -23,9 +39,9 @@ function dialog(title, subtitle = '') {
 }
 async function run(button, task) {
   if (button.disabled) return;
-  const text = button.textContent;button.disabled=true;button.textContent='Working…';
+  const text = button.textContent;button.disabled=true;button.setAttribute('aria-busy','true');button.textContent=button.matches('.awardsPageHeader__control')?'…':'Working…';
   try { await task(); } catch(e) { if(e.name!=='AbortError') toastError(e.message || 'Could not complete this action. Try again.'); }
-  finally { button.disabled=false;button.textContent=text; }
+  finally { button.disabled=false;button.removeAttribute('aria-busy');button.textContent=text; }
 }
 function check(result) { if (!result?.ok) throw new Error(result?.error || 'Could not load awards. Try again.'); return result; }
 function resultHtml(a) {
@@ -37,14 +53,16 @@ function participation(a) {
 }
 export async function openSeasonAwards(seasonId) {
   if (!seasonId) return toastError('Choose a season first.');
-  const modal = dialog('Awards desk','Configure the ballot. Give your season its winners.');
+  const modal = dialog('Season awards','Categories, nominees and voting');
   const body = modal.querySelector('.awardsDialog__body');
   body.innerHTML='<p class="small" role="status">Preparing season awards…</p>';
   let data;
   const refresh = async () => {
-    data=check(await API.seasonAwards(seasonId,true));
+    const [ballot,leaders]=await Promise.all([API.seasonAwards(seasonId,true),API.leaderboardSeason(seasonId).catch(()=>null)]);
+    data=check(ballot);
     if(!modal.open)return;
-    body.innerHTML=`<div class="awardsDeskIntro"><div><span class="stepEyebrow">${esc(data.season.name)}</span><p>Nominees lock when voting opens. Votes stay private until the deadline.</p></div><button class="btn primary" data-add type="button">+ Add award</button></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees · ${esc(dateLabel(a.deadline))}</p>${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button>${a.kind==='CUSTOM'?'<button class="btn gray" data-command="delete" type="button">Remove draft</button>':''}</div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voting card</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh participation</button>`;
+    modal.querySelector('.awardsDialog__head p').textContent=data.season.name;
+    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Nominees lock when voting opens. Votes stay private until voting closes.</p></div><button class="btn primary" data-add type="button">+ Add award</button></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees · ${esc(dateLabel(a.deadline))}</p>${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button>${a.kind==='CUSTOM'?'<button class="btn gray" data-command="delete" type="button">Remove draft</button>':''}</div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voting card</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
     body.querySelector('[data-add]').onclick=()=>editAward(null,data,refresh);
     body.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
     for(const card of body.querySelectorAll('[data-award]')) {
@@ -121,18 +139,26 @@ async function shareParticipation(a,seasonName) {
   host.querySelector('[data-copy]').onclick=e=>run(e.currentTarget,async()=>{await navigator.clipboard.writeText(awardUrl(a.seasonId));toastInfo('Voting link copied.');});
   host.querySelector('[data-share]').onclick=e=>run(e.currentTarget,async()=>{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],text,title:a.name});else {await navigator.clipboard.writeText(text);toastInfo('Link copied. Download the image and attach it to your group message.');}});
 }
-export async function renderAwardsPage(root,query) {
+export async function renderAwardsPage(root,query,routeToken,navigation={}) {
   const seasonId=query.get('seasonId') || '';
+  root.classList.add('awardsPage');
+  const previousHash=String(navigation.previousHash || '');
+  const previousPath=previousHash.split('?')[0];
+  const validPrevious=['#/match','#/admin','#/leaderboard','#/season','#/captain'].includes(previousPath);
+  if(validPrevious)root.dataset.awardsReturnHash=previousHash;
+  const backHash=root.dataset.awardsReturnHash || '#/match';
   const generation=crypto.randomUUID();
   root.dataset.awardsGeneration=generation;
   root.innerHTML='<section class="card" role="status">Loading season awards…</section>';
   const refresh=async()=>{
-    const data=check(await API.seasonAwards(seasonId));
+    const [ballot,leaders]=await Promise.all([API.seasonAwards(seasonId),API.leaderboardSeason(seasonId).catch(()=>null)]);
+    const data=check(ballot);
     if(!root.isConnected || root.dataset.awardsGeneration!==generation)return;
     const user=getCachedUser();
-    root.innerHTML=`<section class="awardsHero"><span class="stepEyebrow">${esc(data.season.name)} · Season awards</span><h1>Your season.<br>Your vote.</h1><p>Celebrate the players who made it count.</p><div class="awardActions"><a class="btn" href="#/match">Back to home</a><button class="btn" data-refresh type="button">Refresh ballot</button></div></section><div class="awardBallots">${data.awards.length?data.awards.map(a=>`<article class="card awardBallot" data-id="${esc(a.awardId)}"><div class="awardCardHead"><h2>${esc(a.name)}</h2><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span></div>${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`<p class="small">${esc(dateLabel(a.deadline))}</p>${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="small">${a.canVote?'One vote. Choose any nominee except yourself. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees">${a.nominees.map(n=>{const disabled=!a.canVote || n.playerName.toLowerCase()===String(user?.name).toLowerCase();return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong><small>${n.overall?`${Number(n.overall)} OVR · ${esc(n.position || '')}`:'Season nominee'}</small></span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Your vote: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</article>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
+    root.innerHTML=`<header class="awardsPageHeader"><a class="awardsPageHeader__control" href="${esc(backHash)}" data-awards-back aria-label="Back to previous screen"><span aria-hidden="true">‹</span><span class="awardsPageHeader__controlLabel">Back</span></a><div class="awardsPageHeader__title"><h1>Season awards</h1><p>${esc(data.season.name)}</p></div><button class="awardsPageHeader__control" data-refresh type="button" aria-label="Refresh awards and leaders" title="Refresh awards and leaders">↻</button></header>${leadersHtml(leaders)}<div class="awardBallots">${data.awards.length?data.awards.map(a=>`<article class="card awardBallot" data-id="${esc(a.awardId)}"><div class="awardCardHead"><h2>${esc(a.name)}</h2><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span></div>${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`<p class="small">${esc(dateLabel(a.deadline))}</p>${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="small">${a.canVote?'One vote. Choose any nominee except yourself. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees">${a.nominees.map(n=>{const disabled=!a.canVote || n.playerName.toLowerCase()===String(user?.name).toLowerCase();return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong><small>${n.overall?`${Number(n.overall)} OVR · ${esc(n.position || '')}`:'Season nominee'}</small></span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Your vote: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</article>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
+    root.querySelector('[data-awards-back]').onclick=event=>{if(validPrevious && previousHash===backHash && history.length>1){event.preventDefault();history.back();}};
     root.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
     root.querySelectorAll('[data-id] form').forEach(form=>form.onsubmit=e=>{e.preventDefault();const candidate=new FormData(form).get('candidate');if(!candidate)return;run(form.querySelector('[type=submit]'),async()=>{check(await API.awardVote(form.closest('[data-id]').dataset.id,candidate));toastSuccess('Vote saved.');await refresh();});});
   };
-  try{await refresh();}catch(e){root.innerHTML=`<section class="card emptyState"><b>Could not load the ballot</b><span>${esc(e.message)}</span><button class="btn" type="button">Try again</button></section>`;root.querySelector('button').onclick=()=>renderAwardsPage(root,query);}
+  try{await refresh();}catch(e){root.innerHTML=`<section class="card emptyState"><b>Could not load the ballot</b><span>${esc(e.message)}</span><div class="awardActions"><a class="btn" href="${esc(backHash)}">Back</a><button class="btn" type="button">Try again</button></div></section>`;root.querySelector('button').onclick=()=>renderAwardsPage(root,query,routeToken,navigation);}
 }

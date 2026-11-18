@@ -20,6 +20,7 @@ const ROUTES = {
 
 const PAGE_CONTAINERS = {};   // route -> div
 const LAST_HASH_BY_ROUTE = {}; // route -> full hash (includes query)
+let activeRouteHash = "";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -111,6 +112,8 @@ async function renderRoute() {
     }
   }
   const token = setRouteToken();
+  const previousHash = activeRouteHash;
+  activeRouteHash = fullHash;
 
   const container = ensureContainer(route);
   showOnly(route);
@@ -134,7 +137,7 @@ async function renderRoute() {
     if (firstTime) {
       container.innerHTML = `<div class="card"><div class="h1">Loading…</div><div class="small">Please wait.</div></div>`;
     }
-    await ROUTES[route](container, query, token);
+    await ROUTES[route](container, query, token, { previousHash });
 
     // Mark rendered only if still current token
     if (getRouteToken() === token) container.dataset.rendered = "1";

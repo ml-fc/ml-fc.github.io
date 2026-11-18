@@ -1210,6 +1210,7 @@ function renderAdminShell(root, view) {
         <div class="field"><label class="field__label" for="seasonStart">Start date</label><input id="seasonStart" class="input" type="date" /></div>
         <div class="field"><label class="field__label" for="seasonEnd">End date</label><input id="seasonEnd" class="input" type="date" /></div>
       </div>
+      <p class="small">The Home countdown appears automatically for an open season using this end date. New matches stop after the final day in Melbourne time.</p>
       <div class="field"><label class="field__label" for="seasonStatus">Season status</label>
         <select id="seasonStatus" class="input">
           <option value="OPEN" selected>OPEN</option>

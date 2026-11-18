@@ -21,3 +21,11 @@ Reviewed using Playwright with synthetic API fixtures. No real player records, v
 - Aligned privacy/terms stylesheet versions with the PWA release.
 
 These are browser viewport checks, not physical-device certification. Device permission prompts, push delivery and OS share sheets remain platform-controlled; their production side effects were not triggered during this review.
+
+## Awards refinement — release 2026-11-18.95
+
+- Replaced the large slogan/banner with a centred page heading and Back/Refresh controls. Verified header height of 69px on 320/390px phones and centred content at 768/1440px.
+- Added Golden Boot, Most Assists, Highest Rated (10 rated matches), Most MOM and Most Appearances leaders in both the ballot page and admin dialog, using the existing Ladder API. Ties are displayed together. Final-season honours keep their existing completed-match rules.
+- Verified previous-screen Back navigation and Home fallback after opening/reloading a direct ballot link.
+- Checked tied leaders, rating qualification, empty statistics, and voting availability when the leaderboard request fails. Refresh recovers the statistics panel.
+- Added an admin explanation that an OPEN season's end date automatically drives the Home countdown; there is no separate enable switch.
