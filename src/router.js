@@ -1,3 +1,4 @@
+import { renderAwardsPage } from './ui/awards.js';
 // src/router.js
 import { renderMatchPage } from "./pages/match.js";
 import { renderLeaderboardPage } from "./pages/leaderboard.js";
@@ -8,6 +9,7 @@ import { renderSeasonPage } from "./pages/season.js";
 import { getToken, getCachedUser, refreshMe } from "./auth.js";
 
 const ROUTES = {
+  "#/awards": renderAwardsPage,
   "#/match": renderMatchPage,
   "#/leaderboard": renderLeaderboardPage,
   "#/admin": renderAdminPage,
@@ -83,7 +85,7 @@ async function renderRoute() {
 
   // If not logged in, force login page except for leaderboard
   if (!hasToken && route !== "#/login" && route !== "#/leaderboard") {
-    const returnHash = fullHash.startsWith("#/match") ? fullHash : "";
+    const returnHash = (fullHash.startsWith("#/match") || fullHash.startsWith("#/awards")) ? fullHash : "";
     window.location.hash = returnHash ? `#/login?return=${encodeURIComponent(returnHash)}` : "#/login";
     return;
   }
@@ -97,7 +99,7 @@ async function renderRoute() {
   const isSuperAdmin = String(user?.name || "").trim().toLowerCase() === "admin";
   const profileIncomplete = user && (!String(user.photoUrl || "").trim() || (!isSuperAdmin && (!String(user.phone || "").trim() || !String(user.email || "").trim() || !String(user.emailVerifiedAt || "").trim())));
   if (hasToken && profileIncomplete && route !== "#/login") {
-    const returnHash = fullHash.startsWith("#/match") ? fullHash : "";
+    const returnHash = (fullHash.startsWith("#/match") || fullHash.startsWith("#/awards")) ? fullHash : "";
     window.location.hash = returnHash ? `#/login?profile=required&return=${encodeURIComponent(returnHash)}` : "#/login?profile=required";
     return;
   }
@@ -122,7 +124,7 @@ async function renderRoute() {
   // Login page content depends on auth state, so always re-render it.
   // Score/ratings actions happen on the captain page. Re-render match and admin
   // whenever they are revisited so hidden route DOM cannot show stale results.
-  const shouldRender = firstTime || (fullHash !== lastHash) || route === "#/login" || route === "#/admin" || route === "#/match";
+  const shouldRender = firstTime || (fullHash !== lastHash) || route === "#/login" || route === "#/admin" || route === "#/match" || route === "#/awards";
   LAST_HASH_BY_ROUTE[route] = fullHash;
 
   if (!shouldRender) return;

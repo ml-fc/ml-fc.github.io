@@ -1,3 +1,4 @@
+import { mountSeasonHonours } from '../ui/season_honours.js';
 // src/pages/match.js
 import { API } from "../api/endpoints.js";
 import { toastSuccess, toastError, toastInfo, toastWarn } from "../ui/toast.js";
@@ -2270,6 +2271,7 @@ export async function renderMatchPage(root, query) {
     return;
   }
 
+  mountSeasonHonours(root);
   const seasonsRes = await loadSeasons();
   if (!seasonsRes.ok) {
     toastError(seasonsRes.error || "Failed to load seasons");

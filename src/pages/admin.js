@@ -1,3 +1,5 @@
+import { openSeasonAwards } from '../ui/awards.js';
+import { updateSeasonCreation } from '../ui/season_honours.js';
 import { drawFcCard } from "../ui/fc_card.js";
 import { mountTeamField, positionMap, positionRows, defaultPositions, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/admin.js
@@ -1040,7 +1042,8 @@ function renderLogin(root) {
         <button id="login" class="btn primary">Login</button>
         <button id="clear" class="btn gray">Clear key</button>
       </div>
-      <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button" style="margin-top:10px">Share top 20 FC Cards</button>
+      <button class="btn primary" id="seasonAwards" type="button">🏆 Awards</button>
+        <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button" style="margin-top:10px">Share top 20 FC Cards</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </details>
   `;
@@ -1511,11 +1514,13 @@ function bindTopNav(root, routeToken) {
 function bindSeasonSelector(root, routeToken) {
   root.querySelector("#seasonBlock").innerHTML = seasonsSelectHtml(MEM.seasons, MEM.selectedSeasonId);
   const select = root.querySelector("#seasonSelect");
+  updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===MEM.selectedSeasonId));
 
   select.onchange = () => {
     if (!stillOnAdmin(routeToken)) return;
 
     MEM.selectedSeasonId = select.value;
+    updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===MEM.selectedSeasonId));
     localStorage.setItem(LS_SELECTED_SEASON, MEM.selectedSeasonId);
 
     // cache-first load matches for season (no API)
@@ -1533,6 +1538,7 @@ function bindSeasonSelector(root, routeToken) {
 }
 
 function bindSeasonMgmt(root, routeToken) {
+  root.querySelector("#seasonAwards").onclick=()=>openSeasonAwards(MEM.selectedSeasonId);
   const listEl = root.querySelector("#seasonList");
   const nameEl = root.querySelector("#seasonName");
   const startEl = root.querySelector("#seasonStart");
@@ -1759,6 +1765,8 @@ function bindCreateMatch(root, routeToken) {
     if (!stillOnAdmin(routeToken)) return;
 
     const btn = root.querySelector("#createMatch");
+    updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===MEM.selectedSeasonId));
+    if(btn.disabled)return toastWarn("This season has ended. Create a new season first.");
     setDisabled(btn, true, "Creating…");
 
     const payload = {

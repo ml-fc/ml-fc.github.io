@@ -17,6 +17,12 @@ export const API = {
   myNextMatch: () => apiGet({ action: "my_next_match" }),
   mySeasonStats: (seasonId = "", includeHistory = false) =>
     apiGet({ action: "my_season_stats", seasonId, includeHistory: includeHistory ? 1 : 0 }),
+  seasonHonours: (offset = 0) => apiGet({ action: "season_honours", offset }),
+  seasonAwards: (seasonId, admin = false) => apiGet({ action: admin ? "admin_season_awards" : "season_awards", seasonId }),
+  awardsSeed: (seasonId, refresh = false) => apiPost({ action: "admin_awards_seed", seasonId, refresh }),
+  awardSave: (payload) => apiPost({ action: "admin_award_save", ...payload }),
+  awardCommand: (awardId, command, payload = {}) => apiPost({ action: `admin_award_${command}`, awardId, ...payload }),
+  awardVote: (awardId, candidateName) => apiPost({ action: "award_vote", awardId, candidateName }),
   // seasons
   seasons: () => apiGet({ action: "seasons" }),
   leaderboardSeason: (seasonId, includeCards = false) => apiGet({ action: "leaderboard_season", seasonId, includeCards: includeCards ? 1 : 0 }),

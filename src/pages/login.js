@@ -52,7 +52,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
   let me = getCachedUser();
   if (token && !me) me = await refreshMe().catch(() => null);
   const requestedReturn = String(query?.get?.("return") || "");
-  const returnHash = requestedReturn.startsWith("#/match") ? requestedReturn : "";
+  const returnHash = (requestedReturn.startsWith("#/match") || requestedReturn.startsWith("#/awards")) ? requestedReturn : "";
   const returnQuery = returnHash ? `&return=${encodeURIComponent(returnHash)}` : "";
 
   // If logged in already, show account page + logout
@@ -76,7 +76,7 @@ export async function renderLoginPage(root, query = new URLSearchParams()) {
         </div>
         <button class="profileStatusCard" id="openStatusDialog" type="button" aria-haspopup="dialog"><span><span class="field__label">Player status</span><strong><span class="profileStatusIcon profileStatusIcon--${esc(String(me.playerStatus||"ACTIVE").toLowerCase())}" aria-hidden="true">${playerStatusIcon(me.playerStatus)}</span>${esc(String(me.playerStatus||"ACTIVE")[0]+String(me.playerStatus||"ACTIVE").slice(1).toLowerCase())}</strong><small>Only Active players can update match availability.</small></span><b aria-hidden="true">Change ›</b></button>
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-          <button class="btn primary" id="goMatches">${returnHash ? "Continue to match" : "Go to matches"}</button>
+          <button class="btn primary" id="goMatches">${returnHash ? "Continue" : "Go to matches"}</button>
           <button class="btn gray" id="goSeason">My season</button>
           <button class="btn gray" id="updateApp">Update app</button>
           <button class="btn gray" id="logout">Logout</button>
