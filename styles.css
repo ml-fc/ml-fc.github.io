@@ -3249,3 +3249,80 @@ button.awardsPageHeader__control { width:44px; justify-self:end; font-size:24px;
   .awardLeaders__grid>div { padding:10px; }
   .awardLeaders__grid>div:last-child:nth-child(odd) { grid-column:1/-1; }
 }
+
+/* Club Desk: an opaque working surface within the matchday identity. */
+.adminDesk { color:#102c40; overflow-wrap:anywhere; }
+.adminDesk [hidden] { display:none !important; }
+.adminDesk > .card, .adminDesk #listArea > .card { background:#f4f7f6; }
+.adminDesk #adminHeaderCard { padding:18px 20px 0; background:#f4f7f6; }
+.adminDesk #adminHeaderCard .h1 { margin:0 0 14px; font-size:28px; }
+.adminDesk #adminHeaderCard .h1::after { content:none; }
+.adminPrimaryNav { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.adminPrimaryNav a { display:flex; align-items:center; justify-content:center; min-height:48px; padding:10px 8px; color:#526976; border-bottom:3px solid transparent; text-align:center; font-size:15px; font-weight:800; text-decoration:none; }
+.adminPrimaryNav a[aria-current] { color:#075a87; border-color:#086eaa; background:#e5eef2; border-radius:6px 6px 0 0; }
+.adminDesk .btn, .adminDesk summary, .adminDesk .userAction, .adminDesk .userStatus__select { min-height:44px; }
+.adminDesk .input, .adminCreateDialog .input { min-width:0; max-width:100%; min-height:44px; font:400 16px/1.4 "Trebuchet MS", "Segoe UI", sans-serif; }
+.adminDesk :is(a,button,input,select,textarea,summary):focus-visible { outline:3px solid #086eaa; outline-offset:3px; }
+.adminDesk .field__label, .adminCreateDialog .field__label { font:700 14px/1.4 "Trebuchet MS", "Segoe UI", sans-serif; }
+.adminMatchToolbar { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; }
+.adminDesk #seasonBlock { min-width:0; }
+.adminDesk #seasonBlock > .row { margin-top:0 !important; }
+.adminDesk #seasonSelect { width:100%; min-width:0; text-overflow:ellipsis; }
+.adminFilterRow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
+.adminMatchFilter { display:flex; padding:3px; border:1px solid #c6d6de; border-radius:8px; background:#e6edf0; }
+.adminMatchFilter a { display:grid; place-items:center; min-width:72px; min-height:40px; padding:8px 14px; color:#3d586a; text-decoration:none; border-radius:5px; font-size:14px; font-weight:800; }
+.adminMatchFilter a[aria-current] { background:#fff; color:#075a87; box-shadow:0 1px 4px #102c4020; text-decoration:underline; text-underline-offset:4px; }
+.adminDesk #msg:empty { display:none; }
+.adminDesk #msg { margin-top:12px; }
+.adminDesk .adminMatchRow { border:1px solid #cad8df; border-left:4px solid #8195a0; box-shadow:none; padding:16px; }
+.adminDesk .adminMatchRow--future { border-left-color:#3c9b68; }
+.adminDesk .adminMatchRow--progress { border-left-color:#d49a1d; }
+.adminDesk .adminMatchRow__actions { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.adminDesk .adminMatchRow__actions .btn { min-height:44px; padding:10px; font-size:13px; }
+.adminDesk .adminMatchRow__progress { font-size:12px; line-height:1.5; }
+.adminMoreActions { margin-top:8px; }
+.adminMoreActions summary { display:flex; align-items:center; gap:8px; width:fit-content; padding:8px 2px; color:#365667; font-size:13px; font-weight:800; cursor:pointer; }
+.adminMoreActions summary::after { content:"＋"; }
+.adminMoreActions[open] summary::after { content:"−"; }
+.adminDestructive { grid-column:1/-1; border-top:1px solid #d5dfe4; padding-top:12px; margin-top:4px; }
+.adminDesk .adminDestructive .btn { width:auto; min-width:150px; }
+.adminDesk .field__help { color:#4b6372; }
+.adminTools { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px; }
+.adminTools a { display:grid; gap:8px; min-width:0; padding:22px; border:1px solid #c6d6de; border-radius:8px; color:#173649; background:#fff; text-decoration:none; }
+.adminTools a:hover { border-color:#086eaa; background:#edf5f8; }
+.adminTools strong { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:18px; }
+.adminTools strong span { color:#086eaa; }
+.adminTools a > span { color:#526976; font-size:14px; line-height:1.5; }
+.adminDesk #clubToolBack { margin-bottom:14px; }
+.adminDesk #seasonList { margin-bottom:16px; }
+.adminDesk #seasonForm { margin-top:24px; border-top:1px solid #c6d6de; padding-top:16px; }
+.adminDesk .seasonActions .btn { font-size:13px; }
+.adminDesk .seasonActions .primary { background:#e4edf2; color:#173649; border-color:#c6d6de; }
+.adminEmpty { display:grid; justify-items:start; gap:14px; padding:20px 0; color:#4b6372; }
+.adminDesk #showMoreMatches { margin-top:18px; width:100%; }
+.adminCreateDialog { width:min(620px,calc(100% - 24px)); max-height:calc(100dvh - 24px); margin:auto; padding:0; border:1px solid #c6d6de; border-radius:14px; background:#f4f7f6; color:#102c40; overscroll-behavior:contain; box-shadow:0 24px 80px #02111c80; }
+.adminCreateDialog::backdrop { background:#02111cce; }
+.adminCreateDialog__body { padding:24px 24px calc(24px + env(safe-area-inset-bottom,0px)); }
+.adminCreateDialog .h1 { margin:0; font-size:28px; }
+.adminCreateDialog__head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.adminCreateDialog__actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+.adminCreateDialog .btn { min-height:44px; font-size:14px; }
+.adminCreateDialog #created { margin-top:12px; }
+body:has(.adminCreateDialog[open]) { overflow:hidden; }
+@media(max-width:600px) {
+  .adminDesk #adminHeaderCard { padding:16px 14px 0; }
+  .adminPrimaryNav { gap:4px; }
+  .adminPrimaryNav a { font-size:14px; }
+  .adminMatchToolbar { grid-template-columns:minmax(0,1fr); gap:12px; }
+  .adminMatchToolbar > .btn { width:100%; }
+  .adminTools { grid-template-columns:1fr; gap:10px; }
+  .adminTools a { padding:18px; }
+  .adminCreateDialog__body { padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px)); }
+  .adminCreateDialog__actions { display:grid; grid-template-columns:1fr; }
+  .adminDesk .adminMatchRow { padding:12px; }
+  .adminDesk .adminMatchRow__head { gap:8px; }
+  .adminDesk #seasonList .row { flex-wrap:wrap !important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .adminDesk *, .adminCreateDialog { scroll-behavior:auto; transition:none; animation:none; }
+}

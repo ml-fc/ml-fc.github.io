@@ -41,6 +41,15 @@ let ADMIN_REFRESH_INFLIGHT = false;
 let ACTIVE_ADMIN = { root: null, routeToken: "", view: "", refreshList: null };
 let MANAGE_COMMAND_SCROLL_HANDLER = null;
 let PENDING_LEADERS_SHARE = null;
+let CREATE_BUSY = false;
+const LIST_POSITIONS = new Map();
+const LIST_LIMITS = new Map();
+const CREATE_DRAFT_KEY = "mlfc_admin_create_draft_v1";
+const CREATE_FIELDS = ["title", "date", "time", "type", "teamHomeName", "teamAwayName", "availabilityLimit"];
+let CREATE_SEASON_ID = "";
+let LAST_LIST_KEY = "";
+let LAST_ADMIN_VIEW = "";
+let ADMIN_RELOAD_CHECKED = false;
 
 function now() { return Date.now(); }
 
@@ -966,12 +975,10 @@ function formatHumanDateTime(dateStr, timeStr) {
 }
 
 function getViewParams(query) {
-  // views:
-  // - open (default)
-  // - past
-  // - manage (requires code)
-  const view = (query.get("view") || "open").toLowerCase();
+  const requested = (query.get("view") || "open").toLowerCase();
+  let view = ["open", "past", "manage", "club", "seasons", "users", "appearance", "announcements"].includes(requested) ? requested : "open";
   const code = query.get("code") || "";
+  if (view === "manage" && !code) view = "open";
   const prev = (query.get("prev") || "open").toLowerCase();
   const focus = (query.get("focus") || "").toLowerCase();
   return { view, code, prev, focus };
@@ -994,6 +1001,7 @@ function pickSelectedSeason(seasonsRes) {
   let selected = localStorage.getItem(LS_SELECTED_SEASON) || "";
   if (!seasons.some(s => s.seasonId === selected)) selected = current || seasons[0]?.seasonId || "";
   if (selected) localStorage.setItem(LS_SELECTED_SEASON, selected);
+  else localStorage.removeItem(LS_SELECTED_SEASON);
 
   return { seasons, selected, current };
 }
@@ -1013,11 +1021,11 @@ function seasonsSelectHtml(seasons, selected) {
 // Shared by manual + background refresh paths
 async function refreshMatchesFromApi(seasonId, routeToken) {
   const res = await API.adminListMatches(seasonId);
-  if (!stillOnAdmin(routeToken)) return { ok: false, error: "Route changed" };
   if (!res.ok) return res;
 
-  MEM.matches = res.matches || [];
-  lsSet(matchesKey(seasonId), { ts: now(), matches: MEM.matches });
+  const matches = res.matches || [];
+  lsSet(matchesKey(seasonId), { ts: now(), matches });
+  if (stillOnAdmin(routeToken) && MEM.selectedSeasonId === seasonId) MEM.matches = matches;
   return { ok: true, matches: MEM.matches };
 }
 
@@ -1101,16 +1109,11 @@ function renderLogin(root) {
 }
 
 function topNavHtml(view) {
-  const openActive = view === "open" ? "primary" : "gray";
-  const pastActive = view === "past" ? "primary" : "gray";
-  const usersActive = view === "users" ? "primary" : "gray";
-  return `
-    <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-      <button class="btn ${openActive}" id="goOpen">Open matches</button>
-      <button class="btn ${pastActive}" id="goPast">Past matches</button>
-      <button class="btn ${usersActive}" id="goUsers">User management</button>
-    </div>
-  `;
+  const club = ["club", "seasons", "users", "appearance", "announcements"].includes(view);
+  return `<nav class="adminPrimaryNav" aria-label="Club Desk">
+    <a href="#/admin?view=open" ${!club ? 'aria-current="page"' : ""}>Matches</a>
+    <a href="#/admin?view=club" ${club ? 'aria-current="page"' : ""}>Club management</a>
+  </nav>`;
 }
 
 function matchRowHtml(m, view) {
@@ -1121,14 +1124,15 @@ function matchRowHtml(m, view) {
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
   const potmVotingStarted = String(m.potmOpenedAt || "").trim() !== "";
   const potmVotingClosed = Number(m.potmVotingClosed || 0) === 1 || isCompleted;
-  const potmVoteCount = Number(m.potmVoteCount || 0);
   const ratingStarted = Number(m.ratingCount || 0) > 0;
   const kickOff = new Date(`${String(m.date || "").slice(0, 10)}T${String(m.time || "00:00").slice(0, 5)}:00`).getTime();
   const hasStarted = Number.isFinite(kickOff) && kickOff <= Date.now();
   const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
   const progress = isCompleted
     ? "Match completed"
-    : !hasStarted
+    : status === "CLOSED"
+      ? "Match closed"
+      : !hasStarted
       ? "Upcoming match"
       : !scoreStarted
         ? "Match started · scores pending"
@@ -1139,7 +1143,7 @@ function matchRowHtml(m, view) {
             : potmVotingStarted
               ? ratingStarted ? "Voting and ratings in progress" : "Voting open · ratings pending"
               : ratingStarted ? "Ratings in progress · voting pending" : "Scores updated · voting and ratings pending";
-  const progressTone = isCompleted ? "complete" : hasStarted ? "progress" : "future";
+  const progressTone = isCompleted || status === "CLOSED" ? "complete" : hasStarted ? "progress" : "future";
   const stream = streamState(m);
 
   // If locked/completed: disable Manage + scoring.
@@ -1154,24 +1158,29 @@ function matchRowHtml(m, view) {
           <div class="adminMatchRow__title">${escapeHtml(m.title)}</div>
           <div class="adminMatchRow__meta">${escapeHtml(when)}<span aria-hidden="true">·</span>${escapeHtml(m.type)}</div>
           <div class="adminMatchRow__progress"><span aria-hidden="true"></span>${escapeHtml(progress)}</div>
-          ${potmVotingClosed && !isCompleted ? `<div class="adminMatchRow__votingComplete">✓ Voting completed</div>` : ""}
         </div>
         <div class="adminMatchRow__badges">
           ${stream === "LIVE" ? `<span class="badge badge--live"><span class="liveSignal" aria-hidden="true"></span>LIVE</span>` : stream === "READY" ? `<span class="badge badge--streamReady">STREAM READY</span>` : stream === "ENDED" ? `<span class="badge">REPLAY</span>` : ""}
-          <span class="badge${status === "OPEN" ? " badge--good" : ""}">${escapeHtml(m.status)}</span>
           ${locked ? `<span class="badge badge--bad">LOCKED</span>` : ""}
         </div>
       </div>
 
       <div class="adminMatchRow__actions">
-        <button class="btn gray" data-manage="${escapeHtml(m.publicCode)}" ${disableManage ? "disabled" : ""}>Manage</button>
+        <button class="btn primary" data-manage="${escapeHtml(m.publicCode)}" ${disableManage ? "disabled" : ""}>Manage</button>
+        <button class="btn gray" data-score="${escapeHtml(m.publicCode)}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
+      </div>
+      ${isEditLocked ? '<p class="field__help">Read-only match. Unlock from More actions to edit.</p>' : !hasStarted ? '<p class="field__help">Scoring and voting become available after kick-off.</p>' : ""}
+      <details class="adminMoreActions">
+        <summary>More actions<span class="visuallyHidden"> for ${escapeHtml(m.title)}</span></summary>
+        <div class="adminMatchRow__actions">
         <button class="btn ${stream === "LIVE" ? "streamLiveButton" : "gray"}" data-stream="${escapeHtml(m.publicCode)}">${stream === "LIVE" ? "Streaming" : stream === "READY" ? "Stream ready" : stream === "ENDED" ? "Replay" : "Stream"}</button>
         ${(!isCompleted && !locked) || potmVotingStarted ? `<button class="btn ${potmVotingClosed ? "whatsappBtn" : hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${potmVotingStarted || (hasStarted && !isEditLocked) ? "" : "disabled"} title="${potmVotingClosed ? "View and share the POTM result" : hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingClosed ? "POTM result" : potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
-        <button class="btn primary" data-score="${escapeHtml(m.publicCode)}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
-        ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${m.matchId}">Complete & lock</button>` : ""}
-        ${isEditLocked ? `<button class="btn gray" data-unlock="${m.matchId}">Unlock match</button>` : ""}
-        <button class="btn dangerGhost" data-delete-match="${m.matchId}">Delete match</button>
-      </div>
+
+        ${hasBothScores && !locked && !isCompleted ? `<button class="btn gray" data-lock="${escapeHtml(m.matchId)}">Complete & lock</button>` : ""}
+        ${isEditLocked ? `<button class="btn gray" data-unlock="${escapeHtml(m.matchId)}">Unlock match</button>` : ""}
+        <div class="adminDestructive"><button class="btn dangerGhost" data-delete-match="${escapeHtml(m.matchId)}">Delete match</button></div>
+        </div>
+      </details>
     </article>
   `;
 }
@@ -1179,32 +1188,44 @@ function matchRowHtml(m, view) {
 function renderAdminShell(root, view) {
   root.innerHTML = `
     <div class="card" id="adminHeaderCard">
-      <div class="h1">Admin</div>
-      <div class="small">Season selection is shared across all tabs.</div>
-
-      <div id="seasonBlock"></div>
-
-      ${topNavHtml(view)}
-
-      <div class="small" id="msg" style="margin-top:10px"></div>
-
-      <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" style="display:none;" id="clearAdminCache">Clear cache</button>
-      </div>
+      <h1 class="h1">Club Desk</h1>
+      <div id="adminNav">${topNavHtml(view)}</div>
     </div>
-
-    <details class="card" id="seasonMgmt">
-      <summary style="font-weight:950">Season management</summary>
-
-      <div class="small" style="margin-top:8px">
-        Create seasons like: <b>24 Winter</b>, <b>24-25 Summer</b>, <b>25 Winter</b>, <b>25-26 Summer</b>.
+    <section class="card adminMatchWorkspace" id="matchWorkspace" aria-label="Match controls">
+      <div class="adminMatchToolbar"><div id="seasonBlock"></div><button class="btn primary" id="openCreateMatch" type="button">Create match</button></div>
+      <div class="adminFilterRow">
+        <nav class="adminMatchFilter" aria-label="Filter matches">
+          <a href="#/admin?view=open" id="goOpen">Open</a><a href="#/admin?view=past" id="goPast">Past</a>
+        </nav>
+        <button class="btn gray" id="refreshAdminMatches" type="button">Refresh</button>
       </div>
+      <div class="field__message" id="msg" role="status"></div>
+      <button hidden id="clearAdminCache" type="button">Clear cache</button>
+    </section>
+    <section class="card" id="clubOverview" aria-labelledby="clubOverviewTitle">
+      <h2 class="h1" id="clubOverviewTitle">Club management</h2>
+      <div class="adminTools">
+        <a href="#/admin?view=seasons"><strong>Seasons <span aria-hidden="true">↗</span></strong><span>Season dates, status and awards</span></a>
+        <a href="#/admin?view=users"><strong>Players <span aria-hidden="true">↗</span></strong><span>Player accounts and permissions</span></a>
+        <a href="#/admin?view=appearance"><strong>Appearance <span aria-hidden="true">↗</span></strong><span>Club-wide themes</span></a>
+        <a href="#/admin?view=announcements"><strong>Announcements <span aria-hidden="true">↗</span></strong><span>Messages to registered players</span></a>
+      </div>
+    </section>
+    <div id="clubToolBack"><a class="btn gray" href="#/admin?view=club">← Club management</a></div>
+    <div id="seasonToolContext" class="card"></div>
 
+    <section class="card" id="seasonMgmt">
+      <h2 class="h1">Seasons</h2>
+
+      <div id="seasonList" class="small" style="margin-top:8px"></div>
+      <button class="btn primary" id="openSeasonForm" type="button" aria-expanded="false" aria-controls="seasonForm">Create season</button>
       <div class="row seasonActions" style="margin-top:12px;gap:10px;flex-wrap:wrap">
         <button class="btn primary seasonAwardsButton" id="seasonAwards" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Z"/><path d="M8 5H5v3a4 4 0 0 0 4 4m7-7h3v3a4 4 0 0 1-4 4M12 13v5m-4 3h8m-7-3h6v3"/></svg><span>Awards</span></button>
         <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button">Share top 20 FC Cards</button>
       </div>
 
+      <div id="seasonForm" hidden>
+      <h3 id="seasonFormTitle">Create season</h3>
       <div class="field"><label class="field__label" for="seasonName">Season name</label><input id="seasonName" class="input" placeholder="For example, 25-26 Summer" /></div>
       <div class="formGrid formGrid--two">
         <div class="field"><label class="field__label" for="seasonStart">Start date</label><input id="seasonStart" class="input" type="date" /></div>
@@ -1220,16 +1241,15 @@ function renderAdminShell(root, view) {
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="createSeason">Create season</button>
         <button class="btn primary" id="updateSeason" style="display:none">Update season</button>
-        <button class="btn gray" id="cancelSeasonEdit" type="button" style="display:none">Cancel</button>
+        <button class="btn gray" id="cancelSeasonEdit" type="button">Cancel</button>
       </div>
 
-      <div class="hr"></div>
-      <div class="h1">Seasons</div>
-      <div id="seasonList" class="small" style="margin-top:8px"></div>
-    </details>
+      </div>
+    </section>
 
-    <details class="card themeSettings" id="themeSettingsCard">
-      <summary style="font-weight:950">Theme</summary>
+    <section class="card themeSettings" id="themeSettingsCard">
+      <h2 class="h1">Appearance</h2>
+      <p class="small">These settings affect everyone in the club.</p>
       <div class="themeSettings__body">
         <div>
           <div class="h1">Club colours. Football icons.</div>
@@ -1258,13 +1278,16 @@ function renderAdminShell(root, view) {
       <div class="themePreview" id="themePreview" aria-live="polite"></div>
       <p class="field__help" id="themeCategoryHelp">EPL themes update automatically on Mondays. A manual club choice stays until the next weekly selection.</p>
       <div class="field__message" id="themeSettingsMessage" role="status" aria-live="polite"></div>
-    </details>
+    </section>
 
-    <details class="card" id="createMatchCard" >
-      <summary style="font-weight:950">Create match</summary>
+    <dialog class="adminCreateDialog" id="createMatchCard" aria-labelledby="createMatchHeading" aria-describedby="createSeasonContext">
+      <div class="adminCreateDialog__body">
+      <header class="adminCreateDialog__head"><h2 class="h1" id="createMatchHeading">Create match</h2><button class="btn gray" id="closeCreateMatchTop" type="button" aria-label="Close and keep match draft">Close</button></header>
+      <p id="createSeasonContext" class="small"></p>
+      <p class="field__help">Closing keeps your draft on this device until you create or discard it.</p>
 
       <div class="field"><label class="field__label" for="title">Match title</label><input id="title" class="input" placeholder="For example, Friday night football" /></div>
-      <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
+      <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" aria-describedby="created" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
       <div class="field"><label class="field__label" for="type">Match type</label><select id="type" class="input">
         <option value="INTERNAL" selected>Internal</option>
         <option value="OPPONENT">Against opponents (1 captain)</option>
@@ -1287,12 +1310,17 @@ function renderAdminShell(root, view) {
         aria-describedby="availabilityHelp"
       /><div class="field__help" id="availabilityHelp">Extra Yes responses move to the waiting list.</div></div>
 
-      <button id="createMatch" class="btn primary" style="margin-top:10px">Create</button>
-      <div id="created" class="small" style="margin-top:10px"></div>
-    </details>
+      <div class="adminCreateDialog__actions">
+        <button id="createMatch" class="btn primary" type="button">Create match</button>
+        <button id="closeCreateMatch" class="btn gray" type="button">Close & keep draft</button>
+        <button id="discardCreateMatch" class="btn dangerGhost" type="button">Discard draft</button>
+      </div>
+      <div id="created" class="field__message" role="status"></div>
+      </div>
+    </dialog>
 
-    <details class="card" id="announcementCard">
-      <summary style="font-weight:950">Send club announcement</summary>
+    <section class="card" id="announcementCard">
+      <h2 class="h1">Announcements</h2>
       <p class="small">Send one in-app and push notification to every registered player. Add an optional secure link for payments or tournament registration.</p>
       <div class="field"><label class="field__label" for="announcementTitle">Notification title</label><input id="announcementTitle" class="input" maxlength="80" placeholder="For example, Tournament registration" /></div>
       <div class="field"><label class="field__label" for="announcementMessage">Message</label><textarea id="announcementMessage" class="input" rows="4" maxlength="500" placeholder="Write a clear action and deadline"></textarea></div>
@@ -1300,31 +1328,45 @@ function renderAdminShell(root, view) {
       <label class="row announcementEmbedChoice"><input id="announcementEmbed" type="checkbox" /><span>Offer an embedded registration view</span></label>
       <div class="row" style="margin-top:12px"><button class="btn primary" id="sendAnnouncement">Review & send to everyone</button></div>
       <div class="field__message" id="announcementMsg" role="status" aria-live="polite"></div>
-    </details>
+    </section>
 
-    <div id="usersArea"></div>
+    <section class="card" id="playersTool"><h2 class="h1">Players</h2><div id="usersArea"></div></section>
 
     <div id="listArea"></div>
     <div id="manageArea"></div>
   `;
 
-  // Requested: Season management collapsed by default
-  root.querySelector("#seasonMgmt").open = false;
-  // users render only in Users view
+  root.classList.add("adminDesk");
 }
 
 function setAdminChromeVisible(root, visible) {
-  const display = visible ? "" : "none";
-  const header = root.querySelector("#adminHeaderCard");
-  const seasonMgmt = root.querySelector("#seasonMgmt");
-  const createMatch = root.querySelector("#createMatchCard");
-  const themeSettings = root.querySelector("#themeSettingsCard");
-  const announcement = root.querySelector("#announcementCard");
-  if (header) header.style.display = display;
-  if (seasonMgmt) seasonMgmt.style.display = display;
-  if (createMatch) createMatch.style.display = display;
-  if (themeSettings) themeSettings.style.display = display;
-  if (announcement) announcement.style.display = display;
+  root.querySelector("#adminHeaderCard").hidden = !visible;
+  root.querySelector("#matchWorkspace").hidden = !visible;
+}
+
+function showAdminWorkspace(root, view) {
+  const matches = view === "open" || view === "past";
+  const club = ["club", "seasons", "users", "appearance", "announcements"].includes(view);
+  root.querySelectorAll(".adminPrimaryNav a").forEach((link, index) => {
+    if ((index === 0 && !club) || (index === 1 && club)) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  for (const [id, show] of Object.entries({
+    adminHeaderCard: view !== "manage", matchWorkspace: matches,
+    clubOverview: view === "club", clubToolBack: club && view !== "club",
+    seasonToolContext: view === "seasons", seasonMgmt: view === "seasons",
+    themeSettingsCard: view === "appearance", announcementCard: view === "announcements",
+    playersTool: view === "users", listArea: matches, manageArea: view === "manage"
+  })) root.querySelector(`#${id}`).hidden = !show;
+  // Move the single shared selector rather than showing a second selector.
+  const context = view === "seasons" ? root.querySelector("#seasonToolContext") : root.querySelector(".adminMatchToolbar");
+  context.prepend(root.querySelector("#seasonBlock"));
+  for (const filter of ["open", "past"]) {
+    const link = root.querySelector(filter === "open" ? "#goOpen" : "#goPast");
+    if (view === filter) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+  }
+  const dialog = root.querySelector("#createMatchCard");
+  if (!matches && dialog.open) dialog.close();
 }
 
 async function bindThemeSettings(root) {
@@ -1373,13 +1415,24 @@ async function bindThemeSettings(root) {
       : `<span><b>Manor Lakes theme</b><small>${settings?.apiConfigured ? "Waiting for the next completed EPL week." : "Add the API-Football secret to start automatic selection."}</small></span>`;
   };
 
+  setBusy(true);
   const loaded = await API.adminThemeSettings().catch(() => null);
   if (!loaded?.ok) {
     current.textContent = loaded?.error || "Theme settings could not be loaded.";
-    setBusy(true);
+    delete card.dataset.loaded;
+    let retry = card.querySelector("[data-theme-retry]");
+    if (!retry) {
+      retry = document.createElement("button");
+      retry.className = "btn gray";
+      retry.dataset.themeRetry = "";
+      retry.textContent = "Retry theme settings";
+      current.after(retry);
+    }
+    retry.onclick = () => { retry.remove(); card.dataset.loaded = "1"; bindThemeSettings(root).catch(() => { delete card.dataset.loaded; }); };
     return;
   }
   paint(loaded);
+  setBusy(false);
 
   toggle.onchange = async () => {
     setBusy(true);
@@ -1419,6 +1472,8 @@ async function bindThemeSettings(root) {
 }
 
 function renderListView(root, view) {
+  if (!["open", "past"].includes(getViewParams(currentHashQuery()).view)) return;
+  showAdminWorkspace(root, view);
   const listArea = root.querySelector("#listArea");
   const manageArea = root.querySelector("#manageArea");
 
@@ -1432,6 +1487,14 @@ function renderListView(root, view) {
 
   const open = (MEM.matches || []).filter(m => String(m.status || "").toUpperCase() === "OPEN");
   const past = (MEM.matches || []).filter(m => String(m.status || "").toUpperCase() !== "OPEN");
+  const key = `${MEM.selectedSeasonId}:${view}`;
+  const limit = LIST_LIMITS.get(key) || 12;
+  const hasCachedMatches = !!lsGet(matchesKey(MEM.selectedSeasonId));
+  const ordered = (view === "past" ? past : open).sort((a, b) => {
+    const first = `${a.date || ""}T${a.time || "00:00"}`;
+    const second = `${b.date || ""}T${b.time || "00:00"}`;
+    return view === "past" ? second.localeCompare(first) : first.localeCompare(second);
+  });
 
   listArea.innerHTML = `
     <div class="card">
@@ -1439,14 +1502,30 @@ function renderListView(root, view) {
       <div id="matchesList" style="margin-top:10px">
         ${
           (view === "past" ? past : open).length
-            ? (view === "past" ? past : open).map(m => matchRowHtml(m, view)).join("")
-            : `<div class="small">No matches.</div>`
+            ? ordered.slice(0, limit).map(m => matchRowHtml(m, view)).join("")
+            : !MEM.selectedSeasonId
+              ? '<div class="adminEmpty"><strong>Create a season to start adding matches.</strong><a class="btn primary" href="#/admin?view=seasons">Create season</a></div>'
+              : !hasCachedMatches ? '<div class="small" role="status">Loading matches…</div>'
+              : `<div class="adminEmpty"><strong>No ${view === "past" ? "past" : "open"} matches in this season.</strong>${view === "open" ? '<button class="btn primary" id="emptyCreateMatch" type="button">Create match</button>' : '<span>Completed and closed matches will appear here.</span>'}</div>`
         }
       </div>
+      ${ordered.length > limit ? '<button class="btn gray" id="showMoreMatches" type="button">Show more matches</button>' : ""}
     </div>
   `;
-
+  root.querySelector("#emptyCreateMatch")?.addEventListener("click", () => root.querySelector("#openCreateMatch").click());
+  root.querySelector("#showMoreMatches")?.addEventListener("click", () => {
+    const y = window.scrollY;
+    LIST_LIMITS.set(key, limit + 12);
+    renderListView(root, view);
+    window.scrollTo(0, y);
+    const next = root.querySelectorAll(".adminMatchRow")[limit];
+    next?.querySelector("button:not([disabled]), summary")?.focus({ preventScroll: true });
+  });
   bindListButtons(root, view);
+  root.querySelectorAll(".adminMatchRow").forEach(row => {
+    const title = row.querySelector(".adminMatchRow__title").textContent;
+    row.querySelectorAll("button").forEach(button => button.setAttribute("aria-label", `${button.textContent} for ${title}`));
+  });
 }
 
 async function loadAdminMatch(code) {
@@ -1487,31 +1566,6 @@ async function openManageView(root, code, routeToken, prevView) {
   renderManageUI(root, fresh, routeToken, { fromCache: false, prevView });
 }
 
-function bindTopNav(root, routeToken) {
-  // Some admin views intentionally hide the top-nav buttons. Guard against missing DOM.
-  const goOpen = root.querySelector("#goOpen");
-  if (goOpen) {
-    goOpen.onclick = () => {
-      if (!stillOnAdmin(routeToken)) return;
-      location.hash = "#/admin?view=open";
-    };
-  }
-
-  const goPast = root.querySelector("#goPast");
-  if (goPast) {
-    goPast.onclick = () => {
-      if (!stillOnAdmin(routeToken)) return;
-      location.hash = "#/admin?view=past";
-    };
-  }
-
-  const u = root.querySelector("#goUsers");
-  if (u) u.onclick = () => {
-    if (!stillOnAdmin(routeToken)) return;
-    location.hash = "#/admin?view=users";
-  };
-}
-
 function bindSeasonSelector(root, routeToken) {
   root.querySelector("#seasonBlock").innerHTML = seasonsSelectHtml(MEM.seasons, MEM.selectedSeasonId);
   const select = root.querySelector("#seasonSelect");
@@ -1520,8 +1574,9 @@ function bindSeasonSelector(root, routeToken) {
   select.onchange = () => {
     if (!stillOnAdmin(routeToken)) return;
 
+    LIST_POSITIONS.set(LAST_LIST_KEY, 0);
     MEM.selectedSeasonId = select.value;
-    updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===MEM.selectedSeasonId));
+    updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===(CREATE_SEASON_ID || MEM.selectedSeasonId)));
     localStorage.setItem(LS_SELECTED_SEASON, MEM.selectedSeasonId);
 
     // cache-first load matches for season (no API)
@@ -1534,12 +1589,20 @@ function bindSeasonSelector(root, routeToken) {
       location.hash = "#/admin?view=open";
     } else {
       renderListView(root, view);
+      if (view === "seasons") bindSeasonMgmt(root, routeToken);
+      if (view === "open" || view === "past") {
+        const cached = lsGet(matchesKey(MEM.selectedSeasonId));
+        const stale = !cached || now() - Number(cached.ts || 0) > ADMIN_MATCH_CACHE_MAX_AGE_MS;
+        root.querySelector("#msg").textContent = stale ? "Loading matches…" : "";
+        ACTIVE_ADMIN.refreshList?.({ force: stale, silent: false }).catch(() => {});
+      }
     }
   };
 }
 
 function bindSeasonMgmt(root, routeToken) {
-  root.querySelector("#seasonAwards")?.addEventListener("click", () => openSeasonAwards(MEM.selectedSeasonId));
+  root.querySelector("#seasonAwards").disabled = !MEM.selectedSeasonId;
+  root.querySelector("#seasonAwards").onclick = () => openSeasonAwards(MEM.selectedSeasonId);
   const listEl = root.querySelector("#seasonList");
   const nameEl = root.querySelector("#seasonName");
   const startEl = root.querySelector("#seasonStart");
@@ -1556,7 +1619,8 @@ function bindSeasonMgmt(root, routeToken) {
     const editing = Boolean(editSeasonId);
     createBtn.style.display = editing ? "none" : "";
     updateBtn.style.display = editing ? "" : "none";
-    cancelBtn.style.display = editing ? "" : "none";
+    cancelBtn.style.display = "";
+    root.querySelector("#seasonFormTitle").textContent = editing ? "Edit season" : "Create season";
     if (!editing) {
       nameEl.value = "";
       startEl.value = "";
@@ -1568,7 +1632,7 @@ function bindSeasonMgmt(root, routeToken) {
   function renderList() {
     const seasons = MEM.seasons || [];
     if (!seasons.length) {
-      listEl.innerHTML = "No seasons yet.";
+      listEl.innerHTML = "No seasons yet. Create a season to start adding matches.";
       return;
     }
 
@@ -1580,15 +1644,15 @@ function bindSeasonMgmt(root, routeToken) {
           <div class="card" style="margin:8px 0; padding:10px">
             <div class="row" style="justify-content:space-between; gap:10px; flex-wrap:wrap">
               <div>
-                <div style="font-weight:950">${s.name} ${isCurrent ? "<span class=\"badge\">Selected</span>" : ""}</div>
+                <div style="font-weight:950">${escapeHtml(s.name)} ${isCurrent ? "<span class=\"badge\">Selected</span>" : ""}</div>
                 <div class="small" style="margin-top:4px">
-                  <span class="${badge}">${s.status}</span>
-                  <span style="margin-left:8px">${s.startDate} → ${s.endDate}</span>
+                  <span class="${badge}">${escapeHtml(s.status)}</span>
+                  <span style="margin-left:8px">${escapeHtml(s.startDate)} → ${escapeHtml(s.endDate)}</span>
                 </div>
               </div>
               <div class="row" style="gap:8px; flex-wrap:nowrap; flex-shrink:0">
-                <button class="btn gray" data-season-edit="${s.seasonId}">Edit</button>
-                <button class="btn gray" data-season-del="${s.seasonId}">Delete</button>
+                <button class="btn gray" data-season-edit="${escapeHtml(s.seasonId)}">Edit</button>
+                <button class="btn gray" data-season-del="${escapeHtml(s.seasonId)}">Delete</button>
               </div>
             </div>
           </div>
@@ -1608,7 +1672,9 @@ function bindSeasonMgmt(root, routeToken) {
         endEl.value = s.endDate || "";
         statusEl.value = (s.status || "OPEN").toUpperCase();
         setMode(id);
-        root.querySelector("#seasonMgmt").open = true;
+        root.querySelector("#seasonForm").hidden = false;
+        root.querySelector("#openSeasonForm").setAttribute("aria-expanded", "true");
+        nameEl.focus();
       };
     });
     listEl.querySelectorAll("[data-season-del]").forEach((btn) => {
@@ -1650,9 +1716,19 @@ function bindSeasonMgmt(root, routeToken) {
 
   renderList();
 
+  root.querySelector("#openSeasonForm").onclick = () => {
+    if (MEM.editSeasonId) {
+      if (!confirm("Discard the season edits and create a new season?")) return;
+      setMode("");
+    }
+    root.querySelector("#seasonForm").hidden = false;
+    root.querySelector("#openSeasonForm").setAttribute("aria-expanded", "true");
+    nameEl.focus();
+  };
   cancelBtn.onclick = () => {
-    if (!stillOnAdmin(routeToken)) return;
-    setMode("");
+    root.querySelector("#seasonForm").hidden = true;
+    root.querySelector("#openSeasonForm").setAttribute("aria-expanded", "false");
+    root.querySelector("#openSeasonForm").focus();
   };
 
   createBtn.onclick = async () => {
@@ -1690,6 +1766,8 @@ function bindSeasonMgmt(root, routeToken) {
 
     bindSeasonSelector(root, routeToken);
     setMode("");
+    root.querySelector("#seasonForm").hidden = true;
+    root.querySelector("#openSeasonForm").setAttribute("aria-expanded", "false");
     renderList();
 
     // show open list from cache (likely empty until Refresh)
@@ -1730,107 +1808,147 @@ function bindSeasonMgmt(root, routeToken) {
 
     bindSeasonSelector(root, routeToken);
     setMode("");
+    root.querySelector("#seasonForm").hidden = true;
+    root.querySelector("#openSeasonForm").setAttribute("aria-expanded", "false");
     renderList();
     renderListView(root, "open");
   };
 }
 
-function bindCreateMatch(root, routeToken) {
-  // Default availability limits:
-  // - OPPONENT match: 11
-  // - INTERNAL match: 22
-  try {
-    const typeEl = root.querySelector("#type");
-    const limitEl = root.querySelector("#availabilityLimit");
-    const homeNameEl = root.querySelector("#teamHomeName");
-    const awayNameEl = root.querySelector("#teamAwayName");
-    const namesHelp = root.querySelector("#teamNamesHelp");
-    if (typeEl && limitEl) {
-      const setDefault = () => {
-        const opponent = String(typeEl.value || "").toUpperCase() === "OPPONENT";
-        limitEl.value = opponent ? 11 : 22;
-        if (homeNameEl) homeNameEl.value = opponent ? "MLFC" : "Blue";
-        if (awayNameEl) awayNameEl.value = opponent ? "Opponent" : "Orange";
-        if (homeNameEl) homeNameEl.disabled = opponent;
-        if (awayNameEl) awayNameEl.disabled = opponent;
-        if (namesHelp) namesHelp.textContent = opponent ? "Opponent fixtures use MLFC and Opponent." : "Choose the internal team names shown across scores, teams and results.";
-      };
-      // initial default
-      setDefault();
-      // update when type changes
-      typeEl.onchange = () => setDefault();
+function bindCreateMatch(root) {
+  const dialog = root.querySelector("#createMatchCard");
+  const button = root.querySelector("#createMatch");
+  const trigger = root.querySelector("#openCreateMatch");
+  const created = root.querySelector("#created");
+  const readDraft = () => {
+    try { return JSON.parse(sessionStorage.getItem(CREATE_DRAFT_KEY) || "null"); } catch { return null; }
+  };
+  const saveDraft = () => {
+    const fields = Object.fromEntries(CREATE_FIELDS.map(id => [id, root.querySelector(`#${id}`).value]));
+    try { sessionStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify({ seasonId: CREATE_SEASON_ID, fields })); } catch {}
+    trigger.textContent = "Continue match draft";
+  };
+  const syncType = (defaults = false) => {
+    const opponent = root.querySelector("#type").value === "OPPONENT";
+    if (defaults) {
+      root.querySelector("#availabilityLimit").value = opponent ? 11 : 22;
+      root.querySelector("#teamHomeName").value = opponent ? "MLFC" : "Blue";
+      root.querySelector("#teamAwayName").value = opponent ? "Opponent" : "Orange";
     }
-  } catch {}
-
-  root.querySelector("#createMatch").onclick = async () => {
-    if (!stillOnAdmin(routeToken)) return;
-
-    const btn = root.querySelector("#createMatch");
-    updateSeasonCreation(root, MEM.seasons.find(s=>s.seasonId===MEM.selectedSeasonId));
-    if(btn.disabled)return toastWarn("This season has ended. Create a new season first.");
-    setDisabled(btn, true, "Creating…");
-
+    for (const id of ["teamHomeName", "teamAwayName"]) root.querySelector(`#${id}`).disabled = opponent;
+    root.querySelector("#teamNamesHelp").textContent = opponent ? "Opponent fixtures use MLFC and Opponent." : "Choose the internal team names shown across scores, teams and results.";
+  };
+  const reset = () => {
+    const defaults = { title: "", date: "", time: "19:00", type: "INTERNAL", teamHomeName: "Blue", teamAwayName: "Orange", availabilityLimit: "22" };
+    CREATE_FIELDS.forEach(id => { root.querySelector(`#${id}`).value = defaults[id]; });
+    CREATE_SEASON_ID = "";
+    sessionStorage.removeItem(CREATE_DRAFT_KEY);
+    trigger.textContent = "Create match";
+    created.textContent = "";
+    syncType();
+  };
+  // Restore only on the first mount; later navigation preserves the original controls.
+  if (!dialog.dataset.initialized) {
+    const draft = readDraft();
+    if (draft?.fields) {
+      CREATE_FIELDS.forEach(id => { if (typeof draft.fields[id] === "string") root.querySelector(`#${id}`).value = draft.fields[id]; });
+      CREATE_SEASON_ID = draft.seasonId || "";
+      trigger.textContent = "Continue match draft";
+    }
+    syncType();
+    dialog.dataset.initialized = "1";
+  }
+  dialog.oninput = saveDraft;
+  root.querySelector("#type").onchange = () => { syncType(true); saveDraft(); };
+  trigger.disabled = !MEM.selectedSeasonId && !CREATE_SEASON_ID;
+  trigger.onclick = () => {
+    CREATE_SEASON_ID ||= MEM.selectedSeasonId;
+    const season = MEM.seasons.find(s => s.seasonId === CREATE_SEASON_ID);
+    root.querySelector("#createSeasonContext").textContent = `Season: ${season?.name || "Unavailable season — discard this draft to choose another"}`;
+    updateSeasonCreation(root, season);
+    if (CREATE_BUSY) button.disabled = true;
+    if (!dialog.open) dialog.showModal();
+    root.querySelector("#title").focus();
+  };
+  const close = () => {
+    if (CREATE_BUSY) return;
+    saveDraft();
+    dialog.close();
+    trigger.focus();
+  };
+  root.querySelector("#closeCreateMatch").onclick = close;
+  root.querySelector("#closeCreateMatchTop").onclick = close;
+  dialog.oncancel = event => { event.preventDefault(); close(); };
+  root.querySelector("#discardCreateMatch").onclick = () => {
+    if (CREATE_BUSY || !confirm("Discard this match draft? Entered values will be cleared.")) return;
+    reset();
+    dialog.close();
+    trigger.focus();
+  };
+  button.onclick = async () => {
+    if (CREATE_BUSY || !dialog.open || !isAdminListViewActive()) return;
+    updateSeasonCreation(root, MEM.seasons.find(s => s.seasonId === CREATE_SEASON_ID));
+    if (button.disabled) return;
     const payload = {
       title: root.querySelector("#title").value.trim() || "Weekly Match",
       date: root.querySelector("#date").value,
       time: root.querySelector("#time").value || "19:00",
       type: root.querySelector("#type").value,
-      teamHomeName: root.querySelector("#teamHomeName")?.value.trim() || "Blue",
-      teamAwayName: root.querySelector("#teamAwayName")?.value.trim() || "Orange",
-      availabilityLimit: Math.max(1, Math.min(100, Math.floor(Number(root.querySelector("#availabilityLimit")?.value || 22)))),
-      seasonId: MEM.selectedSeasonId
+      teamHomeName: root.querySelector("#teamHomeName").value.trim() || "Blue",
+      teamAwayName: root.querySelector("#teamAwayName").value.trim() || "Orange",
+      availabilityLimit: Math.max(1, Math.min(100, Math.floor(Number(root.querySelector("#availabilityLimit").value || 22)))),
+      seasonId: CREATE_SEASON_ID
     };
-
+    root.querySelector("#date").removeAttribute("aria-invalid");
     if (!payload.date) {
-      setDisabled(btn, false);
-      toastWarn("Please choose a match date");
+      root.querySelector("#date").setAttribute("aria-invalid", "true");
+      created.textContent = "Please choose a match date.";
+      root.querySelector("#date").focus();
       return;
     }
-
-    const out = await API.adminCreateMatch(payload);
-    setDisabled(btn, false);
-
-    const created = root.querySelector("#created");
-    if (!out.ok) {
-      created.textContent = out.error || "Failed";
-      return toastError(out.error || "Failed to create match");
+    saveDraft();
+    CREATE_BUSY = true;
+    setDisabled(button, true, "Creating…");
+    dialog.setAttribute("aria-busy", "true");
+    const controls = [...dialog.querySelectorAll("input, select, button")];
+    const disabled = controls.map(control => control.disabled);
+    controls.forEach(control => { control.disabled = true; });
+    let out;
+    try { out = await API.adminCreateMatch(payload); }
+    catch { out = { ok: false, error: "Could not create the match. Check your connection and try again." }; }
+    finally {
+      CREATE_BUSY = false;
+      controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      setDisabled(button, false);
+      dialog.removeAttribute("aria-busy");
     }
-
-    toastSuccess("Match created.");
-
-    // Requested: do NOT show URL here; just open the new match manage view
-    created.textContent = "Created ✅ Opening match…";
-
-    // Collapse create match section
-    const details = root.querySelector("#createMatchCard");
-    if (details) details.open = false;
-
-    // Add new match into MEM + app storage immediately (NO API)
-    const newMatch = {
-      matchId: out.matchId,
-      publicCode: out.publicCode,
-      seasonId: out.seasonId || MEM.selectedSeasonId,
-      title: payload.title,
-      date: payload.date,
-      time: payload.time,
-      type: payload.type,
-      teamHomeName: payload.teamHomeName,
-      teamAwayName: payload.teamAwayName,
-      availabilityLimit: payload.availabilityLimit,
-      status: "OPEN",
-      ratingsLocked: "FALSE"
-    };
-
-    // Put new OPEN match at top
-    MEM.matches = [newMatch, ...(MEM.matches || []).filter(m => String(m.matchId) !== String(newMatch.matchId))];
-    lsSet(matchesKey(MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
-
-    // Clear any stale caches for this match code
+    if (!out?.ok) {
+      created.textContent = out?.error || "Could not create the match. Try again.";
+      button.focus();
+      created.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const newMatch = { ...payload, matchId: out.matchId, publicCode: out.publicCode, seasonId: out.seasonId || payload.seasonId, status: "OPEN", ratingsLocked: "FALSE" };
+    const cached = lsGet(matchesKey(payload.seasonId));
+    const matches = payload.seasonId === MEM.selectedSeasonId ? MEM.matches : (cached?.matches || []);
+    const updated = [newMatch, ...matches.filter(m => String(m.matchId) !== String(newMatch.matchId))];
+    lsSet(matchesKey(payload.seasonId), { ts: now(), matches: updated });
+    if (payload.seasonId === MEM.selectedSeasonId) MEM.matches = updated;
     clearPublicMatchDetailCache(out.publicCode);
     clearManageCache(out.publicCode);
-
-    // Navigate to manage view (prev=open)
-    location.hash = `#/admin?view=manage&code=${encodeURIComponent(out.publicCode)}&prev=open`;
+    reset();
+    dialog.close();
+    toastSuccess("Match created.");
+    root.querySelector("#msg").textContent = "Match created.";
+    if (isAdminRouteActive()) {
+      MEM.selectedSeasonId = payload.seasonId;
+      MEM.matches = updated;
+      localStorage.setItem(LS_SELECTED_SEASON, payload.seasonId);
+      bindSeasonSelector(root, window.__mlfcAdminToken);
+      if (getViewParams(currentHashQuery()).view === "open") renderListView(root, "open");
+      else location.hash = "#/admin?view=open";
+      trigger.focus();
+    }
   };
 }
 
@@ -2357,7 +2475,8 @@ function bindListButtons(root, view) {
   root.querySelectorAll('[data-score]:not([disabled])').forEach(btn => {
     btn.onclick = () => {
       const code = btn.getAttribute("data-score");
-      location.hash = `#/captain?code=${encodeURIComponent(code)}&src=admin`;
+      LIST_POSITIONS.set(`${MEM.selectedSeasonId}:${view}`, window.scrollY);
+      location.hash = `#/captain?code=${encodeURIComponent(code)}&src=admin&prev=${view}`;
     };
   });
 
@@ -2387,6 +2506,7 @@ function bindListButtons(root, view) {
       if (!stillOnAdmin(routeToken)) return;
 
       const code = btn.getAttribute("data-manage");
+      LIST_POSITIONS.set(`${MEM.selectedSeasonId}:${view}`, window.scrollY);
       // Navigate using the hash so the browser back button returns to the admin list view
       // (instead of whatever tab was open before entering admin).
       location.hash = `#/admin?view=manage&code=${encodeURIComponent(code)}&prev=${encodeURIComponent(view)}`;
@@ -2466,6 +2586,7 @@ function bindListButtons(root, view) {
       if (!stillOnAdmin(routeToken)) return;
 
       const matchId = btn.getAttribute("data-unlock");
+      if (!confirm("Unlock this match? Teams, availability, scores and ratings will become editable again.")) return;
       setDisabled(btn, true, "Unlocking…");
 
       const out = await API.adminUnlockMatch(matchId);
@@ -3375,103 +3496,88 @@ export async function renderAdminPage(root, query) {
 
   const picked = pickSelectedSeason(seasonsRes);
   MEM.seasons = picked.seasons;
-  MEM.selectedSeasonId = localStorage.getItem(LS_SELECTED_SEASON) || picked.selected;
+  MEM.selectedSeasonId = picked.selected;
 
   // matches cache-first (no API)
   loadMatchesFromLocal(MEM.selectedSeasonId);
 
   const { view, code, prev } = getViewParams(query);
 
-  if (view === "users") {
-    root.innerHTML = `
-      <div class="card">
-        <div class="h1" style="margin:0">User management</div>
-        ${topNavHtml("users")}
-      </div>
-      <div class="card" id="usersArea"></div>
-    `;
-    bindTopNav(root, routeToken);
-    await renderUsers(root);
-    return;
-  }
-
-  renderAdminShell(root, view);
-
-  bindTopNav(root, routeToken);
+  const mounted = !!root.querySelector("#adminHeaderCard") && root.dataset.adminUser === String(me.name);
+  root.dataset.adminUser = String(me.name);
+  if (!mounted) renderAdminShell(root, view);
+  showAdminWorkspace(root, view);
   bindSeasonSelector(root, routeToken);
   bindSeasonMgmt(root, routeToken);
-  bindThemeSettings(root).catch(() => {});
-  bindCreateMatch(root, routeToken);
+  bindCreateMatch(root);
   bindAnnouncement(root, routeToken);
   bindHeaderButtons(root, routeToken);
-  // Users view is rendered on demand
-  if (view === "users") {
-    bindUserMgmt(root, routeToken);
-  }
 
   const msg = root.querySelector("#msg");
-  msg.textContent = MEM.matches.length
-    ? "Loaded from device cache."
-    : "No cached matches for this season yet.";
+  const cache = lsGet(matchesKey(MEM.selectedSeasonId));
+  msg.textContent = cache ? (now() - cache.ts > ADMIN_MATCH_CACHE_MAX_AGE_MS ? "Showing saved matches. Refreshing…" : "") : "Loading matches…";
 
   async function refreshAdminList(opts = {}) {
+    if (!stillOnAdmin(routeToken) || !isAdminListViewActive()) return;
     const force = !!opts.force;
-    const silent = !!opts.silent;
     const seasonId = MEM.selectedSeasonId;
-
-    if (!shouldRefreshAdminMatches(seasonId, { force })) return;
+    if (!seasonId || !shouldRefreshAdminMatches(seasonId, { force })) return;
     if (ADMIN_REFRESH_INFLIGHT) return;
-
-    const t = now();
-    if (!force && t - ADMIN_LAST_REFRESH_TS < ADMIN_MATCH_REFRESH_COOLDOWN_MS) return;
-    ADMIN_LAST_REFRESH_TS = t;
-
-    if (!silent) msg.textContent = "Loading latest…";
-
+    if (!force && now() - ADMIN_LAST_REFRESH_TS < ADMIN_MATCH_REFRESH_COOLDOWN_MS && lsGet(matchesKey(seasonId))) return;
+    ADMIN_LAST_REFRESH_TS = now();
+    if (!opts.silent) msg.textContent = "Loading matches…";
     ADMIN_REFRESH_INFLIGHT = true;
     try {
       const out = await refreshMatchesFromApi(seasonId, routeToken);
-      if (!stillOnAdmin(routeToken)) return;
+      if (!stillOnAdmin(routeToken) || seasonId !== MEM.selectedSeasonId) return;
       if (!out.ok) {
-        if (!silent) msg.textContent = out.error || "Failed to load";
+        msg.textContent = `${out.error || "Could not load matches."}${lsGet(matchesKey(seasonId)) ? " Showing saved matches. Try Refresh." : " Try Refresh."}`;
+        if (!lsGet(matchesKey(seasonId))) root.querySelector("#matchesList").innerHTML = '<div class="small">Matches could not be loaded. Use Refresh to try again.</div>';
         return;
       }
-
-      msg.textContent = silent ? "Updated just now." : "";
-      renderListView(root, (view === "past") ? "past" : "open");
+      msg.textContent = "";
+      const y = window.scrollY;
+      renderListView(root, view === "past" ? "past" : "open");
+      window.scrollTo(0, y);
     } finally {
       ADMIN_REFRESH_INFLIGHT = false;
+      // A season or route may have changed while its previous request was in flight.
+      if (isAdminListViewActive() && (seasonId !== MEM.selectedSeasonId || !stillOnAdmin(routeToken))) {
+        ACTIVE_ADMIN.refreshList?.({ silent: false }).catch(() => {});
+      }
     }
   }
-
+  root.querySelector("#refreshAdminMatches").onclick = () => refreshAdminList({ force: true });
   ACTIVE_ADMIN = { root, routeToken, view, refreshList: refreshAdminList };
   ensureAdminAutoRefresh();
 
-  const viewNow = view;
-  const hasCache = !!lsGet(matchesKey(MEM.selectedSeasonId));
-  const cacheStale = (now() - Number(lsGet(matchesKey(MEM.selectedSeasonId))?.ts || 0)) > ADMIN_MATCH_CACHE_MAX_AGE_MS;
-  // In iOS installed app (Add to Home Screen), reload semantics are unreliable.
-  const shouldReloadFetch = (viewNow === "open" || viewNow === "past") && (isIOSStandalone() || isReloadForAdminList() || !hasCache || cacheStale);
-  if (shouldReloadFetch) {
-    await refreshAdminList({ force: true, silent: false });
-    if (!stillOnAdmin(routeToken)) return;
+  if (view === "appearance" && !root.querySelector("#themeSettingsCard").dataset.loaded) {
+    const card = root.querySelector("#themeSettingsCard");
+    card.dataset.loaded = "1";
+    bindThemeSettings(root).catch(() => { delete card.dataset.loaded; });
   }
-
-  // Render view without API
-  if (view === "users") {
-    // Hide list/manage areas while in Users
-    const la = root.querySelector("#listArea");
-    const ma = root.querySelector("#manageArea");
-    if (la) la.style.display = "none";
-    if (ma) ma.style.display = "none";
-    setAdminChromeVisible(root, true);
-    // season mgmt + create match stay visible on admin header; users render below
-    return;
-  }
-
+  if (view === "users" && !root.querySelector("#userSearch")) await renderUsers(root);
+  if (!stillOnAdmin(routeToken)) return;
+  const previousView = LAST_ADMIN_VIEW;
+  LAST_ADMIN_VIEW = view;
   if (view === "manage" && code) {
+    window.scrollTo(0, 0);
     await openManageView(root, code, routeToken, prev || "open");
-  } else {
-    renderListView(root, (view === "past") ? "past" : "open");
+  } else if (view === "open" || view === "past") {
+    renderListView(root, view);
+    const key = `${MEM.selectedSeasonId}:${view}`;
+    LAST_LIST_KEY = key;
+    requestAnimationFrame(() => {
+      if (stillOnAdmin(routeToken)) window.scrollTo(0, LIST_POSITIONS.get(key) || 0);
+    });
+    if (previousView === "manage") root.querySelector(view === "past" ? "#goPast" : "#goOpen").focus({ preventScroll: true });
+    const hasCache = !!cache;
+    const cacheStale = now() - Number(cache?.ts || 0) > ADMIN_MATCH_CACHE_MAX_AGE_MS;
+    const reload = !ADMIN_RELOAD_CHECKED && (isIOSStandalone() || isReloadForAdminList());
+    ADMIN_RELOAD_CHECKED = true;
+    if (reload || !hasCache || cacheStale) await refreshAdminList({ force: true });
+    if (!MEM.selectedSeasonId) msg.textContent = "Create a season in Club management to start adding matches.";
+  } else if (previousView !== view) {
+    window.scrollTo(0, 0);
   }
 }

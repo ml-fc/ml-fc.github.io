@@ -42,7 +42,7 @@ For every frontend release:
 3. Add any new offline-critical file to `STATIC_ASSETS` in `service-worker.js`.
 4. Run syntax, browser, XSS, and offline checks.
 
-The current release is `2026-09-24.61`.
+The current release is `2026-11-18.96`.
 
 ## Deployment
 
@@ -70,3 +70,14 @@ Installed PWAs may need to be closed and reopened once so the new service worker
 ## Security
 
 Treat every backend field as untrusted and escape it before inserting it into HTML or an attribute. Never commit API tokens, player data, OAuth credentials, or files named like `client_secret_*.json`. The Google site-verification HTML file is public verification material; it is not an OAuth client secret.
+
+## Club Desk regression checks
+
+Start the local server on port 4173, then run the browser checks with Playwright CLI:
+
+```bash
+npx --package @playwright/cli playwright-cli -s=club-admin open about:blank
+npx --package @playwright/cli playwright-cli -s=club-admin run-code --filename=tests/admin-workspace.browser.js
+```
+
+The checks use synthetic seasons, matches and players and intercept every Worker request, including mutations. They cover navigation and legacy URLs, shared seasons, returning from management and scoring, match restrictions, pagination, retained drafts, validation, duplicate submission, lazy tools, errors, keyboard focus, and layouts at 360, 390, 768 and 1280 pixels. Service-worker installation is blocked in this fixture run to keep update reloads separate from interaction checks.

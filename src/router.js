@@ -113,6 +113,11 @@ async function renderRoute() {
   }
   const token = setRouteToken();
   const previousHash = activeRouteHash;
+  // A hidden native modal still makes the document inert. Close it on navigation;
+  // page-owned controls retain their draft values when their route is hidden.
+  if (previousHash && previousHash !== fullHash) {
+    document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
+  }
   activeRouteHash = fullHash;
 
   const container = ensureContainer(route);

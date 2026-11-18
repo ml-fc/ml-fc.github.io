@@ -620,8 +620,8 @@ export async function renderCaptainPage(root, query) {
       <div class="small captainCommand__context" style="margin-top:10px">${escapeHtml(when)}</div>
       <div class="small captainCommand__context" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${escapeHtml(captain)}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${escapeHtml(captainTeam)}` : ""}`}</div>
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote captainCommand__context">You can only rate/update <b>opponent</b> players.</div>` : ""}
-      <div class="row captainCommand__context" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" id="openMatch">${adminMode ? "Back to match management" : "Open match"}</button>
+      <div class="row ${adminMode ? "" : "captainCommand__context"}" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+        <button class="btn gray" id="openMatch">${adminMode ? "Back to matches" : "Open match"}</button>
       </div>
       <button class="btn primary captainWizardLauncher${!adminMode && hasStarted && !initialDutyStatus.complete ? " isDue" : ""}" id="openRatingWizard" type="button" aria-haspopup="dialog"><span>Open rating wizard</span><small id="ratingWizardProgress">${initialDutyStatus.completed}/${initialDutyStatus.required} rated</small></button>
     </div>
@@ -947,7 +947,7 @@ export async function renderCaptainPage(root, query) {
 
   root.querySelector("#openMatch").onclick = () => {
     location.hash = adminMode
-      ? `#/admin?view=manage&code=${encodeURIComponent(code)}&prev=open`
+      ? `#/admin?view=${new URLSearchParams(location.hash.split("?")[1] || "").get("prev") === "past" ? "past" : "open"}`
       : `#/match?code=${encodeURIComponent(code)}`;
   };
 
