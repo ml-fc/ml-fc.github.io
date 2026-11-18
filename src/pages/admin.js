@@ -1042,8 +1042,7 @@ function renderLogin(root) {
         <button id="login" class="btn primary">Login</button>
         <button id="clear" class="btn gray">Clear key</button>
       </div>
-      <button class="btn primary" id="seasonAwards" type="button">🏆 Awards</button>
-        <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button" style="margin-top:10px">Share top 20 FC Cards</button>
+      <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button" style="margin-top:10px">Share top 20 FC Cards</button>
       <div id="msg" class="field__message" role="status" aria-live="polite"></div>
     </details>
   `;
@@ -1201,7 +1200,8 @@ function renderAdminShell(root, view) {
         Create seasons like: <b>24 Winter</b>, <b>24-25 Summer</b>, <b>25 Winter</b>, <b>25-26 Summer</b>.
       </div>
 
-      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap">
+      <div class="row seasonActions" style="margin-top:12px;gap:10px;flex-wrap:wrap">
+        <button class="btn primary seasonAwardsButton" id="seasonAwards" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Z"/><path d="M8 5H5v3a4 4 0 0 0 4 4m7-7h3v3a4 4 0 0 1-4 4M12 13v5m-4 3h8m-7-3h6v3"/></svg><span>Awards</span></button>
         <button class="btn whatsappBtn" id="shareSeasonLeaders" type="button">Share top 20 FC Cards</button>
       </div>
 
@@ -1538,7 +1538,7 @@ function bindSeasonSelector(root, routeToken) {
 }
 
 function bindSeasonMgmt(root, routeToken) {
-  root.querySelector("#seasonAwards").onclick=()=>openSeasonAwards(MEM.selectedSeasonId);
+  root.querySelector("#seasonAwards")?.addEventListener("click", () => openSeasonAwards(MEM.selectedSeasonId));
   const listEl = root.querySelector("#seasonList");
   const nameEl = root.querySelector("#seasonName");
   const startEl = root.querySelector("#seasonStart");

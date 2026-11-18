@@ -3118,8 +3118,98 @@ body[data-weekly-theme="goats"] .nextMatch { background:linear-gradient(120deg,#
 .awardNominee{position:relative;display:flex;align-items:center;gap:12px;min-width:0;min-height:80px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff;cursor:pointer;transition:border-color .15s,background .15s}.awardNominee>input{position:absolute;opacity:0;width:1px;height:1px}.awardNominee>span{display:grid;gap:5px;min-width:0}.awardNominee strong{font-size:14px;overflow-wrap:anywhere}.awardNominee small{font-size:11px;color:var(--ink-2)}.awardNominee .playerPhoto{width:42px;height:42px;flex:none}.awardNominee i{margin-left:auto;display:grid;place-items:center;width:24px;height:24px;border:1px solid #dce3e9;border-radius:50%;color:transparent;flex:none;font-style:normal}.awardNominee:has(input:checked){border-color:#ad822e;background:#fbf5e6;box-shadow:inset 0 0 0 1px #ad822e}.awardNominee:has(input:checked) i{color:#fff;background:#9b762d;border-color:#9b762d}.awardNominee:has(input:focus-visible){outline:3px solid #477cbd;outline-offset:3px}.awardNominee--disabled{cursor:default;opacity:.6}
 .awardVoteFooter{display:flex;align-items:center;justify-content:space-between;gap:15px;border-top:1px solid #e0e6ec;margin-top:22px;padding-top:20px;font-size:12px;color:var(--ink-2)}
 .awardWinner{display:flex;align-items:center;gap:16px;border:1px solid #dec996;background:#fbf5e6;padding:20px;border-radius:12px;margin-top:18px}.awardWinner>span{font-size:32px}.awardWinner>div{display:grid;gap:7px}.awardWinner small{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:#805b13}.awardWinner strong{font-size:20px;line-height:1.3}.awardResults{margin-top:18px}.awardResults summary{cursor:pointer;font-size:12px;font-weight:800}.awardResults>div{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #e0e6ec;font-size:13px}
-.seasonCountdown{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 17px;border:1px solid #d9e1e9;border-radius:10px;background:#fff;font-size:11px;margin-bottom:16px}.seasonCountdown>div{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.seasonCountdown [data-season-clock]{color:var(--ink-2);font-variant-numeric:tabular-nums}.seasonCountdown a{font-weight:800;text-decoration:none;color:#805b13;white-space:nowrap}.seasonCountdown__dot{width:6px;height:6px;border-radius:50%;background:#b58b39;flex:none}
 .seasonHonours{padding:0;overflow:hidden;margin-bottom:16px}.seasonHonours>summary{display:flex;justify-content:space-between;align-items:center;list-style:none;cursor:pointer;padding:20px 24px;background:#0a1726;color:#fff}.seasonHonours>summary::-webkit-details-marker{display:none}.seasonHonours>summary>span:first-child{display:grid;gap:7px}.seasonHonours>summary small{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#e3bc66}.seasonHonours>summary strong{font:26px Impact,'Arial Narrow',sans-serif;font-weight:400;letter-spacing:.025em}.seasonHonours__expand{font-size:26px;color:#e3bc66}.seasonHonours[open]>summary .seasonHonours__expand{transform:rotate(45deg)}.seasonHonours__body{padding:20px 24px}.seasonHonours__numbers{display:flex;gap:22px;flex-wrap:wrap;font-size:11px;color:var(--ink-2);padding-bottom:18px}.seasonHonours__numbers b{font-size:16px;color:var(--ink);margin-right:3px}.seasonHonours__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#e0e6ec;border:1px solid #e0e6ec;border-radius:10px;overflow:hidden}.seasonHonour{display:grid;align-content:start;gap:8px;padding:18px;background:#fff}.seasonHonour small{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#805b13;font-weight:800}.seasonHonour strong{font-size:16px;line-height:1.35;overflow-wrap:anywhere}.seasonHonour>span{font-size:10px;color:var(--ink-2)}.seasonHonours__stats{margin-top:20px}.seasonHonours__stats>summary{font-size:12px;font-weight:800;cursor:pointer}.seasonStatsScroll{overflow-x:auto;margin-top:14px}.seasonStatsScroll table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:12px}.seasonStatsScroll td,.seasonStatsScroll th{padding:10px;border-bottom:1px solid #e0e6ec;text-align:right}.seasonStatsScroll th:first-child{text-align:left}.seasonOlder{display:block;margin:0 auto 20px;font-size:12px}
-@media(max-width:600px){.awardsDialog{max-height:94dvh;border-radius:15px}.awardsDialog__head,.awardsDialog__body{padding:20px 18px}.awardsDeskIntro{align-items:flex-start}.awardAdminCard{padding:17px}.awardEmblem{width:45px;height:45px;font-size:28px}.awardCardHead h3,.awardCardHead h2{font-size:25px}.awardNominees{grid-template-columns:1fr}.awardSelectionSummary{align-items:flex-start;flex-direction:column}.awardVoteFooter{align-items:stretch;flex-direction:column}.seasonHonours__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.seasonHonour{padding:14px}.seasonHonour strong{font-size:14px}.seasonHonours__body{padding:16px}.seasonHonours>summary{padding:18px}.seasonCountdown{align-items:flex-start;font-size:10px;padding:12px}.seasonCountdown>div{gap:6px}.seasonCountdown [data-season-clock]{width:100%;padding-left:12px}.awardsHero{padding:26px}.awardPicker{grid-template-columns:1fr}.awardParticipation{gap:15px}.awardActions .btn{flex-grow:1}}
+@media(max-width:600px){.awardsDialog{max-height:94dvh;border-radius:15px}.awardsDialog__head,.awardsDialog__body{padding:20px 18px}.awardsDeskIntro{align-items:flex-start}.awardAdminCard{padding:17px}.awardEmblem{width:45px;height:45px;font-size:28px}.awardCardHead h3,.awardCardHead h2{font-size:25px}.awardNominees{grid-template-columns:1fr}.awardSelectionSummary{align-items:flex-start;flex-direction:column}.awardVoteFooter{align-items:stretch;flex-direction:column}.seasonHonours__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.seasonHonour{padding:14px}.seasonHonour strong{font-size:14px}.seasonHonours__body{padding:16px}.seasonHonours>summary{padding:18px}.awardsHero{padding:26px}.awardPicker{grid-template-columns:1fr}.awardParticipation{gap:15px}.awardActions .btn{flex-grow:1}}
 @media(prefers-reduced-motion:reduce){.awardNominee{transition:none}}
 @media(max-width:600px){.awardsDeskIntro{flex-direction:column;gap:10px}.awardsDeskIntro>div{width:100%}.awardsDeskIntro p{margin:8px 0}.awardsDeskIntro>.btn{width:auto;align-self:flex-start}.awardsDialog__head>div{min-width:0}.awardCardHead>div{min-width:0}}
+
+/* Mobile usability: keep the match in reach and controls comfortable on phones. */
+.seasonHonours>summary strong { color:#fff; overflow-wrap:anywhere; line-height:1.15; }
+.seasonHonours>summary>span:first-child { min-width:0; }
+[data-season-history]:not(:empty) { margin-top:22px; }
+.profileIdentity>div { min-width:0; }
+.profileIdentity .h1,.profilePhone { overflow-wrap:anywhere; }
+.awardParticipation section { min-width:0; }
+.awardParticipation section>div { overflow-wrap:anywhere; }
+.awardPick input { min-height:20px; }
+@media(max-width:819px) {
+  html { scroll-padding-top:90px; scroll-padding-bottom:110px; }
+  /* 16px text avoids automatic input zoom in mobile Safari. */
+  #app input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  #app select,#app textarea,
+  dialog input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  dialog select,dialog textarea { min-width:0; max-width:100%; font-size:16px; }
+  .ladderFilterBar { grid-template-columns:minmax(0,1fr) 112px; }
+  .ladderSearch .input,.ladderMinimum .input { min-height:44px; }
+  .ladderMinimum .input { padding-inline:6px; }
+  .ladderSort .btn { min-height:44px; }
+  .ladderControls__head .ladderRefresh { min-width:44px; min-height:44px; }
+  .usersActions .userAction,.userStatus__select { min-height:44px; }
+  .usersActions .userAction { font-size:12px; }
+  .fcCardInfo { width:44px; height:44px; flex-shrink:0; }
+  .seasonHonours>summary { min-height:80px; }
+  .seasonHonours__stats>summary { min-height:44px; display:list-item; align-content:center; }
+  .seasonOlder { min-height:44px; }
+}
+@media(max-width:600px) {
+  .seasonHonour:last-child:nth-child(odd) { grid-column:1/-1; }
+  .awardParticipation { grid-template-columns:1fr; }
+  .awardActions { gap:8px; }
+  .awardActions .btn { min-height:44px; }
+}
+@media(max-width:360px) {
+  .profileIdentity { gap:12px; }
+  .profileIdentity .playerPhoto--profile { width:58px; height:58px; }
+  .usersActions { grid-column:1/-1; }
+}
+
+/* The season bar shares the matchday surfaces and follows the selected club theme. */
+.seasonCountdown {
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:12px 14px; margin-bottom:16px; border:1px solid var(--line);
+  border-left:3px solid var(--accent); border-radius:8px;
+  background:var(--panel); color:var(--text); box-shadow:none;
+}
+.seasonCountdown .seasonCountdown__main { display:grid; flex:1 1 0; gap:6px; min-width:0; }
+.seasonCountdown strong { color:var(--text); font-size:13px; line-height:1.35; font-weight:800; overflow-wrap:anywhere; }
+.seasonCountdown .seasonCountdown__status { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px; color:var(--muted); font-size:11px; line-height:1.4; }
+.seasonCountdown [data-season-clock] { width:auto; padding:0; color:var(--accent); font:700 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; }
+.seasonCountdown .seasonCountdown__awards { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:9px 11px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--text); font-size:12px; font-weight:800; text-decoration:none; }
+.seasonCountdown__awards svg { width:17px; height:17px; flex:none; color:var(--accent); }
+.seasonCountdown__awards:hover { border-color:var(--accent); }
+.seasonCountdown__awards:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.seasonAwardsButton { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.seasonAwardsButton svg { width:18px; height:18px; flex:none; }
+@media(max-width:700px) {
+  .lb__playerIdentity { display:grid; grid-template-columns:minmax(0,1fr); gap:3px; }
+  .lb__playerIdentity:has(.lbFcThumb) { grid-template-columns:28px minmax(0,1fr); column-gap:5px; }
+  .lb__playerIdentity .lbFcThumb { grid-column:1; grid-row:1/3; width:28px; margin:0; }
+  .lb__playerIdentity .lb__playerText,.lb__playerIdentity .playerAwards { grid-column:-2/-1; min-width:0; }
+  .lb__playerIdentity .playerAwards { flex-wrap:wrap; margin:0; gap:3px; }
+  .lb__playerIdentity .playerLink { display:block; width:100%; max-width:100%; min-height:44px; white-space:normal; overflow-wrap:anywhere; font-size:13px; line-height:1.25; }
+}
+@media(max-width:360px) {
+  .seasonCountdown { gap:10px; padding:11px 10px; }
+  .seasonCountdown .seasonCountdown__awards { gap:5px; padding:9px 8px; }
+}
+@media(max-width:819px) {
+  .ratingPlayerName { white-space:normal; overflow-wrap:anywhere; line-height:1.3; }
+  .awardForm small { font-weight:400; }
+}
+
+/* Optional automation notes must not shift the pitch into an auto-height grid row. */
+.fieldWorkspace { grid-template-areas:"head" "note" "tools" "pitch" "foot"; }
+.fieldWorkspace>.fieldWorkspace__head { grid-area:head; }
+.fieldWorkspace>.fieldAutomationNote { grid-area:note; }
+.fieldWorkspace>.fieldWorkspace__tools { grid-area:tools; }
+.fieldWorkspace>.fieldWorkspace__body { grid-area:pitch; }
+.fieldWorkspace>.fieldWorkspace__foot { grid-area:foot; }
+@media(max-width:819px) {
+  .fieldWorkspace__head .btn,.fieldWorkspace__tools .btn,.fieldWorkspace__foot .btn { min-height:44px; }
+}
+.seasonActions { align-items:stretch; }
+.seasonActions>.btn { display:inline-flex; align-items:center; justify-content:center; }
+@media(max-width:600px) {
+  .seasonActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .seasonActions>.btn { min-width:0; width:100%; padding-inline:10px; }
+}

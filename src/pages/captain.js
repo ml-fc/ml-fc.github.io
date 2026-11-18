@@ -1308,7 +1308,7 @@ export async function renderCaptainPage(root, query) {
     const boostControlHtml=(p,canEdit)=>{
       if(!canEdit) return "";
       const d=drafts[p]||{};
-      return `<div class="ratingBoost"><span>Boost</span><select class="input" data-boost-attribute="${encodeURIComponent(p)}" aria-label="Boost attribute for ${p}"><option value="">None</option>${["PAC","SHO","PAS","DRI","DEF","PHY"].map(value=>`<option value="${value}"${d.boostAttribute===value?" selected":""}>${value}</option>`).join("")}</select><select class="input" data-boost-multiplier="${encodeURIComponent(p)}" aria-label="Boost strength for ${p}">${[-3,-2,-1,1,2,3].map(value=>`<option value="${value}"${Number(d.boostMultiplier||1)===value?" selected":""}>${value>0?"+":""}${value}×</option>`).join("")}</select></div>`;
+      return `<div class="ratingBoost"><span>Boost</span><select class="input" data-boost-attribute="${encodeURIComponent(p)}" aria-label="Boost attribute for ${escapeHtml(p)}"><option value="">None</option>${["PAC","SHO","PAS","DRI","DEF","PHY"].map(value=>`<option value="${value}"${d.boostAttribute===value?" selected":""}>${value}</option>`).join("")}</select><select class="input" data-boost-multiplier="${encodeURIComponent(p)}" aria-label="Boost strength for ${escapeHtml(p)}">${[-3,-2,-1,1,2,3].map(value=>`<option value="${value}"${Number(d.boostMultiplier||1)===value?" selected":""}>${value>0?"+":""}${value}×</option>`).join("")}</select></div>`;
     };
 
     function playerCardHtml(p) {
@@ -1318,15 +1318,15 @@ export async function renderCaptainPage(root, query) {
       const progress = ratingProgress(p, canEdit);
 
       const ratingInput = canEdit
-        ? `<input class="input ratingStatInput" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
+        ? `<input class="input ratingStatInput" data-rating="${encodeURIComponent(p)}" aria-label="Rating for ${escapeHtml(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
         : `<div class="small muted">—</div>`;
 
       const goalsInput = canEdit
-        ? `<input class="input ratingStatInput" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
+        ? `<input class="input ratingStatInput" data-goals="${encodeURIComponent(p)}" aria-label="Goals for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
         : `<div class="small muted">—</div>`;
 
       const assistsInput = canEdit
-        ? `<input class="input ratingStatInput" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
+        ? `<input class="input ratingStatInput" data-assists="${encodeURIComponent(p)}" aria-label="Assists for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
         : `<div class="small muted">—</div>`;
       const hasPlayerActions = isInternalCaptainView || !isOpponentMatch;
 
@@ -1368,13 +1368,13 @@ export async function renderCaptainPage(root, query) {
         const d = drafts[p] || {};
         const progress = ratingProgress(p, canEdit);
         const ratingCell = canEdit
-          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" aria-label="Rating for ${escapeHtml(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
           : `<span class="small muted">—</span>`;
         const goalsCell = canEdit
-          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" aria-label="Goals for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
           : `<span class="small muted">—</span>`;
         const assistsCell = canEdit
-          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" aria-label="Assists for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
           : `<span class="small muted">—</span>`;
         return `
           <tr class="${progress.className}" ${canEdit ? `data-rating-progress="${encodeURIComponent(p)}"` : ""} style="border-top:1px solid rgba(11,18,32,0.06)">
@@ -1403,15 +1403,15 @@ export async function renderCaptainPage(root, query) {
         const progress = ratingProgress(p, canEdit);
 
         const ratingCell = canEdit
-          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-rating="${encodeURIComponent(p)}" aria-label="Rating for ${escapeHtml(p)}" type="number" min="1" max="10" step="0.5" inputmode="decimal" placeholder="1–10" value="${d.rating ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const goalsCell = canEdit
-          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-goals="${encodeURIComponent(p)}" aria-label="Goals for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.goals ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const assistsCell = canEdit
-          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" type="number" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
+          ? `<input class="input ratingTableInput" data-assists="${encodeURIComponent(p)}" aria-label="Assists for ${escapeHtml(p)}" type="number" inputmode="numeric" min="0" max="99" placeholder="0" value="${d.assists ?? ""}" />`
           : `<div class="small muted">—</div>`;
 
         const updateButton = isInternalCaptainView
