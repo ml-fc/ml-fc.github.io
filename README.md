@@ -42,7 +42,7 @@ For every frontend release:
 3. Add any new offline-critical file to `STATIC_ASSETS` in `service-worker.js`.
 4. Run syntax, browser, XSS, and offline checks.
 
-The current release is `2026-11-18.96`.
+The current release is `2026-11-19.97`.
 
 ## Deployment
 
@@ -78,6 +78,11 @@ Start the local server on port 4173, then run the browser checks with Playwright
 ```bash
 npx --package @playwright/cli playwright-cli -s=club-admin open about:blank
 npx --package @playwright/cli playwright-cli -s=club-admin run-code --filename=tests/admin-workspace.browser.js
+npx --package @playwright/cli playwright-cli -s=club-admin run-code --filename=tests/awards.browser.js
 ```
 
 The checks use synthetic seasons, matches and players and intercept every Worker request, including mutations. They cover navigation and legacy URLs, shared seasons, returning from management and scoring, match restrictions, pagination, retained drafts, validation, duplicate submission, lazy tools, errors, keyboard focus, and layouts at 360, 390, 768 and 1280 pixels. Service-worker installation is blocked in this fixture run to keep update reloads separate from interaction checks.
+
+Awards checks cover creating categories during active voting, confirmed removal, fresh participation, voter PNG content/download, Melbourne deadlines, privacy, errors and themed club-tool layouts. Open match actions are always visible; history retains its compact disclosure. Back controls share a compact chevron and return through browser history when the destination matches.
+
+The awards Worker requires `0008_season_awards.sql` and `0009_award_removal.sql` from the sibling API repository. Apply migrations before deploying the Worker and publishing this frontend. Removed draft/active categories retain their snapshots and votes; finished categories remain protected.

@@ -1,3 +1,4 @@
+import { returnTo } from './navigation.js';
 import { API } from '../api/endpoints.js';
 import { toastSuccess, toastError, toastInfo } from './toast.js';
 import { playerPhotoHtml } from './player_photo.js';
@@ -6,6 +7,7 @@ import { getCachedUser } from '../auth.js';
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const awardUrl = seasonId => `${location.origin}${location.pathname}#/awards?seasonId=${encodeURIComponent(seasonId)}`;
 const dateLabel = value => value ? new Date(value).toLocaleString('en-AU', {timeZone:'Australia/Melbourne',dateStyle:'medium',timeStyle:'short'}) + ' Melbourne' : 'Set a voting deadline';
+const deadlineHtml = a => `<p class="awardDeadline"><strong>${a.status==='CLOSED'?'Voting deadline':'Voting closes'}</strong> <time datetime="${esc(a.deadline)}">${esc(dateLabel(a.deadline))}</time></p>`;
 const stateLabel = state => ({DRAFT:'Draft',OPEN:'Voting open',CLOSED:'Final'})[state] || 'Unknown';
 export function liveSeasonLeaders(rows) {
   const source=Array.isArray(rows)?rows:[];
@@ -62,7 +64,7 @@ export async function openSeasonAwards(seasonId) {
     data=check(ballot);
     if(!modal.open)return;
     modal.querySelector('.awardsDialog__head p').textContent=data.season.name;
-    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Nominees lock when voting opens. Votes stay private until voting closes.</p></div><button class="btn primary" data-add type="button">+ Add award</button></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees · ${esc(dateLabel(a.deadline))}</p>${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button>${a.kind==='CUSTOM'?'<button class="btn gray" data-command="delete" type="button">Remove draft</button>':''}</div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voting card</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
+    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Add awards at any time. Draft and active awards can be removed. Nominees lock when voting opens; individual choices stay private.</p></div><button class="btn primary" data-add type="button">+ Add award</button></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees</p>${deadlineHtml(a)}${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button></div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voter image</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
     body.querySelector('[data-add]').onclick=()=>editAward(null,data,refresh);
     body.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
     for(const card of body.querySelectorAll('[data-award]')) {
@@ -71,15 +73,20 @@ export async function openSeasonAwards(seasonId) {
       card.querySelector('[data-edit]')?.addEventListener('click',()=>editAward(a,data,refresh));
       card.querySelector('[data-share]')?.addEventListener('click',e=>run(e.currentTarget,async()=>{
         const fresh=check(await API.seasonAwards(seasonId,true)).awards.find(x=>x.awardId===a.awardId);
-        await shareParticipation(fresh,data.season.name);
+        if(!fresh)throw new Error('This award was removed. Refresh awards to continue.');
+        if(modal.open)await shareParticipation(fresh,data.season.name);
       }));
-      card.querySelector('[data-participation]')?.addEventListener('click',()=>showParticipation(a));
+      card.querySelector('[data-participation]')?.addEventListener('click',e=>run(e.currentTarget,async()=>{
+        const fresh=check(await API.seasonAwards(seasonId,true)).awards.find(x=>x.awardId===a.awardId);
+        if(!fresh)throw new Error('This award was removed. Refresh awards to continue.');
+        if(modal.open)showParticipation(fresh,data.season.name);
+      }));
       for(const button of card.querySelectorAll('[data-command]'))button.onclick=()=>run(button,async()=>{
         const command=button.dataset.command;
-        if(command==='delete' && !confirm(`Remove the ${a.name} draft?`))return;
+        if(command==='delete' && !confirm(a.status==='OPEN' ? `Remove ${a.name}? Voting for this award will stop and it will disappear from the ballot. Its ${Number(a.totalVotes) || 0} existing votes will be retained. Other awards are unchanged.` : `Remove ${a.name}?`))return;
         if(command==='close' && !confirm(`Close ${a.name} voting and publish the winners?`))return;
         check(await API.awardCommand(a.awardId,command==='remind'?'notify':command,{revision:a.revision,pendingOnly:command==='remind',round:crypto.randomUUID()}));
-        toastSuccess(command==='notify'||command==='remind'?'Voting notifications sent.':command==='open'?'Voting opened. Share the link or notify players.':command==='delete'?'Draft removed.':'Voting closed. Winners published.');
+        toastSuccess(command==='notify'||command==='remind'?'Voting notifications sent.':command==='open'?'Voting opened. Share the link or notify players.':command==='delete'?'Award removed.':'Voting closed. Winners published.');
         await refresh();
       });
     }
@@ -91,8 +98,9 @@ function editAward(a,data,refresh) {
   const modal=dialog(a?'Configure award':'Create an award',data.season.name);
   const body=modal.querySelector('.awardsDialog__body');
   let selected=new Set((a?.nominees || []).map(n=>n.playerName));
-  const localDeadline=a?.deadline ? new Date(Date.parse(a.deadline)-new Date(a.deadline).getTimezoneOffset()*60000).toISOString().slice(0,16) : '';
-  body.innerHTML=`<form class="awardForm"><label class="field">Award name<input class="input" name="name" required maxlength="80" value="${esc(a?.name || '')}" placeholder="e.g. Players’ player" /></label><label class="field">Voting closes<input class="input" name="deadline" type="datetime-local" required value="${esc(localDeadline)}" /><small class="small">Your device’s local time. Players see the Melbourne time.</small></label><div class="awardSelectionSummary"><div><strong data-count></strong><p class="small">Choose players who appeared in this season.</p></div><button class="btn" data-nominees type="button">Choose nominees</button></div><div data-selected class="awardNomineeStrip"></div><p class="small">At least two nominees are needed to open voting. You can save a draft first.</p><button class="btn primary" type="submit">Save award</button></form>`;
+  const deadline=a?.deadline || data.awards.filter(x=>x.status==='OPEN' && Date.parse(x.deadline)>Date.now()).map(x=>x.deadline).sort()[0] || '';
+  const localDeadline=deadline ? new Date(Date.parse(deadline)-new Date(deadline).getTimezoneOffset()*60000).toISOString().slice(0,16) : '';
+  body.innerHTML=`<form class="awardForm"><label class="field">Award name<input class="input" name="name" required maxlength="80" value="${esc(a?.name || '')}" placeholder="e.g. Players’ player" /></label><label class="field">Voting closes<input class="input" name="deadline" type="datetime-local" required value="${esc(localDeadline)}" /><small class="small">Your device’s local time. Players see the Melbourne time.</small></label><div class="awardSelectionSummary"><div><strong data-count></strong><p class="small">Choose players who appeared in this season.</p></div><button class="btn" data-nominees type="button">Choose nominees</button></div><div data-selected class="awardNomineeStrip"></div><p class="small">At least two nominees are needed to open voting. Save this draft, then open its voting from the awards desk. Existing awards keep their votes.</p><button class="btn primary" type="submit">Save award</button></form>`;
   const paint=()=>{body.querySelector('[data-count]').textContent=`${selected.size} nominees selected`;body.querySelector('[data-selected]').innerHTML=[...selected].map(n=>`<span>${esc(n)}</span>`).join('');};paint();
   body.querySelector('[data-nominees]').onclick=()=>{
     const picker=dialog('Choose nominees',`${data.players.length} season players`);
@@ -113,25 +121,33 @@ function editAward(a,data,refresh) {
     modal.close();toastSuccess('Award saved.');await refresh();
   });};
 }
-function showParticipation(a) {
+function showParticipation(a,seasonName) {
   const modal=dialog(a.name,'Participation only. Individual choices remain private.');
-  modal.querySelector('.awardsDialog__body').innerHTML=`${participation(a)}<div class="awardParticipation">${[['Voted',a.voted],['Not voted',a.pending]].map(([title,names])=>`<section><h3>${title} <small>${names.length}</small></h3>${names.map(n=>`<div>${title==='Voted'?'✓':'○'} ${esc(n)}</div>`).join('') || '<p class="small">No players</p>'}</section>`).join('')}</div>`;
+  modal.querySelector('.awardsDialog__body').innerHTML=`${deadlineHtml(a)}${participation(a)}<div class="awardParticipation">${[['Voted',a.voted],['Not voted',a.pending]].map(([title,names])=>`<section><h3>${title} <small>${names.length}</small></h3>${names.map(n=>`<div>${title==='Voted'?'✓':'○'} ${esc(n)}</div>`).join('') || '<p class="small">No players</p>'}</section>`).join('')}</div><div class="awardActions"><button class="btn primary" type="button" data-share-participation>Share voter image</button></div>`;
+  modal.querySelector('[data-share-participation]').onclick=e=>run(e.currentTarget,async()=>{
+    const fresh=check(await API.seasonAwards(a.seasonId,true)).awards.find(x=>x.awardId===a.awardId);
+    if(!fresh)throw new Error('This award was removed. Refresh awards to continue.');
+    if(modal.open)await shareParticipation(fresh,seasonName);
+  });
 }
 async function shareParticipation(a,seasonName) {
+  const routeHash=location.hash;
   const canvas=document.createElement('canvas');canvas.width=1200;
   const groups=[a.voted || [],a.pending || []];
-  canvas.height=500+Math.max(1,...groups.map(g=>g.length))*48;
+  canvas.height=590+Math.max(1,...groups.map(g=>g.length))*48;
   const c=canvas.getContext('2d');c.fillStyle='#0a1726';c.fillRect(0,0,canvas.width,canvas.height);
   c.fillStyle='#e3bc66';c.font='bold 30px Arial';c.fillText('MANOR LAKES FC · SEASON AWARDS',60,70);
   c.fillStyle='#ffffff';c.font='bold 54px Arial';c.fillText(a.name,60,150,1080);
   c.fillStyle='#bcd0df';c.font='28px Arial';c.fillText(seasonName,60,205,1080);c.fillText(`${Number(a.totalVotes) || 0} of ${Number(a.totalEligible) || 0} voted · ${stateLabel(a.status)}`,60,258);
-  groups.forEach((names,i)=>{const x=60+i*590;c.fillStyle=i?'#e3bc66':'#6ed5ad';c.font='bold 28px Arial';c.fillText(i?'NOT VOTED':'VOTED',x,345);c.font='26px Arial';names.forEach((n,j)=>c.fillText(`${i?'○':'✓'} ${n}`,x,400+j*48,520));});
-  c.fillStyle='#bcd0df';c.font='22px Arial';c.fillText('Participation at time of sharing · Individual votes are private',60,canvas.height-40);
+  c.fillStyle='#e3bc66';c.font='24px Arial';c.fillText(`Voting deadline: ${dateLabel(a.deadline)}`,60,310,1080);
+  groups.forEach((names,i)=>{const x=60+i*590;c.fillStyle=i?'#e3bc66':'#6ed5ad';c.font='bold 28px Arial';c.fillText(i?'NOT VOTED':'VOTED',x,395);c.font='26px Arial';names.forEach((n,j)=>c.fillText(`${i?'○':'✓'} ${n}`,x,450+j*48,520));});
+  c.fillStyle='#bcd0df';c.font='22px Arial';c.fillText(`As of ${dateLabel(new Date().toISOString())} · Individual choices are private`,60,canvas.height-40,1080);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Could not create the voting card');
   const file=new File([blob],'mlfc-awards-voting.png',{type:'image/png'});
-  const text=`🏆 ${a.name} · ${seasonName}\n${Number(a.totalVotes) || 0} of ${Number(a.totalEligible) || 0} have voted.\n${awardUrl(a.seasonId)}`;
+  const text=`🏆 ${a.name} · ${seasonName}\n${Number(a.totalVotes) || 0} of ${Number(a.totalEligible) || 0} have voted.\nVoting deadline: ${dateLabel(a.deadline)}\n${awardUrl(a.seasonId)}`;
   // Provide a second user gesture for mobile file sharing after asynchronous image generation.
-  const modal=dialog('Share voting card','Share the image and voting link with your group.');
+  if(location.hash!==routeHash)return;
+  const modal=dialog('Share voter image','Voted and pending players, plus the voting deadline.');
   const host=modal.querySelector('.awardsDialog__body');
   const objectUrl=URL.createObjectURL(file);
   modal.addEventListener('close',()=>URL.revokeObjectURL(objectUrl),{once:true});
@@ -155,8 +171,8 @@ export async function renderAwardsPage(root,query,routeToken,navigation={}) {
     const data=check(ballot);
     if(!root.isConnected || root.dataset.awardsGeneration!==generation)return;
     const user=getCachedUser();
-    root.innerHTML=`<header class="awardsPageHeader"><a class="awardsPageHeader__control" href="${esc(backHash)}" data-awards-back aria-label="Back to previous screen"><span aria-hidden="true">‹</span><span class="awardsPageHeader__controlLabel">Back</span></a><div class="awardsPageHeader__title"><h1>Season awards</h1><p>${esc(data.season.name)}</p></div><button class="awardsPageHeader__control" data-refresh type="button" aria-label="Refresh awards and leaders" title="Refresh awards and leaders">↻</button></header>${leadersHtml(leaders)}<div class="awardBallots">${data.awards.length?data.awards.map(a=>`<article class="card awardBallot" data-id="${esc(a.awardId)}"><div class="awardCardHead"><h2>${esc(a.name)}</h2><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span></div>${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`<p class="small">${esc(dateLabel(a.deadline))}</p>${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="small">${a.canVote?'One vote. Choose any nominee except yourself. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees">${a.nominees.map(n=>{const disabled=!a.canVote || n.playerName.toLowerCase()===String(user?.name).toLowerCase();return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong><small>${n.overall?`${Number(n.overall)} OVR · ${esc(n.position || '')}`:'Season nominee'}</small></span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Your vote: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</article>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
-    root.querySelector('[data-awards-back]').onclick=event=>{if(validPrevious && previousHash===backHash && history.length>1){event.preventDefault();history.back();}};
+    root.innerHTML=`<header class="awardsPageHeader"><a class="awardsPageHeader__control pageBack" href="${esc(backHash)}" data-awards-back aria-label="Back to previous screen"><span aria-hidden="true">‹</span><span class="awardsPageHeader__controlLabel">Back</span></a><div class="awardsPageHeader__title"><h1>Season awards</h1><p>${esc(data.season.name)}</p></div><button class="awardsPageHeader__control" data-refresh type="button" aria-label="Refresh awards and leaders" title="Refresh awards and leaders">↻</button></header>${leadersHtml(leaders)}<div class="awardBallots">${data.awards.length?data.awards.map(a=>`<article class="card awardBallot" data-id="${esc(a.awardId)}"><div class="awardCardHead"><h2>${esc(a.name)}</h2><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span></div>${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`${deadlineHtml(a)}${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="small">${a.canVote?'One vote. Choose any nominee except yourself. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees">${a.nominees.map(n=>{const disabled=!a.canVote || n.playerName.toLowerCase()===String(user?.name).toLowerCase();return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong><small>${n.overall?`${Number(n.overall)} OVR · ${esc(n.position || '')}`:'Season nominee'}</small></span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Your vote: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</article>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
+    root.querySelector('[data-awards-back]').onclick=event=>{event.preventDefault();returnTo(backHash,previousHash);};
     root.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
     root.querySelectorAll('[data-id] form').forEach(form=>form.onsubmit=e=>{e.preventDefault();const candidate=new FormData(form).get('candidate');if(!candidate)return;run(form.querySelector('[type=submit]'),async()=>{check(await API.awardVote(form.closest('[data-id]').dataset.id,candidate));toastSuccess('Vote saved.');await refresh();});});
   };

@@ -151,7 +151,9 @@ async (page) => {
   await page.keyboard.press('Escape');
   await desk.locator('#goOpen').click();
   const active = desk.locator('.adminMatchRow').filter({has:page.locator('[data-manage="FIXTURE-ACTIVE"]')});
-  await active.locator('summary').click();
+  await active.locator('[data-stream]').waitFor({state:'visible'});
+  assert(await active.locator('summary').count()===0,'Open matches show actions directly');
+  assert(await active.locator('[data-stream]').isVisible(),'Streaming visible without an extra click');
   await active.locator('[data-lock]').click();
   await page.locator('#adminVotingDialog').waitFor();
   assert(!calls.some(c=>c.action==='admin_lock_ratings'),'POTM required before completion');
@@ -229,6 +231,7 @@ async (page) => {
     for (const theme of themes) {
       applyWeeklyTheme({enabled:true,theme});
       const card = document.querySelector('#listArea > .card');
+      if (getComputedStyle(document.querySelector('.adminDesk')).zIndex!=='2') throw new Error('Workspace must be above theme portrait');
       if (getComputedStyle(card).backgroundColor.startsWith('rgba')) throw new Error('Operational surface must be opaque');
       if (document.documentElement.scrollWidth>innerWidth) throw new Error('Theme introduces horizontal overflow');
     }
@@ -236,7 +239,7 @@ async (page) => {
     return themes.length;
   });
   await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
-  assert(await desk.locator('.adminMoreActions summary').last().evaluate(el=>el.getBoundingClientRect().bottom<document.querySelector('.bottomnav').getBoundingClientRect().top),'Last card clears bottom navigation when scrolled to the end');
+  assert(await desk.locator('[data-delete-match]').last().evaluate(el=>el.getBoundingClientRect().bottom<document.querySelector('.bottomnav').getBoundingClientRect().top),'Last card clears bottom navigation when scrolled to the end');
   const title=matches[0].title;
   matches[0].title='<img src=x onerror="window.fixtureXss=1">';
   await desk.locator('#refreshAdminMatches').click();

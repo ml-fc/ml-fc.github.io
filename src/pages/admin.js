@@ -1,3 +1,4 @@
+import { returnTo, backIcon } from '../ui/navigation.js';
 import { openSeasonAwards } from '../ui/awards.js';
 import { updateSeasonCreation } from '../ui/season_honours.js';
 import { drawFcCard } from "../ui/fc_card.js";
@@ -1169,9 +1170,8 @@ function matchRowHtml(m, view) {
         <button class="btn primary" data-manage="${escapeHtml(m.publicCode)}" ${disableManage ? "disabled" : ""}>Manage</button>
         <button class="btn gray" data-score="${escapeHtml(m.publicCode)}" ${isEditLocked || !hasStarted ? "disabled" : ""} title="${hasStarted ? "" : "Available after kick-off"}">Score & ratings</button>
       </div>
-      ${isEditLocked ? '<p class="field__help">Read-only match. Unlock from More actions to edit.</p>' : !hasStarted ? '<p class="field__help">Scoring and voting become available after kick-off.</p>' : ""}
-      <details class="adminMoreActions">
-        <summary>More actions<span class="visuallyHidden"> for ${escapeHtml(m.title)}</span></summary>
+      ${isEditLocked ? '<p class="field__help">Read-only match. Unlock match to edit.</p>' : !hasStarted ? '<p class="field__help">Scoring and voting become available after kick-off.</p>' : ""}
+      ${view === "open" ? '<div class="adminOpenActions">' : `<details class="adminMoreActions"><summary>More actions<span class="visuallyHidden"> for ${escapeHtml(m.title)}</span></summary>`}
         <div class="adminMatchRow__actions">
         <button class="btn ${stream === "LIVE" ? "streamLiveButton" : "gray"}" data-stream="${escapeHtml(m.publicCode)}">${stream === "LIVE" ? "Streaming" : stream === "READY" ? "Stream ready" : stream === "ENDED" ? "Replay" : "Stream"}</button>
         ${(!isCompleted && !locked) || potmVotingStarted ? `<button class="btn ${potmVotingClosed ? "whatsappBtn" : hasStarted ? "good" : "gray"}" data-manage-voting="${escapeHtml(m.matchId)}" ${potmVotingStarted || (hasStarted && !isEditLocked) ? "" : "disabled"} title="${potmVotingClosed ? "View and share the POTM result" : hasStarted ? "Manage POTM voting" : "Available after kick-off"}">${potmVotingClosed ? "POTM result" : potmVotingStarted ? "Manage voting" : "Voting"}</button>` : ""}
@@ -1180,7 +1180,7 @@ function matchRowHtml(m, view) {
         ${isEditLocked ? `<button class="btn gray" data-unlock="${escapeHtml(m.matchId)}">Unlock match</button>` : ""}
         <div class="adminDestructive"><button class="btn dangerGhost" data-delete-match="${escapeHtml(m.matchId)}">Delete match</button></div>
         </div>
-      </details>
+      ${view === "open" ? "</div>" : "</details>"}
     </article>
   `;
 }
@@ -1211,7 +1211,7 @@ function renderAdminShell(root, view) {
         <a href="#/admin?view=announcements"><strong>Announcements <span aria-hidden="true">↗</span></strong><span>Messages to registered players</span></a>
       </div>
     </section>
-    <div id="clubToolBack"><a class="btn gray" href="#/admin?view=club">← Club management</a></div>
+    <div id="clubToolBack"><a class="pageBack" href="#/admin?view=club" aria-label="Back to Club management">${backIcon}<span>Back</span></a><span>Club management</span></div>
     <div id="seasonToolContext" class="card"></div>
 
     <section class="card" id="seasonMgmt">
@@ -1359,6 +1359,9 @@ function showAdminWorkspace(root, view) {
     playersTool: view === "users", listArea: matches, manageArea: view === "manage"
   })) root.querySelector(`#${id}`).hidden = !show;
   // Move the single shared selector rather than showing a second selector.
+  root.querySelector('#clubToolBack a').onclick = event => {
+    event.preventDefault();returnTo('#/admin?view=club', root.dataset.adminPreviousHash);
+  };
   const context = view === "seasons" ? root.querySelector("#seasonToolContext") : root.querySelector(".adminMatchToolbar");
   context.prepend(root.querySelector("#seasonBlock"));
   for (const filter of ["open", "past"]) {
@@ -1650,9 +1653,9 @@ function bindSeasonMgmt(root, routeToken) {
                   <span style="margin-left:8px">${escapeHtml(s.startDate)} → ${escapeHtml(s.endDate)}</span>
                 </div>
               </div>
-              <div class="row" style="gap:8px; flex-wrap:nowrap; flex-shrink:0">
+              <div class="row adminSeasonActions" style="gap:8px; flex-wrap:nowrap; flex-shrink:0">
                 <button class="btn gray" data-season-edit="${escapeHtml(s.seasonId)}">Edit</button>
-                <button class="btn gray" data-season-del="${escapeHtml(s.seasonId)}">Delete</button>
+                <button class="btn dangerGhost" data-season-del="${escapeHtml(s.seasonId)}">Delete</button>
               </div>
             </div>
           </div>
@@ -2764,7 +2767,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
         </div>
       </div>
       <div class="manageCommand__actions">
-        <button class="btn gray" id="backToAdminList">Back to matches</button>
+        <button class="pageBack" id="backToAdminList" type="button" aria-label="Back to matches">${backIcon}<span>Back</span></button>
         <button class="btn primary" id="shareMatch">Share match link</button>
       </div>
       <div class="manageCommand__notice" id="lockReason">${locked || isCompleted ? "Completed matches are read-only. Return to the match list to unlock." : !hasBothScores ? "Complete & lock becomes available in the match list after both scores are saved." : !potmReady ? "Select Player of the Match before completing from the match list." : "This match can be completed from the match list once all ratings have been checked."}</div>
@@ -2824,7 +2827,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
 
   manageArea.querySelector("#backToAdminList").onclick = () => {
     const target = prevView === "past" ? "past" : "open";
-    location.hash = `#/admin?view=${target}`;
+    returnTo(`#/admin?view=${target}`, root.dataset.adminPreviousHash);
   };
 
   manageArea.querySelector("#shareMatch").onclick = () => {
@@ -3457,7 +3460,8 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
    Main entry
    ======================= */
 
-export async function renderAdminPage(root, query) {
+export async function renderAdminPage(root, query, token, navigation = {}) {
+  if (navigation.previousHash && navigation.previousHash !== location.hash) root.dataset.adminPreviousHash = navigation.previousHash;
   cleanupCaches();
 
   const routeToken = (window.__mlfcAdminToken = String(Math.random()));

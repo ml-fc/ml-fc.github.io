@@ -1,3 +1,4 @@
+import { returnTo, backIcon } from '../ui/navigation.js';
 import { FIELD_POSITIONS, mountTeamField, positionMap, positionRows, fieldPositionCode } from "../ui/team_field.js";
 // src/pages/captain.js
 import { API } from "../api/endpoints.js";
@@ -300,7 +301,7 @@ function getScopeFromHash() {
   }
 }
 
-export async function renderCaptainPage(root, query) {
+export async function renderCaptainPage(root, query, token, navigation = {}) {
   const code = query.get("code");
 
   // IMPORTANT: don't rely only on cached user, because admin status might change after login.
@@ -621,7 +622,7 @@ export async function renderCaptainPage(root, query) {
       <div class="small captainCommand__context" style="margin-top:6px">${adminMode ? `<b>Admin scoring mode</b> · You can enter both sides and rate any player.` : `<b>Captain:</b> ${escapeHtml(captain)}${type === "INTERNAL" && captainTeam ? ` • <b>Your team:</b> ${escapeHtml(captainTeam)}` : ""}`}</div>
       ${(!adminMode && type === "INTERNAL" && captainTeam) ? `<div class="small inlineNote captainCommand__context">You can only rate/update <b>opponent</b> players.</div>` : ""}
       <div class="row ${adminMode ? "" : "captainCommand__context"}" style="margin-top:12px; gap:10px; flex-wrap:wrap">
-        <button class="btn gray" id="openMatch">${adminMode ? "Back to matches" : "Open match"}</button>
+        <button class="${adminMode ? "pageBack" : "btn gray"}" id="openMatch" type="button" ${adminMode ? 'aria-label="Back to matches"' : ""}>${adminMode ? `${backIcon}<span>Back</span>` : "Open match"}</button>
       </div>
       <button class="btn primary captainWizardLauncher${!adminMode && hasStarted && !initialDutyStatus.complete ? " isDue" : ""}" id="openRatingWizard" type="button" aria-haspopup="dialog"><span>Open rating wizard</span><small id="ratingWizardProgress">${initialDutyStatus.completed}/${initialDutyStatus.required} rated</small></button>
     </div>
@@ -946,9 +947,8 @@ export async function renderCaptainPage(root, query) {
   } catch {}
 
   root.querySelector("#openMatch").onclick = () => {
-    location.hash = adminMode
-      ? `#/admin?view=${new URLSearchParams(location.hash.split("?")[1] || "").get("prev") === "past" ? "past" : "open"}`
-      : `#/match?code=${encodeURIComponent(code)}`;
+    const target = adminMode ? `#/admin?view=${query.get("prev") === "past" ? "past" : "open"}` : `#/match?code=${encodeURIComponent(code)}`;
+    returnTo(target, navigation.previousHash);
   };
 
   root.querySelector("#submitScore").onclick = async () => {

@@ -1,0 +1,142 @@
+// playwright-cli run-code --filename=tests/awards.browser.js
+// Isolated browser fixtures; no production API requests or mutations.
+async (page) => {
+  const context = await page.context().browser().newContext({serviceWorkers:'block', acceptDownloads:true});
+  page = await context.newPage();
+  try {
+    const assert = (ok, message) => { if (!ok) throw new Error(message); };
+    const errors = [], calls = [];
+    page.on('pageerror', e => errors.push(e.message));
+    const season = {seasonId:'fixture-awards',name:'Summer season',status:'OPEN',startDate:'2026-01-01',endDate:'2099-12-31'};
+    const deadline = '2099-12-20T08:00:00.000Z';
+    const players = ['Admin','Alice','Bob','Carol'];
+    const award = (id,name,status='OPEN') => ({awardId:id,seasonId:season.seasonId,name,kind:'CUSTOM',status,deadline,revision:1,nominees:players.map(playerName=>({playerName})),totalVotes:1,totalEligible:4,voted:['Alice'],pending:['Admin','Bob','Carol'],myVote:'',canVote:status==='OPEN'});
+    let awards = [award('active','Players’ player'),{...award('final','Final category','CLOSED'),winners:['Alice'],results:[{playerName:'Alice',votes:1}]}];
+    let failParticipation = false;
+    await page.addInitScript(() => {
+      window.fixtureDrawnText = [];
+      const original = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function(text,...args) {window.fixtureDrawnText.push(String(text)); return original.call(this,text,...args);};
+    });
+    await page.route('https://mlfc-api.manorlakes-football.workers.dev/**', async route => {
+      const req = route.request();
+      const params = req.method()==='POST' ? new URLSearchParams(req.postData()) : new URL(req.url()).searchParams;
+      const action = params.get('action'); calls.push({action,payload:Object.fromEntries(params)});
+      let data = {ok:true};
+      if(action==='me')data={ok:true,user:{name:'Admin',isAdmin:1,photoUrl:'/assets/icons/icon-192.png',phone:'',email:'',emailVerifiedAt:''}};
+      if(action==='seasons') data={ok:true,seasons:[season],currentSeasonId:season.seasonId};
+      if(action==='admin_list_matches')data={ok:true,matches:[]};
+      if(action==='admin_users')data={ok:true,users:[]};
+      if(action==='admin_theme_settings')data={ok:true,enabled:false,theme:null};
+      if(action==='notifications')data={ok:true,notifications:[],unreadCount:0};
+      if(action==='leaderboard_season')data={ok:true,rows:[]};
+      if(action==='admin_season_awards'||action==='season_awards'){
+        data=failParticipation?{ok:false,error:'Fixture network unavailable'}:{ok:true,season,players,awards:awards.map(a=>action==='season_awards'?Object.fromEntries(Object.entries(a).filter(([k])=>!['voted','pending'].includes(k))):a)};
+      }
+      if(action==='admin_award_save')awards.push({...award('added',params.get('name'),'DRAFT'),deadline:params.get('deadline'),nominees:JSON.parse(params.get('nominees')).map(playerName=>({playerName})),totalVotes:0,voted:[],pending:players});
+      if(action==='admin_award_open')Object.assign(awards.find(a=>a.awardId===params.get('awardId')),{status:'OPEN',revision:2});
+      if(action==='admin_award_delete')awards=awards.filter(a=>a.awardId!==params.get('awardId'));
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+    });
+    await page.goto('http://127.0.0.1:4173/manifest.json');
+    await page.evaluate(() => {
+      localStorage.clear(); sessionStorage.clear();
+      localStorage.setItem('mlfc_token_v1','fixture-only');
+      localStorage.setItem('mlfc_user_v1',JSON.stringify({name:'Admin',isAdmin:1,photoUrl:'/assets/icons/icon-192.png',phone:'',email:'',emailVerifiedAt:''}));
+    });
+    await page.goto('http://127.0.0.1:4173/#/admin?view=club');
+    const desk = page.locator('.adminDesk');
+    await desk.locator('.adminTools a[href*="seasons"]').click();
+    await desk.locator('#seasonAwards').waitFor();
+    await page.evaluate(async()=>{
+      const {GOAT_THEMES,applyWeeklyTheme}=await import('/src/themes.js');
+      applyWeeklyTheme({enabled:true,theme:GOAT_THEMES.find(t=>!t.collective)});
+    });
+    for(const view of ['seasons','users','appearance','announcements']){
+      await page.evaluate(view=>{location.hash=`#/admin?view=${view}`;},view);
+      await desk.locator('#clubToolBack').waitFor({state:'visible'});
+      assert(await desk.locator('#clubToolBack .pageBack').count()===1,`${view} uses common Back`);
+      for(const width of [360,1280]){
+        await page.setViewportSize({width,height:900});
+        assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${view} no overflow at ${width}`);
+        await page.screenshot({path:`output/playwright/club-${view}-${width}.png`});
+      }
+    }
+    await desk.locator('#clubToolBack a').click();
+    await desk.locator('#clubOverview').waitFor({state:'visible'});
+    await desk.locator('.adminTools a[href*="seasons"]').click();
+    await desk.locator('#clubToolBack a').click();
+    await desk.locator('#clubOverview').waitFor({state:'visible'});
+    await page.goForward();
+    await desk.locator('#seasonMgmt').waitFor({state:'visible'});
+    await desk.locator('#seasonAwards').click();
+    const main = page.getByRole('dialog',{name:'Season awards',exact:true});
+    const active = main.locator('[data-award="active"]');
+    await active.locator('[data-command="delete"]').waitFor();
+    assert(await main.locator('[data-award="final"] [data-command="delete"]').count()===0,'Finished category protected');
+    assert((await active.locator('.awardDeadline').innerText()).includes('Melbourne'),'Explicit Melbourne deadline');
+    await page.setViewportSize({width:390,height:844});
+    await page.screenshot({path:'output/playwright/awards-desk-phone.png'});
+    const before=calls.filter(c=>c.action==='admin_season_awards').length;
+    awards[0]={...awards[0],totalVotes:2,voted:['Alice','Bob'],pending:['Admin','Carol']};
+    await active.locator('[data-participation]').click();
+    const participation = page.getByRole('dialog',{name:'Players’ player',exact:true});
+    await participation.waitFor();
+    assert(calls.filter(c=>c.action==='admin_season_awards').length===before+1,'Who voted fetches current participation');
+    assert((await participation.locator('.awardParticipation section').first().innerText()).includes('Bob'),'Latest voter displayed');
+    assert(!await participation.getByText('Your vote:').count(),'Choices kept private');
+    await participation.locator('[data-share-participation]').click();
+    const share = page.getByRole('dialog',{name:'Share voter image',exact:true});
+    await share.locator('img').waitFor();
+    await share.locator('img').evaluate(img=>img.decode());
+    const text=await page.evaluate(()=>window.fixtureDrawnText);
+    assert(text.some(t=>t.includes('Voting deadline:')&&t.includes('Melbourne')),'Image includes deadline');
+    assert(text.some(t=>t.includes('✓ Bob'))&&text.some(t=>t.includes('○ Carol')),'Image includes voted and pending players');
+    assert(text.some(t=>t.startsWith('As of')),'Image includes generation time');
+    const downloadPromise=page.waitForEvent('download');
+    await share.getByText('Download image',{exact:true}).click();
+    const download=await downloadPromise;
+    assert(download.suggestedFilename()==='mlfc-awards-voting.png','PNG download available');
+    await download.saveAs('output/playwright/awards-voter-image.png');
+    await page.screenshot({path:'output/playwright/awards-share-phone.png'});
+    await page.keyboard.press('Escape');
+    await participation.waitFor({state:'visible'});
+    await page.keyboard.press('Escape');
+    await main.waitFor({state:'visible'});
+    page.once('dialog',d=>d.dismiss());
+    await active.locator('[data-command="delete"]').click();
+    assert(!calls.some(c=>c.action==='admin_award_delete'),'Cancelling removal sends no mutation');
+    await main.locator('[data-add]').click();
+    const create=page.getByRole('dialog',{name:'Create an award',exact:true});
+    assert(await create.locator('[name="deadline"]').inputValue()!=='','New category inherits current cutoff');
+    await create.locator('[name="name"]').fill('Added during voting');
+    await create.locator('[data-nominees]').click();
+    const picker=page.getByRole('dialog',{name:'Choose nominees',exact:true});
+    await picker.getByLabel('Alice',{exact:true}).check();
+    await picker.getByLabel('Bob',{exact:true}).check();
+    await picker.locator('[data-done]').click();
+    await create.getByRole('button',{name:'Save award',exact:true}).click();
+    const added=main.locator('[data-award="added"]');
+    await added.locator('[data-command="open"]').click();
+    await added.locator('[data-participation]').waitFor();
+    assert(awards.find(a=>a.awardId==='active').totalVotes===2,'Adding a category preserves existing votes');
+    page.once('dialog',d=>d.accept());
+    await active.locator('[data-command="delete"]').click();
+    await active.waitFor({state:'detached'});
+    assert(await added.isVisible(),'Removing one award leaves added category active');
+    failParticipation=true;
+    await added.locator('[data-participation]').click();
+    await page.getByText('Fixture network unavailable',{exact:true}).waitFor();
+    assert(!await added.locator('[data-participation]').isDisabled(),'Participation error permits retry');
+    failParticipation=false;
+    await page.keyboard.press('Escape');
+    await page.evaluate(()=>{location.hash='#/awards?seasonId=fixture-awards';});
+    const ballots=page.locator('.awardBallots');
+    await ballots.locator('[data-id="added"]').waitFor();
+    assert(await ballots.locator('[data-id="active"]').count()===0,'Removed award hidden from player ballot');
+    assert((await ballots.locator('[data-id="added"] .awardDeadline').innerText()).includes('Voting closes'),'Player deadline visible');
+    assert(await ballots.locator('[data-participation]').count()===0,'No admin participation control on player ballot');
+    assert(errors.length===0,`No runtime errors: ${errors.join('; ')}`);
+    return {result:'passed',checks:'active category add/remove, confirmations, deadline, fresh voter lists, PNG download, image content, privacy, errors, Back/Forward, all club tools, themed mobile and desktop layouts'};
+  } finally {await context.close();}
+}
