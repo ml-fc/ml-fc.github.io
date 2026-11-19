@@ -1693,11 +1693,12 @@ details.card[open] > summary { margin-bottom: 14px; }
 .quickResponse__yes { box-shadow: inset 4px 0 #34d399; }
 .quickResponse__no { box-shadow: inset 4px 0 #f87171; }
 .nextMatch__primary { min-width: min(100%, 190px); }
-.nextMatch__lastResult { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; margin-top: 16px; padding-top: 15px; border-top: 1px solid rgba(156, 203, 224, .24); }
-.nextMatch__lastLabel { padding-top: 5px; color: #72d7fa; font: 900 9px/1.2 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+/* The completed match is a separate card from the upcoming fixture. */
+.nextMatch__lastResult { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: start; margin-top: 18px; padding: clamp(18px, 2.5vw, 26px); color: #f5f9fb; background: #0a2539; border: 1px solid #28536a; border-left: 4px solid var(--accent); border-radius: 8px; }
+.nextMatch__lastLabel { grid-column: 1 / -1; margin: 0; color: #72d7fa; font: 900 12px/1.2 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
 .nextMatch__lastSummary { display: grid; min-width: 0; gap: 5px; }
-.nextMatch__lastScore { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
-.nextMatch__lastScore b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nextMatch__lastScore { display: flex; flex-wrap: wrap; min-width: 0; align-items: baseline; gap: 6px 10px; }
+.nextMatch__lastScore b { min-width: 0; overflow-wrap: anywhere; }
 .nextMatch__lastScore strong { flex: 0 0 auto; font-size: 19px; }
 .nextMatch__lastEvents { display: grid; gap: 6px; color: #d9e8ef; font-size: 11px; line-height: 1.35; }
 .nextMatch__contribution { display: flex; min-width: 0; align-items: center; gap: 7px; }
@@ -1712,7 +1713,7 @@ details.card[open] > summary { margin-bottom: 14px; }
 .nextMatch__potmWinner > span:last-child { display:inline-flex; align-items:center; gap:3px; }
 .nextMatch__potmWinner i { font-style:normal; }
 .playerPhoto--homePotm { width:34px; height:34px; border-width:2px; font-size:10px; box-shadow:0 0 0 2px rgba(240,201,75,.28); }
-.nextMatch__lastOpen { align-self:center; min-height:32px; padding:6px 10px; color:#fff; border-color:rgba(255,255,255,.25); background:rgba(255,255,255,.08); font-size:10px; line-height:1.15; }
+.nextMatch__lastOpen { align-self:center; min-height:44px; padding:6px 10px; color:#fff; border-color:rgba(255,255,255,.25); background:rgba(255,255,255,.08); font-size:10px; line-height:1.15; }
 .nextMatch__lastOpen:hover { background: rgba(255,255,255,.15); }
 .nextMatch--loading { min-height: 180px; }
 .nextMatch__skeleton { width: min(520px, 86%); height: 48px; margin-top: 18px; border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,.08), rgba(255,255,255,.18), rgba(255,255,255,.08)); background-size: 200% 100%; animation: nextMatchLoad 1.3s linear infinite; }
@@ -1720,7 +1721,6 @@ details.card[open] > summary { margin-bottom: 14px; }
 .nextMatch--error { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .nextMatch--empty p,
 .nextMatch--error p { max-width: 580px; margin: 0; color: #c2d6e1; }
-.nextMatch--empty.nextMatch--withResult{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr)}.nextMatch--empty.nextMatch--withResult .nextMatch__lastResult{grid-column:1/-1;width:100%}@media(max-width:600px){.nextMatch--empty.nextMatch--withResult{grid-template-columns:1fr}}
 .previousOpenMatch { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center; margin-top:10px; padding:13px 15px; color:#304b5d; background:#edf3f5; border:1px solid #cbd9df; border-left:4px solid #e0a62f; border-radius:6px; }
 .previousOpenMatch__body { display:grid; min-width:0; gap:3px; }
 .previousOpenMatch__body .nextMatch__eyebrow { color:#946410; }
@@ -1876,10 +1876,10 @@ details.card[open] > summary { margin-bottom: 14px; }
   .nextMatch__actions { margin-top: 12px; }
   .quickResponse { gap: 8px; }
   .quickResponse .btn { min-width: 0; padding-inline: 8px; font-size: 12px; }
-  .nextMatch__lastResult { grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; margin-top:12px; padding-top:11px; }
+  .nextMatch__lastResult { grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
   .nextMatch__lastLabel { grid-column: 1 / -1; padding-top: 0; }
   .nextMatch__lastScore { justify-content: space-between; }
-  .nextMatch__lastOpen { width:auto; }
+  .nextMatch__lastOpen { justify-self: start; width: auto; }
   .nextMatch__primary { width: 100%; }
   .nextMatch--empty,
   .nextMatch--error { display: grid; }

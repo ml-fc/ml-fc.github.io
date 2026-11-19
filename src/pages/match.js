@@ -1319,6 +1319,18 @@ function wireNextMatchLinks(host) {
   });
 }
 
+function lastResultCardHtml(result) {
+  if (!result) return "";
+  return `<section class="nextMatch__lastResult" aria-labelledby="lastResultTitle">
+    <h2 class="nextMatch__lastLabel" id="lastResultTitle">Last result</h2>
+    <div class="nextMatch__lastSummary">
+      <div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${result.score?.pending ? "Score update pending" : escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>
+      ${latestResultEventLine(result)}
+    </div>
+    <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
+  </section>`;
+}
+
 function renderNextMatchDashboard(host, data) {
   if (!host) return;
   const match = data?.nextMatch;
@@ -1335,18 +1347,14 @@ function renderNextMatchDashboard(host, data) {
     const result = data?.latestResult;
     host.innerHTML = `
       ${potmVoteBannerHtml(data?.potmVote)}
-      <section class="nextMatch nextMatch--empty${result ? " nextMatch--withResult" : ""}" aria-labelledby="nextMatchTitle">
+      <section class="nextMatch nextMatch--empty" aria-labelledby="nextMatchTitle">
         <header class="nextMatch__head">
           <div><div class="nextMatch__eyebrow">Your matchday</div><h1 id="nextMatchTitle">No fixture on deck</h1></div>
           <div class="nextMatch__aside">${weeklyThemeMark}</div>
         </header>
         <p>There isn’t an open match right now. The next club fixture will appear here when it is published.</p>
-        ${result ? `<div class="nextMatch__lastResult">
-          <span class="nextMatch__lastLabel">Last result</span>
-          <div class="nextMatch__lastSummary"><div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${result.score?.pending ? "Score update pending" : escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>${latestResultEventLine(result)}</div>
-          <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}">Open match</button>
-        </div>` : ""}
-      </section>`;
+      </section>
+      ${lastResultCardHtml(result)}`;
     wirePotmVoteBanner(host);
     wireNextMatchLinks(host);
     return;
@@ -1419,16 +1427,8 @@ function renderNextMatchDashboard(host, data) {
         ${assignment.isCaptain ? `<button class="btn primary nextMatch__primary" type="button" data-next-captain="${escapeHtml(match.publicCode)}">Manage team</button>` : ""}
         ${hasAvailabilityResponse ? `<button class="btn whatsappBtn" type="button" data-next-share>Share to WhatsApp</button>` : ""}
       </footer>
-
-      ${result ? `<div class="nextMatch__lastResult">
-        <span class="nextMatch__lastLabel">Last result</span>
-        <div class="nextMatch__lastSummary">
-          <div class="nextMatch__lastScore"><b>${escapeHtml(result.title)}</b><strong>${result.score?.pending ? "Score update pending" : escapeHtml(`${result.score?.home ?? "–"} — ${result.score?.away ?? "–"}`)}</strong></div>
-          ${latestResultEventLine(result)}
-        </div>
-        <button class="btn nextMatch__lastOpen" type="button" data-next-open="${escapeHtml(result.publicCode)}" aria-label="Open ${escapeHtml(result.title)}">Open match</button>
-      </div>` : ""}
-    </section>`;
+    </section>
+    ${lastResultCardHtml(result)}`;
 
   wirePotmVoteBanner(host);
   wireNextMatchLinks(host);
