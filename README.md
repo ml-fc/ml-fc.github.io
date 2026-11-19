@@ -42,7 +42,7 @@ For every frontend release:
 3. Add any new offline-critical file to `STATIC_ASSETS` in `service-worker.js`.
 4. Run syntax, browser, XSS, and offline checks.
 
-The current release is `2026-11-19.98`.
+The current release is `2026-11-19.99`. Availability appears above the digital team sheet with player names in two columns. Match creation and editing can reuse grounds and location URLs from all seasons via the admin-only `admin_match_grounds` endpoint.
 
 ## Deployment
 

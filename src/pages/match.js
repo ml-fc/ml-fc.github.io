@@ -2062,19 +2062,8 @@ const cap = availabilityLimitForMatch(m);
       ` : `<div class="small">${meName ? "Only players listed in this match can vote." : "Sign in to vote if you played in this match."} Voting stays open until Clubdesk closes it.</div>`}
     </div>` : ``}
 
-    ${teamsSelected ? `<div class="card teamSheetCard">
-      <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="badge">${homePlayers.length + awayPlayers.length} players</span><button class="btn whatsappBtn" id="shareTeamSheet" type="button">Share team sheet</button></div></div>
-      <div class="digitalTeamGrid digitalTeamGrid--single">
-        ${awayPlayers.length
-          ? publicSharedTeamSheet(teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, caps.captain1, caps.captain2)
-          : publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
-      </div>
-      ${publicTeamBalance(data.teamBalance, teamLabel("HOME"), teamLabel("AWAY"))}
-      ${String(m.type || "").toUpperCase() === "INTERNAL" ? `<p class="fieldAutomationNote">${escapeHtml(String(m.teamSelectionMode || "AUTO").toUpperCase() === "MANUAL" ? "Admin-adjusted teams stay fixed. New players are placed using recent outfield roles; goalkeepers rotate separately." : "Teams use recent outfield roles as well as form. Goalkeepers are selected through a separate random rotation.")}</p>` : ""}
-    </div>` : ``}
-
     ${hideAvailability ? `` : `
-      <div class="card">
+      <div class="card matchAvailability">
         <div class="row" style="justify-content:space-between; align-items:center">
           <div class="h1">Availability</div>
           <div class="row" style="gap:10px; align-items:center">
@@ -2111,15 +2100,26 @@ const cap = availabilityLimitForMatch(m);
         <div class="hr"></div>
 
         <div class="small"><b id="yesHdr">Available</b></div>
-        <ol id="yesList" class="list"></ol>
+        <ol id="yesList" class="list matchAvailability__list"></ol>
 
         <div class="small" style="margin-top:10px"><b>Not available</b></div>
-        <ol id="noList" class="list"></ol>
+        <ol id="noList" class="list matchAvailability__list"></ol>
 
         <div class="small" style="margin-top:10px"><b>Waiting list</b></div>
-        <ol id="waitList" class="list"></ol>
+        <ol id="waitList" class="list matchAvailability__list"></ol>
       </div>
     `}
+    ${teamsSelected ? `<div class="card teamSheetCard">
+      <div class="teamSheetCard__head"><div><div class="stepEyebrow">Selected squads</div><div class="h1">Digital team sheet</div></div><div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="badge">${homePlayers.length + awayPlayers.length} players</span><button class="btn whatsappBtn" id="shareTeamSheet" type="button">Share team sheet</button></div></div>
+      <div class="digitalTeamGrid digitalTeamGrid--single">
+        ${awayPlayers.length
+          ? publicSharedTeamSheet(teamLabel("HOME"), homeTeamRows, teamLabel("AWAY"), awayTeamRows, caps.captain1, caps.captain2)
+          : publicTeamSheet(teamLabel("HOME"), homeTeamRows, "blue", caps.captain1)}
+      </div>
+      ${publicTeamBalance(data.teamBalance, teamLabel("HOME"), teamLabel("AWAY"))}
+      ${String(m.type || "").toUpperCase() === "INTERNAL" ? `<p class="fieldAutomationNote">${escapeHtml(String(m.teamSelectionMode || "AUTO").toUpperCase() === "MANUAL" ? "Admin-adjusted teams stay fixed. New players are placed using recent outfield roles; goalkeepers rotate separately." : "Teams use recent outfield roles as well as form. Goalkeepers are selected through a separate random rotation.")}</p>` : ""}
+    </div>` : ``}
+
   `;
 
   wireMatchStreamFullscreen(detail);

@@ -53,6 +53,74 @@ let LAST_LIST_KEY = "";
 let LAST_ADMIN_VIEW = "";
 let ADMIN_RELOAD_CHECKED = false;
 
+let SAVED_GROUNDS = null;
+let SAVED_GROUNDS_REQUEST = null;
+
+async function loadSavedGrounds() {
+  if (SAVED_GROUNDS && Date.now() - SAVED_GROUNDS.ts < 60 * 1000) return SAVED_GROUNDS.grounds;
+  if (!SAVED_GROUNDS_REQUEST) {
+    SAVED_GROUNDS_REQUEST = (async () => {
+      const out = await API.adminMatchGrounds();
+      if (!out?.ok) throw new Error(out?.error || "Could not load saved grounds");
+      const grounds = (out.grounds || []).filter(ground =>
+        typeof ground.groundName === "string" && ground.groundName.trim() &&
+        !groundValidation(ground.groundName, ground.groundUrl || "")
+      );
+      SAVED_GROUNDS = { ts: Date.now(), grounds };
+      return grounds;
+    })().finally(() => { SAVED_GROUNDS_REQUEST = null; });
+  }
+  return SAVED_GROUNDS_REQUEST;
+}
+
+function bindGroundPicker(root, selectId, nameId, urlId, onChange = () => {}) {
+  const select = root.querySelector(`#${selectId}`);
+  const name = root.querySelector(`#${nameId}`);
+  const url = root.querySelector(`#${urlId}`);
+  const locked = name.disabled;
+  const key = value => value.trim().toLowerCase();
+  let grounds = [];
+  let previousName = key(name.value);
+  const syncSelection = () => {
+    const index = grounds.findIndex(ground => key(ground.groundName) === key(name.value));
+    select.value = index < 0 ? "" : String(index);
+  };
+  const refresh = async () => {
+    if (locked) return;
+    try {
+      grounds = await loadSavedGrounds();
+      if (!select.isConnected) return;
+      select.replaceChildren(new Option(grounds.length ? "Enter a new ground" : "No saved grounds yet — enter below", ""),
+        ...grounds.map((ground, index) => new Option(ground.groundName, String(index))));
+      syncSelection();
+    } catch {
+      if (!select.isConnected) return;
+      select.replaceChildren(new Option("Saved grounds unavailable — enter below", ""));
+    }
+  };
+  select.onfocus = refresh;
+  select.onchange = () => {
+    const ground = select.value === "" ? null : grounds[Number(select.value)];
+    name.value = ground?.groundName || "";
+    url.value = ground?.groundUrl || "";
+    previousName = key(name.value);
+    onChange();
+    if (!ground) name.focus();
+  };
+  name.oninput = () => {
+    const nextName = key(name.value);
+    if (nextName !== previousName) {
+      const ground = grounds.find(ground => key(ground.groundName) === nextName);
+      if (ground) url.value = ground.groundUrl || "";
+      else if (previousName) url.value = "";
+    }
+    previousName = nextName;
+    syncSelection();
+    onChange();
+  };
+  return refresh;
+}
+
 function now() { return Date.now(); }
 
 async function leadersBoardFile(payload){
@@ -1289,11 +1357,12 @@ function renderAdminShell(root, view) {
 
       <div class="field"><label class="field__label" for="title">Match title</label><input id="title" class="input" placeholder="For example, Friday night football" /></div>
       <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" aria-describedby="created" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
+      <div class="field"><label class="field__label" for="savedGround">Use a previous ground</label><select class="input" id="savedGround" aria-describedby="groundHelp"><option value="">Choose a saved ground or enter a new one</option></select></div>
       <div class="formGrid formGrid--two">
         <div class="field"><label class="field__label" for="groundName">Ground name (optional)</label><input id="groundName" class="input" maxlength="140" placeholder="For example, Manor Lakes Reserve" /></div>
         <div class="field"><label class="field__label" for="groundUrl">Ground location URL (optional)</label><input id="groundUrl" class="input" type="url" maxlength="2048" placeholder="https://maps.google.com/…" aria-describedby="groundHelp created" /></div>
       </div>
-      <div class="field__help" id="groundHelp">Paste a maps or location link. The ground name links to it on the shared match page.</div>
+      <div class="field__help" id="groundHelp">Choose a previous ground to fill its name and location, or enter a new name and optional location. You can edit the link before saving.</div>
       <div class="field"><label class="field__label" for="type">Match type</label><select id="type" class="input">
         <option value="INTERNAL" selected>Internal</option>
         <option value="OPPONENT">Against opponents (1 captain)</option>
@@ -1867,6 +1936,7 @@ function bindCreateMatch(root) {
     syncType();
     dialog.dataset.initialized = "1";
   }
+  const refreshGrounds = bindGroundPicker(root, "savedGround", "groundName", "groundUrl", saveDraft);
   dialog.oninput = saveDraft;
   root.querySelector("#type").onchange = () => { syncType(true); saveDraft(); };
   trigger.disabled = !MEM.selectedSeasonId && !CREATE_SEASON_ID;
@@ -1877,6 +1947,7 @@ function bindCreateMatch(root) {
     updateSeasonCreation(root, season);
     if (CREATE_BUSY) button.disabled = true;
     if (!dialog.open) dialog.showModal();
+    refreshGrounds();
     root.querySelector("#title").focus();
   };
   const close = () => {
@@ -1948,6 +2019,7 @@ function bindCreateMatch(root) {
       created.scrollIntoView({ block: "nearest" });
       return;
     }
+    SAVED_GROUNDS = null;
     const newMatch = { ...payload, matchId: out.matchId, publicCode: out.publicCode, seasonId: out.seasonId || payload.seasonId, status: "OPEN", ratingsLocked: "FALSE" };
     const cached = lsGet(matchesKey(payload.seasonId));
     const matches = payload.seasonId === MEM.selectedSeasonId ? MEM.matches : (cached?.matches || []);
@@ -2794,11 +2866,12 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     </section>
     <section class="card" aria-labelledby="matchGroundHeading">
       <h2 class="h1" id="matchGroundHeading">Ground</h2>
+      <div class="field"><label class="field__label" for="editSavedGround">Use a previous ground</label><select class="input" id="editSavedGround" ${groundLocked ? "disabled" : ""} aria-describedby="editGroundHelp"><option value="">Choose a saved ground or enter a new one</option></select></div>
       <div class="formGrid formGrid--two">
         <div class="field"><label class="field__label" for="editGroundName">Ground name (optional)</label><input class="input" id="editGroundName" maxlength="140" value="${escapeHtml(m.groundName || "")}" ${groundLocked ? "disabled" : ""} aria-describedby="editGroundMessage" /></div>
         <div class="field"><label class="field__label" for="editGroundUrl">Ground location URL (optional)</label><input class="input" type="url" id="editGroundUrl" maxlength="2048" value="${escapeHtml(m.groundUrl || "")}" ${groundLocked ? "disabled" : ""} aria-describedby="editGroundHelp editGroundMessage" /></div>
       </div>
-      <p class="field__help" id="editGroundHelp">The ground name links to this location on the shared match page. Clear both fields to remove it.</p>
+      <p class="field__help" id="editGroundHelp">Choose a previous ground to fill its location, or enter a new name and optional link. Clear both fields to remove the ground.</p>
       <button class="btn primary" id="saveGround" type="button" ${groundLocked ? "disabled" : ""}>Save ground</button>
       <div class="field__message" id="editGroundMessage" role="status"></div>
     </section>
@@ -2832,6 +2905,8 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     }
   }
 
+  bindGroundPicker(manageArea, "editSavedGround", "editGroundName", "editGroundUrl")();
+
   manageArea.querySelector("#saveGround").onclick = async () => {
     const button = manageArea.querySelector("#saveGround");
     if (button.disabled) return;
@@ -2849,10 +2924,12 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     }
     setDisabled(button, true, "Saving…");
     nameInput.disabled = true; urlInput.disabled = true;
+    manageArea.querySelector("#editSavedGround").disabled = true;
     message.textContent = "Saving ground…";
     try {
       const out = await API.adminUpdateMatchGround(payload);
       if (!out?.ok) throw new Error(out?.error || "Could not save ground");
+      SAVED_GROUNDS = null;
       const ground = { groundName: out.groundName, groundUrl: out.groundUrl };
       Object.assign(m, ground);
       MEM.matches = (MEM.matches || []).map(item => item.matchId === m.matchId ? { ...item, ...ground } : item);
@@ -2865,7 +2942,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       if (stillOnAdmin(routeToken)) renderManageUI(root, data, routeToken, { fromCache: false, prevView });
       toastSuccess("Ground updated.");
     } catch (error) { message.textContent = error.message || "Could not save ground"; toastError(message.textContent); }
-    finally { setDisabled(button, false); nameInput.disabled = false; urlInput.disabled = false; }
+    finally { setDisabled(button, false); nameInput.disabled = false; urlInput.disabled = false; manageArea.querySelector("#editSavedGround").disabled = groundLocked; }
   };
 
   manageArea.querySelector("#saveTeamNames").onclick = async () => {

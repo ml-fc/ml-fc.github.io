@@ -1682,6 +1682,9 @@ details.card[open] > summary { margin-bottom: 14px; }
 .statusPill--pending span { color: #09253a; background: #bae6fd; }
 .statusPillLink{color:#fff;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}.statusPillLink:hover{color:#bae6fd}.statusPillLink:focus-visible{outline:3px solid #f0c94b;outline-offset:4px;border-radius:4px}
 .nextMatch__actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+/* Use both halves of the match card while keeping names readable on phones. */
+.matchAvailability__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; row-gap: 4px; }
+.matchAvailability__list li { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .availabilityStatusPrompt { display: grid; justify-items: start; gap: 12px; }
 .availabilityStatusPrompt .btn { width: auto; max-width: 100%; }
 .quickResponse { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

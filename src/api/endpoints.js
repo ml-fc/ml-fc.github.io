@@ -43,6 +43,7 @@ export const API = {
   setAvailability: (code, availability) => apiPost({ action: "set_availability", code, availability }),
   votePotm: (code, candidateName) => apiPost({ action: "potm_vote", code, candidateName }),
   // admin
+  adminMatchGrounds: () => apiGet({ action: "admin_match_grounds" }),
   adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
   adminUpdateMatchGround: (payload) => apiPost({ action: "admin_update_match_ground", ...payload }),
   adminUpdateTeamNames: (payload) => apiPost({ action: "admin_update_team_names", ...payload }),
