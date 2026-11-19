@@ -3352,3 +3352,7 @@ body:has(.adminCreateDialog[open]) { overflow:hidden; }
 .awardsDialog .btn { min-height:44px; box-shadow:none; }
 .awardsDialog :is(button,a,input,summary):focus-visible { outline:3px solid #086eaa; outline-offset:3px; }
 .awardsDialog__body { padding-bottom:calc(24px + env(safe-area-inset-bottom,0px)); }
+
+.matchGround { margin-top: 8px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.matchGround a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.matchGround a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

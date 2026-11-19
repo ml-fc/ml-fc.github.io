@@ -1,3 +1,4 @@
+import { matchGroundHtml, matchGroundText } from "../ui/match_ground.js";
 import { mountSeasonHonours } from '../ui/season_honours.js';
 // src/pages/match.js
 import { API } from "../api/endpoints.js";
@@ -753,6 +754,7 @@ function whatsappAvailabilityMessage(match, availability) {
     `⚽ *${match.title}*`,
     `${homeMarker} *${matchTeamLabel(match, "HOME")}* vs ${awayMarker} *${matchTeamLabel(match, "AWAY")}*`,
     `🗓️ ${when}`,
+    ...(matchGroundText(match) ? [matchGroundText(match)] : []),
     `👥 ${confirmed}/${maximum} players confirmed · ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} left`,
     "",
     "Availability is shown in the attached image.",
@@ -1056,6 +1058,7 @@ async function shareMatchRecap(match, when, highlights) {
     `⚽ *${match.title}*`,
     `*${homeName} ${match.scoreHome} – ${match.scoreAway} ${awayName}*`,
     `🗓️ ${when}`,
+    ...(matchGroundText(match) ? [matchGroundText(match)] : []),
   ];
   if (highlights.scorers.length) lines.push("", `Scorers: ${highlights.scorers.map((item) => `${item.name} (${item.goals})`).join(" · ")}`);
   if (highlights.assisters.length) lines.push(`Assists: ${highlights.assisters.map((item) => `${item.name} (${item.assists})`).join(" · ")}`);
@@ -1375,6 +1378,7 @@ function renderNextMatchDashboard(host, data) {
           <div class="nextMatch__eyebrow">Your next fixture</div>
           <h1 id="nextMatchTitle">${escapeHtml(match.title)}</h1>
           <p>${escapeHtml(formatHumanDateTime(match.date, match.time))} <span aria-hidden="true">·</span> ${escapeHtml(match.type)}</p>
+          ${matchGroundHtml(match)}
         </div>
         <div class="nextMatch__aside">
           ${weeklyThemeMark}
@@ -2002,6 +2006,7 @@ const cap = availabilityLimitForMatch(m);
     <div class="card">
       <div style="font-weight:950; font-size:18px">${escapeHtml(m.title)}</div>
       <div class="small" style="margin-top:6px">${escapeHtml(when)} • ${escapeHtml(m.type)} • ${escapeHtml(m.status)}</div>
+      ${matchGroundHtml(m)}
       <div class="small" id="detailMsg" style="margin-top:10px">Refresh your browser to reload match details from the server.</div>
       ${isCaptain ? `
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">

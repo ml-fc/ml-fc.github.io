@@ -42,7 +42,7 @@ For every frontend release:
 3. Add any new offline-critical file to `STATIC_ASSETS` in `service-worker.js`.
 4. Run syntax, browser, XSS, and offline checks.
 
-The current release is `2026-11-19.97`.
+The current release is `2026-11-19.98`.
 
 ## Deployment
 
@@ -86,3 +86,5 @@ The checks use synthetic seasons, matches and players and intercept every Worker
 Awards checks cover creating categories during active voting, confirmed removal, fresh participation, voter PNG content/download, Melbourne deadlines, privacy, errors and themed club-tool layouts. Open match actions are always visible; history retains its compact disclosure. Back controls share a compact chevron and return through browser history when the destination matches.
 
 The awards Worker requires `0008_season_awards.sql` and `0009_award_removal.sql` from the sibling API repository. Apply migrations before deploying the Worker and publishing this frontend. Removed draft/active categories retain their snapshots and votes; finished categories remain protected.
+
+Match creation and management support an optional ground name and HTTP/HTTPS location URL. The shared match page hyperlinks the name; WhatsApp text includes the name and location URL. Ground changes refresh the same match link. Deploy API migration `0010_match_ground.sql` and its Worker before publishing this frontend.

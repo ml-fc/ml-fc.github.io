@@ -1,3 +1,4 @@
+import { matchGroundHtml, matchGroundText, groundValidation } from "../ui/match_ground.js";
 import { returnTo, backIcon } from '../ui/navigation.js';
 import { openSeasonAwards } from '../ui/awards.js';
 import { updateSeasonCreation } from '../ui/season_honours.js';
@@ -46,7 +47,7 @@ let CREATE_BUSY = false;
 const LIST_POSITIONS = new Map();
 const LIST_LIMITS = new Map();
 const CREATE_DRAFT_KEY = "mlfc_admin_create_draft_v1";
-const CREATE_FIELDS = ["title", "date", "time", "type", "teamHomeName", "teamAwayName", "availabilityLimit"];
+const CREATE_FIELDS = ["title", "date", "time", "type", "groundName", "groundUrl", "teamHomeName", "teamAwayName", "availabilityLimit"];
 let CREATE_SEASON_ID = "";
 let LAST_LIST_KEY = "";
 let LAST_ADMIN_VIEW = "";
@@ -271,7 +272,7 @@ function teamSheetHtml(teamName, players, captain = "", tone = "blue") {
 }
 
 function teamSheetShareText(match, when, homeName, homePlayers, awayName = "", awayPlayers = [], positions = {}, captains = []) {
-  const lines = ["📋 *MANOR LAKES FC · DIGITAL TEAM SHEET*", "", `⚽ *${match.title}*`, `🗓️ ${when}`, ""];
+  const lines = ["📋 *MANOR LAKES FC · DIGITAL TEAM SHEET*", "", `⚽ *${match.title}*`, `🗓️ ${when}`, matchGroundText(match), ""].filter(Boolean);
   lines.push(`🔵 *${homeName.toUpperCase()}*`);
   (homePlayers.length ? homePlayers : ["Squad to be confirmed"]).forEach((player, index) => lines.push(`${index + 1}. ${player}`));
   if (awayName) {
@@ -1288,6 +1289,11 @@ function renderAdminShell(root, view) {
 
       <div class="field"><label class="field__label" for="title">Match title</label><input id="title" class="input" placeholder="For example, Friday night football" /></div>
       <div class="formGrid formGrid--two"><div class="field"><label class="field__label" for="date">Match date</label><input id="date" class="input" type="date" aria-describedby="created" /></div><div class="field"><label class="field__label" for="time">Kick-off time</label><input id="time" class="input" type="time" value="19:00" /></div></div>
+      <div class="formGrid formGrid--two">
+        <div class="field"><label class="field__label" for="groundName">Ground name (optional)</label><input id="groundName" class="input" maxlength="140" placeholder="For example, Manor Lakes Reserve" /></div>
+        <div class="field"><label class="field__label" for="groundUrl">Ground location URL (optional)</label><input id="groundUrl" class="input" type="url" maxlength="2048" placeholder="https://maps.google.com/…" aria-describedby="groundHelp created" /></div>
+      </div>
+      <div class="field__help" id="groundHelp">Paste a maps or location link. The ground name links to it on the shared match page.</div>
       <div class="field"><label class="field__label" for="type">Match type</label><select id="type" class="input">
         <option value="INTERNAL" selected>Internal</option>
         <option value="OPPONENT">Against opponents (1 captain)</option>
@@ -1842,7 +1848,7 @@ function bindCreateMatch(root) {
     root.querySelector("#teamNamesHelp").textContent = opponent ? "Opponent fixtures use MLFC and Opponent." : "Choose the internal team names shown across scores, teams and results.";
   };
   const reset = () => {
-    const defaults = { title: "", date: "", time: "19:00", type: "INTERNAL", teamHomeName: "Blue", teamAwayName: "Orange", availabilityLimit: "22" };
+    const defaults = { title: "", date: "", time: "19:00", type: "INTERNAL", groundName: "", groundUrl: "", teamHomeName: "Blue", teamAwayName: "Orange", availabilityLimit: "22" };
     CREATE_FIELDS.forEach(id => { root.querySelector(`#${id}`).value = defaults[id]; });
     CREATE_SEASON_ID = "";
     sessionStorage.removeItem(CREATE_DRAFT_KEY);
@@ -1897,6 +1903,8 @@ function bindCreateMatch(root) {
       date: root.querySelector("#date").value,
       time: root.querySelector("#time").value || "19:00",
       type: root.querySelector("#type").value,
+      groundName: root.querySelector("#groundName").value.trim(),
+      groundUrl: root.querySelector("#groundUrl").value.trim(),
       teamHomeName: root.querySelector("#teamHomeName").value.trim() || "Blue",
       teamAwayName: root.querySelector("#teamAwayName").value.trim() || "Orange",
       availabilityLimit: Math.max(1, Math.min(100, Math.floor(Number(root.querySelector("#availabilityLimit").value || 22)))),
@@ -1907,6 +1915,15 @@ function bindCreateMatch(root) {
       root.querySelector("#date").setAttribute("aria-invalid", "true");
       created.textContent = "Please choose a match date.";
       root.querySelector("#date").focus();
+      return;
+    }
+    for (const id of ["groundName", "groundUrl"]) root.querySelector(`#${id}`).removeAttribute("aria-invalid");
+    const groundError = groundValidation(payload.groundName, payload.groundUrl);
+    if (groundError) {
+      const input = root.querySelector(payload.groundUrl && payload.groundName ? "#groundUrl" : "#groundName");
+      input.setAttribute("aria-invalid", "true");
+      created.textContent = groundError;
+      input.focus();
       return;
     }
     saveDraft();
@@ -2642,6 +2659,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   const isCompleted = status === "COMPLETED";
   const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
   const isEditLocked = locked || status === "CLOSED" || isCompleted || scoreStarted;
+  const groundLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
   const potm = data.potm || {};
   const potmStarted = String(potm.openedAt || "").trim() !== "";
@@ -2760,6 +2778,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
           <div class="manageCommand__eyebrow">Matchday control · ${escapeHtml(type)}</div>
           <div class="h1 manageCommand__title" id="manageMatchTitle">${safeTitle}</div>
           <div class="manageCommand__meta">${safeWhen}</div>
+          ${matchGroundHtml(m)}
         </div>
         <div class="manageCommand__statusGroup">
           <div class="manageCommand__state"><span class="statusDot" aria-hidden="true"></span>${phaseLabel}</div>
@@ -2772,6 +2791,16 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       </div>
       <div class="manageCommand__notice" id="lockReason">${locked || isCompleted ? "Completed matches are read-only. Return to the match list to unlock." : !hasBothScores ? "Complete & lock becomes available in the match list after both scores are saved." : !potmReady ? "Select Player of the Match before completing from the match list." : "This match can be completed from the match list once all ratings have been checked."}</div>
       <div class="draftState" id="draftState" role="status" aria-live="polite">All setup changes saved</div>
+    </section>
+    <section class="card" aria-labelledby="matchGroundHeading">
+      <h2 class="h1" id="matchGroundHeading">Ground</h2>
+      <div class="formGrid formGrid--two">
+        <div class="field"><label class="field__label" for="editGroundName">Ground name (optional)</label><input class="input" id="editGroundName" maxlength="140" value="${escapeHtml(m.groundName || "")}" ${groundLocked ? "disabled" : ""} aria-describedby="editGroundMessage" /></div>
+        <div class="field"><label class="field__label" for="editGroundUrl">Ground location URL (optional)</label><input class="input" type="url" id="editGroundUrl" maxlength="2048" value="${escapeHtml(m.groundUrl || "")}" ${groundLocked ? "disabled" : ""} aria-describedby="editGroundHelp editGroundMessage" /></div>
+      </div>
+      <p class="field__help" id="editGroundHelp">The ground name links to this location on the shared match page. Clear both fields to remove it.</p>
+      <button class="btn primary" id="saveGround" type="button" ${groundLocked ? "disabled" : ""}>Save ground</button>
+      <div class="field__message" id="editGroundMessage" role="status"></div>
     </section>
     <details class="card">
       <summary style="font-weight:950">Team names</summary>
@@ -2803,6 +2832,42 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     }
   }
 
+  manageArea.querySelector("#saveGround").onclick = async () => {
+    const button = manageArea.querySelector("#saveGround");
+    if (button.disabled) return;
+    const nameInput = manageArea.querySelector("#editGroundName");
+    const urlInput = manageArea.querySelector("#editGroundUrl");
+    const message = manageArea.querySelector("#editGroundMessage");
+    const payload = { matchId: m.matchId, groundName: nameInput.value.trim(), groundUrl: urlInput.value.trim() };
+    nameInput.removeAttribute("aria-invalid"); urlInput.removeAttribute("aria-invalid");
+    const error = groundValidation(payload.groundName, payload.groundUrl);
+    if (error) {
+      message.textContent = error;
+      const input = payload.groundName && payload.groundUrl ? urlInput : nameInput;
+      input.setAttribute("aria-invalid", "true"); input.focus();
+      return;
+    }
+    setDisabled(button, true, "Saving…");
+    nameInput.disabled = true; urlInput.disabled = true;
+    message.textContent = "Saving ground…";
+    try {
+      const out = await API.adminUpdateMatchGround(payload);
+      if (!out?.ok) throw new Error(out?.error || "Could not save ground");
+      const ground = { groundName: out.groundName, groundUrl: out.groundUrl };
+      Object.assign(m, ground);
+      MEM.matches = (MEM.matches || []).map(item => item.matchId === m.matchId ? { ...item, ...ground } : item);
+      lsSet(matchesKey(m.seasonId || MEM.selectedSeasonId), { ts: now(), matches: MEM.matches });
+      clearPublicMatchDetailCache(m.publicCode);
+      clearManageCache(m.publicCode);
+      lsSet(manageKey(m.publicCode), { ts: now(), data });
+      // Drop cached next-fixture cards for all signed-in players on this device.
+      for (const key of Object.keys(localStorage)) if (key.startsWith("mlfc_next_match_cache_v1:")) localStorage.removeItem(key);
+      if (stillOnAdmin(routeToken)) renderManageUI(root, data, routeToken, { fromCache: false, prevView });
+      toastSuccess("Ground updated.");
+    } catch (error) { message.textContent = error.message || "Could not save ground"; toastError(message.textContent); }
+    finally { setDisabled(button, false); nameInput.disabled = false; urlInput.disabled = false; }
+  };
+
   manageArea.querySelector("#saveTeamNames").onclick = async () => {
     const button = manageArea.querySelector("#saveTeamNames");
     const payload = {matchId:m.matchId, teamHomeName:manageArea.querySelector("#editTeamHomeName").value.trim(), teamAwayName:manageArea.querySelector("#editTeamAwayName").value.trim()};
@@ -2831,7 +2896,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   };
 
   manageArea.querySelector("#shareMatch").onclick = () => {
-    waOpenPrefill(`Manor Lakes FC match link:\n${matchLink(m.publicCode)}`);
+    waOpenPrefill([`⚽ *${m.title || "Manor Lakes FC match"}*`, `🗓️ ${when}`, matchGroundText(m), "", `Match link: ${matchLink(m.publicCode)}`].filter(line => line !== "").join("\n"));
     toastInfo("WhatsApp opened.");
   };
 

@@ -44,6 +44,7 @@ export const API = {
   votePotm: (code, candidateName) => apiPost({ action: "potm_vote", code, candidateName }),
   // admin
   adminListMatches: (seasonId) => apiGet({ action: "admin_list_matches", seasonId }),
+  adminUpdateMatchGround: (payload) => apiPost({ action: "admin_update_match_ground", ...payload }),
   adminUpdateTeamNames: (payload) => apiPost({ action: "admin_update_team_names", ...payload }),
   adminUpdateMatchStream: (matchId, command, youtubeUrl = "") =>
     apiPost({ action: "admin_update_match_stream", matchId, command, youtubeUrl }),

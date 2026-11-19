@@ -20,6 +20,7 @@ async (page) => {
   ];
   let failCreate = true;
   let failList = false;
+  let failGround = false;
   let holdCreate;
   let createGate = null;
   await page.route('https://mlfc-api.manorlakes-football.workers.dev/**', async route => {
@@ -37,6 +38,14 @@ async (page) => {
     if (action==='admin_create_match') {
       if (createGate) await createGate;
       data = failCreate ? {ok:false,error:'Fixture validation error — keep editing.'} : {ok:true,matchId:'created',publicCode:'FIXTURE-CREATED',seasonId:params.get('seasonId')};
+    }
+    if (action==='admin_update_match_ground') {
+      if (failGround) data = {ok:false,error:'Fixture ground save failed.'};
+      else {
+        const ground = {groundName:params.get('groundName'),groundUrl:params.get('groundUrl')};
+        Object.assign(matches.find(m=>m.matchId===params.get('matchId')), ground);
+        data = {ok:true,...ground};
+      }
     }
     if (action==='admin_potm_status') data = {ok:true,voted:[],pending:[]};
     if (action==='notifications') data = {ok:true,notifications:[],unreadCount:0};
@@ -78,6 +87,8 @@ async (page) => {
   await desk.locator('#type').selectOption('INTERNAL');
   await desk.locator('#title').fill('My saved match draft');
   await desk.locator('#teamHomeName').fill('Custom home');
+  await desk.locator('#groundName').fill('Lakes Reserve & Oval');
+  await desk.locator('#groundUrl').fill('https://maps.google.com/?q=Lakes&zoom=14');
   await desk.locator('#availabilityLimit').fill('24');
   await page.keyboard.press('Escape');
   assert(await desk.locator('#openCreateMatch').evaluate(el=>el===document.activeElement),'Escape restores focus');
@@ -117,6 +128,14 @@ async (page) => {
   await desk.locator('#openCreateMatch').click();
   assert(await desk.locator('#teamHomeName').inputValue()==='Custom home','Reload restores custom team name');
   assert(await desk.locator('#availabilityLimit').inputValue()==='24','Reload restores custom limit');
+  assert(await desk.locator('#groundName').inputValue()==='Lakes Reserve & Oval','Reload retains ground name');
+  assert(await desk.locator('#groundUrl').inputValue()==='https://maps.google.com/?q=Lakes&zoom=14','Reload retains ground URL');
+  const beforeInvalidGround = calls.filter(c=>c.action==='admin_create_match').length;
+  await desk.locator('#groundUrl').fill('javascript:alert(1)');
+  await desk.locator('#createMatch').click();
+  assert((await desk.locator('#created').innerText()).includes('valid HTTP'),'Ground URL is validated inline');
+  assert(calls.filter(c=>c.action==='admin_create_match').length===beforeInvalidGround,'Invalid location never submitted');
+  await desk.locator('#groundUrl').fill('https://maps.google.com/?q=Lakes&zoom=14');
   failCreate=false;
   createGate=new Promise(resolve=>{holdCreate=resolve;});
   const beforeCreate=calls.filter(c=>c.action==='admin_create_match').length;
@@ -127,6 +146,7 @@ async (page) => {
   await desk.locator('#createMatchCard').waitFor({state:'hidden'});
   assert(calls.filter(c=>c.action==='admin_create_match').length===beforeCreate+1,'Duplicate submissions prevented');
   assert(await desk.getByText('My saved match draft',{exact:true}).isVisible(),'Success updates list');
+  assert(calls.filter(c=>c.action==='admin_create_match').at(-1).payload.groundName==='Lakes Reserve & Oval','Creation submits ground');
   await desk.locator('#seasonSelect').selectOption('fixture-old');
   await desk.locator('#openCreateMatch').click();
   assert(await desk.locator('#createMatch').isDisabled(),'Closed seasons prevent match creation');
@@ -160,6 +180,60 @@ async (page) => {
   await page.keyboard.press('Escape');
   await desk.locator('[data-manage="FIXTURE-ACTIVE"]').click();
   await desk.locator('#backToAdminList').waitFor();
+  assert(!await desk.locator('#saveGround').isDisabled(),'Ground remains editable after scoring while match is open');
+  await desk.locator('#editGroundUrl').fill('https://maps.google.com/?q=Away');
+  await desk.locator('#saveGround').click();
+  assert((await desk.locator('#editGroundMessage').innerText()).includes('ground name'),'Location requires a ground name');
+  await desk.locator('#editGroundName').fill('Away Oval & Reserve');
+  failGround=true;
+  await desk.locator('#saveGround').click();
+  await desk.locator('#editGroundMessage').filter({hasText:'Fixture ground save failed'}).waitFor();
+  assert(await desk.locator('#editGroundName').inputValue()==='Away Oval & Reserve','Failed ground save retains entered values');
+  failGround=false;
+  await desk.locator('#saveGround').click();
+  await desk.locator('.manageCommand .matchGround a').waitFor();
+  assert(await desk.locator('.manageCommand .matchGround a').getAttribute('href')==='https://maps.google.com/?q=Away','Saved ground name is hyperlinked');
+  await page.evaluate(()=>{window.open=url=>{window.fixtureShareUrl=url;return null;};});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await desk.locator('#shareMatch').click();
+  const sharedText = await page.evaluate(()=>new URL(window.fixtureShareUrl).searchParams.get('text'));
+  assert(sharedText.includes('Away Oval & Reserve') && sharedText.includes('https://maps.google.com/?q=Away') && sharedText.includes('#/match?code=FIXTURE-ACTIVE'),'WhatsApp text has ground, directions URL and stable match link');
+  await page.locator('#toastHost .toast__close').evaluateAll(buttons=>buttons.forEach(button=>button.click()));
+  for (const width of [360,1280]) {
+    await page.setViewportSize({width,height:900});
+    await desk.locator('#editGroundName').scrollIntoViewIfNeeded();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Ground editor fits viewport');
+    await page.screenshot({path:`output/playwright/match-ground-edit-${width}.png`,animations:'disabled'});
+  }
+  // Existing sign-in flow preserves the shared match URL.
+  await page.evaluate(()=>{localStorage.removeItem('mlfc_token_v1');localStorage.removeItem('mlfc_user_v1');});
+  await page.goto('http://127.0.0.1:4173/#/match?code=FIXTURE-ACTIVE');
+  await page.waitForURL(/#\/login\?return=/);
+  assert(decodeURIComponent(page.url()).includes('#/match?code=FIXTURE-ACTIVE'),'Shared match preserved through sign-in');
+  await page.evaluate(()=>{localStorage.setItem('mlfc_token_v1','local-fixture-only');localStorage.setItem('mlfc_user_v1',JSON.stringify({name:'Admin',isAdmin:1,photoUrl:'http://127.0.0.1:4173/assets/icons/icon-192.png',phone:'',email:'',emailVerifiedAt:''}));});
+  await page.goto('http://127.0.0.1:4173/#/match?code=FIXTURE-ACTIVE');
+  const publicGround = page.locator('#matchDetailView .matchGround a');
+  await publicGround.waitFor();
+  assert(await publicGround.innerText()==='Away Oval & Reserve','Shared match displays the ground name');
+  assert(await publicGround.getAttribute('href')==='https://maps.google.com/?q=Away','Match recipients can open directions');
+  assert(await publicGround.getAttribute('rel')==='noopener noreferrer','External ground link is isolated');
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'output/playwright/shared-match-ground-phone.png',animations:'disabled'});
+  const rendering = await page.evaluate(async()=>{
+    const {matchGroundHtml,matchGroundText,groundValidation}=await import('/src/ui/match_ground.js');
+    const host=document.createElement('div');
+    host.innerHTML=matchGroundHtml({groundName:'<img src=x onerror=alert(1)>',groundUrl:'javascript:alert(1)'});
+    return {safe:!host.querySelector('img,a'),noGround:matchGroundHtml({})==='',plain:matchGroundText({groundName:'Reserve'}),bad:groundValidation('Reserve','data:text/html,test')};
+  });
+  assert(rendering.safe && rendering.noGround && rendering.plain==='📍 Reserve' && rendering.bad,'Ground rendering handles optional fields and untrusted API values');
+  await page.evaluate(()=>{localStorage.setItem('mlfc_token_v1','local-fixture-only');localStorage.setItem('mlfc_user_v1',JSON.stringify({name:'Admin',isAdmin:1}));});
+  await page.goto('http://127.0.0.1:4173/#/admin?view=manage&code=FIXTURE-ACTIVE&prev=open');
+  await desk.locator('#editGroundName').waitFor();
+  await desk.locator('#editGroundName').fill('');
+  await desk.locator('#editGroundUrl').fill('');
+  await desk.locator('#saveGround').click();
+  await page.waitForFunction(()=>!document.querySelector('#manageArea .manageCommand .matchGround'));
+  assert(matches[0].groundName==='' && matches[0].groundUrl==='','Ground and location can be cleared');
   await desk.locator('#backToAdminList').click();
   await desk.locator('#goOpen[aria-current]').waitFor();
   assert(await desk.locator('#seasonSelect').inputValue()==='fixture-current','Manage return retains season');
@@ -258,6 +332,6 @@ async (page) => {
   assert(await desk.locator('#seasonName').isVisible(),'No-season empty state leads to creation');
   seasons.push(...originalSeasons);
   assert(errors.length===0,`No runtime errors: ${errors.join('; ')}`);
-  return {result:'passed',themeVariants:themeCount,initialListRequests:initialCalls,finalListRequests:listCalls(),checks:'navigation, legacy routes, filters, pagination, state restrictions, draft retention, shared seasons, defaults, validation, duplicate submission, errors, focus, lazy loads, empty states, responsive layouts, themes, bottom navigation'};
+  return {result:'passed',themeVariants:themeCount,initialListRequests:initialCalls,finalListRequests:listCalls(),checks:'ground creation/edit/clear, WhatsApp share, public linked ground, safe URLs, navigation, legacy routes, filters, pagination, state restrictions, draft retention, shared seasons, defaults, validation, duplicate submission, errors, focus, lazy loads, empty states, responsive layouts, themes, bottom navigation'};
   } finally { await fixtureContext.close(); }
 }
