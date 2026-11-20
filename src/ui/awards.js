@@ -57,15 +57,88 @@ export function votingProgress(awards) {
   const open=(Array.isArray(awards)?awards:[]).filter(a=>a.status==='OPEN');
   return {open:open.length,voted:open.filter(a=>a.myVote).length,pending:open.filter(a=>a.canVote && !a.myVote).length};
 }
-function shareVoting(data, trigger) {
+function cardLines(c,text,width) {
+  const lines=[];let line='';
+  for(const letter of String(text)) {
+    if(letter==='\n'){lines.push(line);line='';continue;}
+    if(line && c.measureText(line+letter).width>width) {
+      const space=line.lastIndexOf(' ');
+      if(space>0){lines.push(line.slice(0,space));line=line.slice(space+1);}
+      else {lines.push(line);line='';}
+    }
+    line+=letter;
+  }
+  lines.push(line);return lines;
+}
+async function votingPoster(season,awards) {
+  const canvas=document.createElement('canvas');canvas.width=1080;
+  const c=canvas.getContext('2d');
+  c.font='bold 34px Arial';
+  const seasonLines=cardLines(c,season.name,936);
+  const headingBottom=450+seasonLines.length*44;
+  const rows=awards.map(a=>{
+    c.font='bold 36px Arial';const names=cardLines(c,a.name,820);
+    c.font='26px Arial';const dates=cardLines(c,`Closes ${dateLabel(a.deadline)}`,820);
+    return {names,dates,height:48+names.length*44+dates.length*36};
+  });
+  c.font='24px Arial';const linkLines=cardLines(c,awardUrl(season.seasonId),888);
+  canvas.height=headingBottom+rows.reduce((sum,row)=>sum+row.height+18,0)+264+linkLines.length*32;
+  c.fillStyle='#091b2b';c.fillRect(0,0,1080,canvas.height);
+  c.fillStyle='#e3bc66';c.fillRect(0,0,1080,12);
+  // The club crest is fixed across appearance themes; the graphic is drawn locally.
+  try {
+    const crest=new Image();crest.src='./assets/icons/icon-192.png';await crest.decode();
+    c.save();c.beginPath();c.arc(116,108,44,0,Math.PI*2);c.clip();
+    c.drawImage(crest,72,64,88,88);
+    c.restore();
+  } catch {c.fillStyle='#091b2b';c.font='bold 24px Arial';c.fillText('MLFC',82,117);}
+  c.fillStyle='#fff';c.font='bold 29px Arial';c.fillText('MANOR LAKES FC',184,99);
+  c.fillStyle='#e3bc66';c.font='bold 22px Arial';c.fillText('SEASON AWARDS · VOTING OPEN',184,136);
+  // Trophy, with handles and a football-pitch arc, gives the invitation a sporting identity.
+  c.save();c.translate(840,252);c.strokeStyle='#e3bc66';c.fillStyle='#e3bc66';c.lineWidth=7;
+  c.beginPath();c.moveTo(-55,-35);c.lineTo(55,-35);c.lineTo(43,34);c.quadraticCurveTo(0,91,-43,34);c.closePath();c.fill();
+  c.beginPath();c.moveTo(-53,-19);c.lineTo(-84,-19);c.quadraticCurveTo(-95,40,-37,43);c.moveTo(53,-19);c.lineTo(84,-19);c.quadraticCurveTo(95,40,37,43);c.moveTo(0,66);c.lineTo(0,102);c.moveTo(-40,107);c.lineTo(40,107);c.stroke();
+  c.strokeStyle='#244659';c.lineWidth=2;c.beginPath();c.arc(0,15,148,0,Math.PI*2);c.stroke();c.restore();
+  c.fillStyle='#fff';c.font='bold 88px Arial';c.fillText('YOUR CLUB.',72,274);c.fillText('YOUR VOTE.',72,372);
+  c.fillStyle='#bcd0df';c.font='bold 34px Arial';seasonLines.forEach((line,i)=>c.fillText(line,72,444+i*44));
+  let y=headingBottom;
+  rows.forEach(row=>{
+    c.fillStyle='#132e40';c.fillRect(72,y,936,row.height);
+    c.fillStyle='#e3bc66';c.fillRect(72,y,5,row.height);
+    c.strokeStyle='#6ed5ad';c.lineWidth=3;c.strokeRect(102,y+28,25,25);
+    c.beginPath();c.moveTo(108,y+39);c.lineTo(116,y+47);c.lineTo(133,y+25);c.stroke();
+    c.fillStyle='#fff';c.font='bold 36px Arial';
+    row.names.forEach((line,j)=>c.fillText(line,154,y+45+j*44));
+    c.fillStyle='#bcd0df';c.font='26px Arial';
+    row.dates.forEach((line,j)=>c.fillText(line,154,y+49+row.names.length*44+j*36));
+    y+=row.height+18;
+  });
+  y+=20;c.fillStyle='#6ed5ad';c.fillRect(72,y,936,72);
+  c.fillStyle='#091b2b';c.font='bold 30px Arial';c.fillText('CHOOSE YOUR PLAYERS. CAST YOUR VOTES.',102,y+47);
+  c.fillStyle='#bcd0df';c.font='24px Arial';c.fillText('All closing times are Melbourne time.',72,y+119);
+  c.fillStyle='#fff';c.font='24px Arial';linkLines.forEach((line,i)=>c.fillText(line,72,y+169+i*32));
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  if(!blob)throw new Error('Could not create the voting image. Try again.');
+  return new File([blob],'mlfc-season-awards-invitation.png',{type:'image/png'});
+}
+async function shareVoting(data, trigger) {
   const open=data.awards.filter(a=>a.status==='OPEN');
   if(!open.length)return toastInfo('There are no open voting categories to share.');
   const text=`🏆 ${data.season.name} · Season awards\nVoting is open!\n\n${open.map(a=>`${a.name}\nCloses ${dateLabel(a.deadline)}`).join('\n\n')}\n\nChoose your players and vote here:\n${awardUrl(data.season.seasonId)}`;
-  const modal=dialog('Share voting link',data.season.name,trigger);
+  const modal=dialog('Share voting image',data.season.name,trigger);
   const host=modal.querySelector('.awardsDialog__body');
-  host.innerHTML=`<p class="small">${open.length} open ${open.length===1?'category':'categories'} · All deadlines in Melbourne time.</p><textarea class="awardShareMessage" aria-label="Voting message" readonly rows="10">${esc(text)}</textarea><div class="awardActions"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener noreferrer">Share to WhatsApp</a>${navigator.share?'<button class="btn" data-native-share type="button">More share options</button>':''}<button class="btn" data-copy-message type="button">Copy message & link</button></div>`;
-  host.querySelector('[data-copy-message]').onclick=e=>run(e.currentTarget,async()=>{await navigator.clipboard.writeText(text);toastSuccess('Voting message and link copied.');});
-  host.querySelector('[data-native-share]')?.addEventListener('click',e=>run(e.currentTarget,()=>navigator.share({title:`${data.season.name} · Season awards`,text})));
+  host.innerHTML='<p class="small" role="status">Creating voting image…</p>';
+  let file;
+  try {file=await votingPoster(data.season,open);}
+  catch(error){if(modal.open)modal.close();throw error;}
+  if(!modal.open)return;
+  const objectUrl=URL.createObjectURL(file);
+  modal.addEventListener('close',()=>URL.revokeObjectURL(objectUrl),{once:true});
+  let canShare=false;
+  try {canShare=Boolean(navigator.share && navigator.canShare?.({files:[file]}));} catch {}
+  host.innerHTML=`<img class="awardSharePreview" src="${objectUrl}" alt="${esc(`${data.season.name} season awards voting invitation`)}" /><div class="awardActions">${canShare?'<button class="btn primary" data-share-image type="button">Share image & link</button>':''}<a class="btn ${canShare?'':'primary'}" href="${objectUrl}" download="${file.name}">Download image</a><button class="btn" data-copy-link type="button">Copy voting link</button></div><p class="small">${canShare?'Choose WhatsApp or another app from the share menu.':'Download the image, copy the voting link, and attach both in WhatsApp or your group chat.'}</p><details class="awardInvitationDetails"><summary>Image details & voting link</summary><ul>${open.map(a=>`<li><strong>${esc(a.name)}</strong><br />Closes ${esc(dateLabel(a.deadline))}</li>`).join('')}</ul><a href="${esc(awardUrl(data.season.seasonId))}">${esc(awardUrl(data.season.seasonId))}</a></details>`;
+  host.querySelector('[data-copy-link]').onclick=e=>run(e.currentTarget,async()=>{await navigator.clipboard.writeText(awardUrl(data.season.seasonId));toastSuccess('Voting link copied.');});
+  host.querySelector('[data-share-image]')?.addEventListener('click',e=>run(e.currentTarget,()=>navigator.share({files:[file],title:`${data.season.name} · Season awards`,text})));
 }
 export async function openSeasonAwards(seasonId) {
   if (!seasonId) return toastError('Choose a season first.');
@@ -78,13 +151,13 @@ export async function openSeasonAwards(seasonId) {
     data=check(ballot);
     if(!modal.open)return;
     modal.querySelector('.awardsDialog__head p').textContent=data.season.name;
-    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Add awards at any time. Draft and active awards can be removed. Nominees lock when voting opens; individual choices stay private.</p></div><div class="awardsDeskIntro__actions">${data.awards.some(a=>a.status==='OPEN')?'<button class="btn" data-share-voting type="button">Share voting link</button>':''}<button class="btn primary" data-add type="button">+ Add award</button></div></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees</p>${deadlineHtml(a)}${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button></div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voter image</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
+    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Add awards at any time. Draft and active awards can be removed. Nominees lock when voting opens; individual choices stay private.</p></div><div class="awardsDeskIntro__actions">${data.awards.some(a=>a.status==='OPEN')?'<button class="btn" data-share-voting type="button">Share voting image</button>':''}<button class="btn primary" data-add type="button">+ Add award</button></div></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees</p>${deadlineHtml(a)}${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button></div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voter image</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
     body.querySelector('[data-add]').onclick=()=>editAward(null,data,refresh);
     body.querySelector('[data-share-voting]')?.addEventListener('click',e=>{
       const button=e.currentTarget;
       run(button,async()=>{
         const fresh=check(await API.seasonAwards(seasonId,true));
-        if(modal.open)shareVoting(fresh,button);
+        if(modal.open)await shareVoting(fresh,button);
       });
     });
     body.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);

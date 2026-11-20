@@ -62,3 +62,11 @@ These measure content height, not scroll distance or total effort to complete ev
 Screenshots under ignored `output/playwright/`: `awards-ballot-before-390.png`, `awards-ballot-after-390.png`, `awards-overview-after-390.png`, `awards-home-progress-390.png`, `awards-theme-390.png`, and `awards-share-all-phone.png`. Test results are saved in `awards-ballot-results.txt` and `awards-admin-results.txt` in the same directory.
 
 Awards implementation: `src/ui/awards.js`, `src/ui/season_honours.js`, and scoped additions in `styles.css`. Release references: `src/config.js` and `index.html`. Regression coverage: the new ballot fixture and the extended admin awards fixture. Unrelated theme edits in the shared workspace were preserved.
+
+## Voting invitation image — 20 November 2026
+
+- Replaced the text-based sharing preview with a downloadable PNG invitation. It uses the fixed club crest, a locally drawn trophy, each currently open category and its Melbourne closing time, plus the season ballot URL. Wrapped names and a variable canvas height accommodate larger lists without clipping.
+- “Share image & link” sends the PNG and a caption containing the clickable ballot URL through supported native file sharing. Download and copy-link actions support other browsers. Expandable image details expose category names, deadlines and the link as accessible text.
+- Image generation uses the existing Canvas API without new dependencies or remote image services. Closing the preview releases its object URL; failed generation permits retry. Build references are aligned at `2026-11-20.104`.
+- `tests/awards.browser.js` passed image content/deadlines, PNG download, native file payload, unsupported file-sharing fallbacks, cancellation, focus restoration, URL cleanup, ten categories with long/unbroken names, image-generation failure and the existing admin awards flows. Preview layouts were checked at 320, 390 and 1280px. Generated artifacts: `output/playwright/awards-invitation.png` and `awards-invitation-{320,390,1280}.png`.
+- Sharing APIs were mocked; actual phone share sheets and WhatsApp delivery were not exercised. No production writes or deployment were performed.
