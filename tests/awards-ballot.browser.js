@@ -10,7 +10,7 @@ async (page) => {
     const season={seasonId:'fixture-compact',name:'Summer season',status:'OPEN',startDate:'2026-01-01',endDate:'2099-12-31'};
     const players=['Alex Morgan','Jamie Clarke','Sam Taylor','Jordan Williams','Casey Bennett','Charlie Evans','Robin Campbell','Drew Mitchell','Morgan Parker','Riley Anderson','Cameron Hughes','Taylor Wilson','Alexandra Montgomery-Williams','Jesse Turner','Avery Collins','Bailey Stewart','Harper Davis','Quinn Robinson','Reese Walker','Skyler Thompson'];
     const names=['Players’ player','Goal of the season','Most improved player','Club spirit','Best teammate','Save of the season'];
-    const awards=names.map((name,i)=>({awardId:`award-${i}`,seasonId:season.seasonId,name,kind:'CUSTOM',status:'OPEN',deadline:i===1?'2099-12-21T08:00:00.000Z':'2099-12-20T08:00:00.000Z',revision:1,nominees:players.map((playerName,j)=>({playerName,...(j%3===0?{overall:80,position:'MID'}:{})})),totalVotes:3,totalEligible:20,myVote:i===2?players[1]:'',canVote:true}));
+    const awards=names.map((name,i)=>({awardId:`award-${i}`,seasonId:season.seasonId,name,kind:'CUSTOM',status:'OPEN',deadline:i===1?'2099-12-21T08:00:00.000Z':'2099-12-20T08:00:00.000Z',revision:1,nominees:players.map((playerName,j)=>({playerName,photoUrl:j<2?'/assets/icons/icon-192.png':'',...(j%3===0?{overall:80,position:'MID'}:{})})),totalVotes:3,totalEligible:20,myVote:i===2?players[1]:'',canVote:true}));
     let failVote=false,failAwards=false;
     let voteGate=null,releaseVote;
     await page.route('https://mlfc-api.manorlakes-football.workers.dev/**',async route=>{
@@ -25,7 +25,7 @@ async (page) => {
       if(action==='public_matches_meta')data={ok:true,fingerprint:'fixture',latestCode:''};
       if(action==='my_next_match')data={ok:true,match:null};
       if(action==='notifications')data={ok:true,notifications:[],unreadCount:0};
-      if(action==='leaderboard_season')data={ok:true,rows:[{playerName:players[0],goals:12,assists:4,matchesPlayed:15,matchesRated:12,avgRating:8.5,potmAwards:3}]};
+      if(action==='leaderboard_season')data={ok:true,rows:[{playerName:players[0],photoUrl:'/assets/icons/icon-192.png',goals:12,assists:4,matchesPlayed:15,matchesRated:12,avgRating:8.5,potmAwards:3},{playerName:players[1],photoUrl:'/assets/icons/icon-192.png',goals:12,assists:2,matchesPlayed:14,matchesRated:9,avgRating:9,potmAwards:2}]};
       if(action==='season_awards')data=failAwards?{ok:false,error:'Fixture awards unavailable'}:{ok:true,season,awards,players};
       if(action==='award_vote'){
         if(voteGate)await voteGate;
@@ -52,6 +52,10 @@ async (page) => {
     assert(compact,'Ballot uses collapsible categories');
     const first=ballots.locator('[data-id="award-0"]'),second=ballots.locator('[data-id="award-1"]');
     const progress=page.locator('.awardBallotProgress');
+    assert(await first.locator('.awardNominee .hasPhoto').count()===2,'Custom award nominees show supplied player photos');
+    assert(await first.locator('.awardNominee .playerPhoto:not(.hasPhoto)').count()===18,'Missing photos retain initials');
+    const nomineePhoto=first.locator('.awardNominee .hasPhoto').first();
+    assert((await nomineePhoto.evaluate(el=>getComputedStyle(el,'::after').backgroundImage)).includes('icon-192.png'),'Custom nominee portrait is displayed');
     assert(await ballots.locator('[open]').count()===1,'One pending category starts open');
     assert((await progress.innerText()).includes('1 voted · 5 pending'),'Counts reflect saved votes');
     assert(await first.getByRole('radio',{name:`${players[0]} (you)`,exact:true}).isDisabled(),'Self vote disabled');
@@ -139,6 +143,16 @@ async (page) => {
     await page.locator('.awardLeadersPanel>summary').click();
     assert(await page.locator('.awardLeaders__grid').isVisible(),'Season leaders available on demand');
     assert((await page.locator('.awardLeaders__grid').innerText()).includes('12 goals'),'Statistics unchanged');
+    const goldenBoot=page.locator('.awardLeaders__grid>div').filter({has:page.locator('dt',{hasText:'Golden Boot'})});
+    assert(await goldenBoot.locator('.awardLeaderPlayer').count()===2,'Tied leaders both retain their names');
+    assert(await goldenBoot.locator('.hasPhoto').count()===2,'Each tied leader has a portrait');
+    const highestRated=page.locator('.awardLeaders__grid>div').filter({has:page.locator('dt',{hasText:'Highest Rated'})});
+    assert((await highestRated.innerText()).includes(players[0]) && !(await highestRated.innerText()).includes(players[1]),'Highest rated qualification is unchanged');
+    for(const width of [320,390,768,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Leader portraits do not cause page overflow');
+      if(width===390)await page.screenshot({path:'output/playwright/awards-leader-photos-390.png',animations:'disabled'});
+    }
     // Home uses saved choices and refreshes when returning from the ballot.
     await page.evaluate(async()=>{
       const {applyWeeklyTheme}=await import('/src/themes.js');applyWeeklyTheme({enabled:false});

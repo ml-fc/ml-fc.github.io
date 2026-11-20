@@ -70,3 +70,16 @@ Awards implementation: `src/ui/awards.js`, `src/ui/season_honours.js`, and scope
 - Image generation uses the existing Canvas API without new dependencies or remote image services. Closing the preview releases its object URL; failed generation permits retry. Build references are aligned at `2026-11-20.104`.
 - `tests/awards.browser.js` passed image content/deadlines, PNG download, native file payload, unsupported file-sharing fallbacks, cancellation, focus restoration, URL cleanup, ten categories with long/unbroken names, image-generation failure and the existing admin awards flows. Preview layouts were checked at 320, 390 and 1280px. Generated artifacts: `output/playwright/awards-invitation.png` and `awards-invitation-{320,390,1280}.png`.
 - Sharing APIs were mocked; actual phone share sheets and WhatsApp delivery were not exercised. No production writes or deployment were performed.
+
+## Award photos and phone footer — 20 November 2026
+
+- Fixed the mobile vote button inheriting full width and reducing the privacy-message width to zero. The button now sizes to its text and the footer can wrap; the message remains one readable line at 320–1280px. Saved player names were also checked.
+- Added portraits beside season leaders, including each tied leader, while preserving names, statistical values and the ten-rated-match qualification. Custom nominees use the same existing photo renderer as Ballon d’Or.
+- The backend now supplies current public photo URLs for all award nominees and ordinary season leaderboard rows through deduplicated, bounded lookups. Existing custom categories need no recreation. Uploads/removals take effect without changing saved nominee eligibility, FC ratings, votes or statistical caches; missing photos retain initials.
+- Validation: all 79 backend tests, Worker dry run and production dependency audit passed; the ballot browser fixture passed photo rendering, tied leaders, unchanged qualification, voting and responsive layouts. No production writes or deployment were performed. Photo fixtures use local test artwork; physical-device testing was not performed. Aligned frontend build: `2026-11-20.106`.
+
+## Admin award editing — 20 November 2026
+
+- A 44px pencil control beside each draft/open award name opens a compact modal for the name and nominee list. Cancel leaves the award unchanged; failed saves retain input and permit retry. Final awards stay protected.
+- Open edits retain the original deadline and electorate and require at least two nominees. Nominees with existing votes cannot be removed. Backend revision and SQL membership guards protect both sides of a simultaneous vote/edit; edits do not reset votes or stored FC metadata.
+- Both awards browser fixtures passed, including editing an open category, nominee selection, save failure/retry, cancellation, tied-player photos and 320–1280px layouts. All 80 backend tests, Worker dry run, production dependency audit, frontend syntax and whitespace checks passed. Native sharing remains mocked; production voting/edit writes were not exercised. Frontend build: `2026-11-20.107`.

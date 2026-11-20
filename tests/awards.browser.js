@@ -12,7 +12,7 @@ async (page) => {
     const players = ['Admin','Alice','Bob','Carol'];
     const award = (id,name,status='OPEN') => ({awardId:id,seasonId:season.seasonId,name,kind:'CUSTOM',status,deadline,revision:1,nominees:players.map(playerName=>({playerName})),totalVotes:1,totalEligible:4,voted:['Alice'],pending:['Admin','Bob','Carol'],myVote:'',canVote:status==='OPEN'});
     let awards = [award('active','Players’ player'),{...award('other','Best teammate'),deadline:'2099-12-21T08:00:00.000Z'},{...award('final','Final category','CLOSED'),winners:['Alice'],results:[{playerName:'Alice',votes:1}]}];
-    let failParticipation = false;
+    let failParticipation = false,failEdit=false;
     await page.addInitScript(() => {
       Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.fixtureCopiedText=text;}}});
       Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{window.fixtureShared=data;}});
@@ -40,7 +40,11 @@ async (page) => {
       if(action==='admin_season_awards'||action==='season_awards'){
         data=failParticipation?{ok:false,error:'Fixture network unavailable'}:{ok:true,season,players,awards:awards.map(a=>action==='season_awards'?Object.fromEntries(Object.entries(a).filter(([k])=>!['voted','pending'].includes(k))):a)};
       }
-      if(action==='admin_award_save')awards.push({...award('added',params.get('name'),'DRAFT'),deadline:params.get('deadline'),nominees:JSON.parse(params.get('nominees')).map(playerName=>({playerName})),totalVotes:0,voted:[],pending:players});
+      if(action==='admin_award_save') {
+        if(failEdit)data={ok:false,error:'Fixture edit conflict'};
+        else if(params.get('awardId'))Object.assign(awards.find(a=>a.awardId===params.get('awardId')),{name:params.get('name'),nominees:JSON.parse(params.get('nominees')).map(playerName=>({playerName})),revision:Number(params.get('revision'))+1});
+        else awards.push({...award('added',params.get('name'),'DRAFT'),deadline:params.get('deadline'),nominees:JSON.parse(params.get('nominees')).map(playerName=>({playerName})),totalVotes:0,voted:[],pending:players});
+      }
       if(action==='admin_award_open')Object.assign(awards.find(a=>a.awardId===params.get('awardId')),{status:'OPEN',revision:2});
       if(action==='admin_award_delete')awards=awards.filter(a=>a.awardId!==params.get('awardId'));
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
@@ -82,6 +86,42 @@ async (page) => {
     await active.locator('[data-command="delete"]').waitFor();
     assert(await main.locator('[data-award="final"] [data-command="delete"]').count()===0,'Finished category protected');
     assert((await active.locator('.awardDeadline').innerText()).includes('Melbourne'),'Explicit Melbourne deadline');
+    assert(await main.locator('[data-award="final"] [data-edit]').count()===0,'Final awards remain protected');
+    const other=main.locator('[data-award="other"]');
+    assert(await other.locator('.awardNameRow [data-edit]').count()===1,'Edit icon sits beside open award name');
+    await other.getByRole('button',{name:'Edit Best teammate',exact:true}).click();
+    const editor=page.getByRole('dialog',{name:'Edit award',exact:true});
+    await editor.waitFor();
+    assert(await editor.locator('[name="deadline"]').getAttribute('readonly')!==null,'Open deadline is fixed');
+    await editor.getByLabel('Award name',{exact:true}).fill('Best teammate award');
+    await editor.locator('[data-nominees]').click();
+    const editPicker=page.getByRole('dialog',{name:'Choose nominees',exact:true});
+    await editPicker.getByLabel('Carol',{exact:true}).uncheck();
+    await editPicker.locator('[data-done]').click();
+    assert((await editor.locator('[data-count]').innerText()).includes('3'),'Nominee changes stay in the modal');
+    failEdit=true;
+    await editor.getByRole('button',{name:'Save award',exact:true}).click();
+    await page.getByText('Fixture edit conflict',{exact:true}).waitFor();
+    assert(await editor.getByLabel('Award name',{exact:true}).inputValue()==='Best teammate award','Failed save preserves edits');
+    assert(!await editor.getByRole('button',{name:'Save award',exact:true}).isDisabled(),'Failed save permits retry');
+    failEdit=false;
+    await editor.getByRole('button',{name:'Save award',exact:true}).click();
+    await editor.waitFor({state:'detached'});
+    await other.getByRole('button',{name:'Edit Best teammate award',exact:true}).waitFor();
+    assert(awards.find(a=>a.awardId==='other').nominees.length===3,'Open nominee edit is saved');
+    assert(awards.find(a=>a.awardId==='other').totalVotes===1,'Edit keeps existing votes');
+    const saves=calls.filter(c=>c.action==='admin_award_save').length;
+    await other.locator('[data-edit]').click();
+    await editor.getByLabel('Award name',{exact:true}).fill('Unsaved name');
+    await page.keyboard.press('Escape');
+    await editor.waitFor({state:'detached'});
+    assert(calls.filter(c=>c.action==='admin_award_save').length===saves,'Cancel does not submit edits');
+    for(const width of [320,390,1280]) {
+      await page.setViewportSize({width,height:844});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Award edit icons fit the viewport');
+      if(width===390)await page.screenshot({path:'output/playwright/awards-edit-icon-390.png'});
+    }
+
     await page.setViewportSize({width:390,height:844});
     await page.screenshot({path:'output/playwright/awards-desk-phone.png'});
     const beforeShare=calls.filter(c=>c.action==='admin_season_awards').length;
