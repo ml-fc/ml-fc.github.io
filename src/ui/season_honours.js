@@ -1,5 +1,5 @@
 import { API } from '../api/endpoints.js';
-import { esc } from './awards.js';
+import { esc, votingProgress } from './awards.js';
 
 let clockTimer=null;
 const trophyIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8v6a4 4 0 0 1-8 0V3Z"/><path d="M8 5H5v3a4 4 0 0 0 4 4m7-7h3v3a4 4 0 0 1-4 4M12 13v5m-4 3h8m-7-3h6v3"/></svg>';
@@ -14,16 +14,29 @@ export async function mountSeasonHonours(root) {
   if(!host){host=document.createElement('div');host.dataset.seasonHome='';root.prepend(host);}
   let history=root.querySelector('[data-season-history]');
   if(!history){history=document.createElement('section');history.dataset.seasonHistory='';history.setAttribute('aria-label','Previous season honours');root.append(history);}
+  const generation=crypto.randomUUID();
+  host.dataset.honoursGeneration=generation;
   if(clockTimer)clearInterval(clockTimer);
   host.innerHTML='<div class="seasonCountdown small" role="status">Loading season…</div>';
   let offset=0;
   try {
     const data=await API.seasonHonours();
     if(!data?.ok)throw new Error(data?.error || 'Could not load season honours');
-    if(!host.isConnected || !history.isConnected)return;
+    if(!host.isConnected || !history.isConnected || host.dataset.honoursGeneration!==generation)return;
     host.innerHTML=data.current?`<section class="seasonCountdown" aria-label="Current season"><div class="seasonCountdown__main"><strong>${esc(data.current.name)}</strong><div class="seasonCountdown__status"><span data-season-label>Ends in</span><time data-season-clock datetime="${esc(data.current.deadline)}" role="timer" aria-live="off"></time></div></div><a class="seasonCountdown__awards" href="#/awards?seasonId=${encodeURIComponent(data.current.seasonId)}" aria-label="View season awards">${trophyIcon}<span>Awards</span><span aria-hidden="true">›</span></a></section>`:'';
     history.innerHTML=`<div data-honours>${data.seasons.map(seasonHtml).join('')}</div>${data.hasMore?'<button class="btn seasonOlder" data-older type="button">Show older seasons</button>':''}`;
     if(data.current){
+      const awardsLink=host.querySelector('.seasonCountdown__awards');
+      const awardsText=awardsLink.querySelector('span');
+      awardsText.className='seasonCountdown__awardText';
+      awardsText.innerHTML='<span>Awards</span><small data-awards-summary>View voting</small>';
+      API.seasonAwards(data.current.seasonId).then(ballot=>{
+        if(!ballot?.ok || !awardsLink.isConnected || host.dataset.honoursGeneration!==generation)return;
+        const {open,voted,pending}=votingProgress(ballot.awards);
+        const text=open?(voted || pending?`${voted} voted · ${pending} pending`:`${open} open ${open===1?'category':'categories'}`):'View awards';
+        awardsText.querySelector('[data-awards-summary]').textContent=text;
+        awardsLink.setAttribute('aria-label',`Season awards: ${text}`);
+      }).catch(()=>{});
       const tick=()=>{
         if(!host.isConnected){clearInterval(clockTimer);clockTimer=null;return;}
         const left=Math.max(0,Date.parse(data.current.deadline)-Date.now());
@@ -43,7 +56,7 @@ export async function mountSeasonHonours(root) {
       catch{older.textContent='Could not load. Try again.';}
       finally{older.disabled=false;if(older.textContent==='Loading…')older.textContent='Show older seasons';}
     };
-  } catch {host.innerHTML='<button class="btn seasonOlder" type="button">Retry season honours</button>';host.querySelector('button').onclick=()=>mountSeasonHonours(root);}
+  } catch {if(!host.isConnected || host.dataset.honoursGeneration!==generation)return;host.innerHTML='<button class="btn seasonOlder" type="button">Retry season honours</button>';host.querySelector('button').onclick=()=>mountSeasonHonours(root);}
 }
 export function updateSeasonCreation(root,season) {
   const button=root.querySelector('#createMatch');

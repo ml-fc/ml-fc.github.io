@@ -91,8 +91,6 @@ function clearWeeklyTheme() {
   delete document.body.dataset.weeklyTeam;
   delete document.body.dataset.themeCategory;
   document.querySelectorAll(".goatsBackdrop").forEach(element => element.remove());
-  const brand = document.querySelector(".brand__mark");
-  if (brand) { brand.src = "./assets/icons/icon-192.png"; brand.alt = ""; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#07111e");
   document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = ""; });
   document.querySelectorAll(".nextMatch__themeMark").forEach((element) => { element.removeAttribute("aria-label"); });
@@ -118,8 +116,6 @@ export function applyWeeklyTheme(payload) {
   document.body.dataset.weeklyTeam = theme.name;
   document.body.dataset.themeCategory = theme.category;
   if (theme.collective) document.body.append(createGoatsCollage("goatsBackdrop"));
-  const brand = document.querySelector(".brand__mark");
-  if (brand) { brand.src = theme.crest; brand.alt = `${theme.name} theme`; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.background);
   document.querySelectorAll(".nextMatch__themeName").forEach((element) => { element.textContent = theme.name; });
   document.querySelectorAll(".nextMatch__themeLabel").forEach((element) => { element.textContent = theme.category === "GOATS" ? "GOAT" : "Team of the Week"; });

@@ -25,14 +25,14 @@ function leadersHtml(result) {
   if(!result?.ok)return '<section class="awardLeaders"><div class="awardLeaders__head"><h2>Season leaders</h2></div><p class="small">Could not load leaders. Refresh to try again.</p></section>';
   return `<section class="awardLeaders" aria-label="Current season leaders"><div class="awardLeaders__head"><h2>Season leaders</h2><span>Recorded match stats</span></div><dl class="awardLeaders__grid">${liveSeasonLeaders(result.rows).map(a=>`<div><dt>${esc(a.name)}</dt><dd><strong>${esc(a.winners.join(' · ') || (a.metric==='avgRating'?'No qualifying player':'No stats yet'))}</strong><span>${a.winners.length?`${a.metric==='avgRating'?a.value.toFixed(2):a.value} ${a.unit}`:'—'}${a.metric==='avgRating'?'<small>10 rated matches minimum</small>':''}</span></dd></div>`).join('')}</dl></section>`;
 }
-function dialog(title, subtitle = '') {
+function dialog(title, subtitle = '', focusTarget = document.activeElement) {
   const el = document.createElement('dialog');
   el.className = 'awardsDialog';
   const titleId = `award-title-${crypto.randomUUID()}`;
   el.setAttribute('aria-labelledby',titleId);
   el.innerHTML = `<header class="awardsDialog__head"><div>${title==='Season awards'?'':'<div class="stepEyebrow">Season awards</div>'}<h2 id="${titleId}">${esc(title)}</h2><p>${esc(subtitle)}</p></div><button class="awardsClose" type="button" aria-label="Close dialog">×</button></header><div class="awardsDialog__body"></div>`;
   el.querySelector('.awardsClose').onclick = () => el.close();
-  const returnFocus=document.activeElement;
+  const returnFocus=focusTarget;
   const onNavigate=()=>el.close();
   window.addEventListener('hashchange',onNavigate);
   el.addEventListener('close',()=>{window.removeEventListener('hashchange',onNavigate);el.remove();if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});},{once:true});
@@ -53,6 +53,20 @@ function participation(a) {
   const percent = a.totalEligible ? Math.round(a.totalVotes/a.totalEligible*100) : 0;
   return `<div class="awardTurnout"><span><b>${Number(a.totalVotes) || 0}</b> of ${Number(a.totalEligible) || 0} voted</span><span>${percent}%</span></div><progress class="awardProgress" max="${Math.max(1,Number(a.totalEligible) || 0)}" value="${Number(a.totalVotes) || 0}" aria-label="Voting participation"></progress>`;
 }
+export function votingProgress(awards) {
+  const open=(Array.isArray(awards)?awards:[]).filter(a=>a.status==='OPEN');
+  return {open:open.length,voted:open.filter(a=>a.myVote).length,pending:open.filter(a=>a.canVote && !a.myVote).length};
+}
+function shareVoting(data, trigger) {
+  const open=data.awards.filter(a=>a.status==='OPEN');
+  if(!open.length)return toastInfo('There are no open voting categories to share.');
+  const text=`🏆 ${data.season.name} · Season awards\nVoting is open!\n\n${open.map(a=>`${a.name}\nCloses ${dateLabel(a.deadline)}`).join('\n\n')}\n\nChoose your players and vote here:\n${awardUrl(data.season.seasonId)}`;
+  const modal=dialog('Share voting link',data.season.name,trigger);
+  const host=modal.querySelector('.awardsDialog__body');
+  host.innerHTML=`<p class="small">${open.length} open ${open.length===1?'category':'categories'} · All deadlines in Melbourne time.</p><textarea class="awardShareMessage" aria-label="Voting message" readonly rows="10">${esc(text)}</textarea><div class="awardActions"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener noreferrer">Share to WhatsApp</a>${navigator.share?'<button class="btn" data-native-share type="button">More share options</button>':''}<button class="btn" data-copy-message type="button">Copy message & link</button></div>`;
+  host.querySelector('[data-copy-message]').onclick=e=>run(e.currentTarget,async()=>{await navigator.clipboard.writeText(text);toastSuccess('Voting message and link copied.');});
+  host.querySelector('[data-native-share]')?.addEventListener('click',e=>run(e.currentTarget,()=>navigator.share({title:`${data.season.name} · Season awards`,text})));
+}
 export async function openSeasonAwards(seasonId) {
   if (!seasonId) return toastError('Choose a season first.');
   const modal = dialog('Season awards','Categories, nominees and voting');
@@ -64,8 +78,15 @@ export async function openSeasonAwards(seasonId) {
     data=check(ballot);
     if(!modal.open)return;
     modal.querySelector('.awardsDialog__head p').textContent=data.season.name;
-    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Add awards at any time. Draft and active awards can be removed. Nominees lock when voting opens; individual choices stay private.</p></div><button class="btn primary" data-add type="button">+ Add award</button></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees</p>${deadlineHtml(a)}${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button></div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voter image</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
+    body.innerHTML=`${leadersHtml(leaders)}<div class="awardsDeskIntro"><div><h3>Voting categories</h3><p>Add awards at any time. Draft and active awards can be removed. Nominees lock when voting opens; individual choices stay private.</p></div><div class="awardsDeskIntro__actions">${data.awards.some(a=>a.status==='OPEN')?'<button class="btn" data-share-voting type="button">Share voting link</button>':''}<button class="btn primary" data-add type="button">+ Add award</button></div></div><div class="awardAdminList">${data.awards.map(a=>`<article class="awardAdminCard" data-award="${esc(a.awardId)}"><div class="awardCardHead"><div><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span><h3>${esc(a.name)}</h3></div><span class="awardEmblem" aria-hidden="true">${a.kind==='BALLONDOR'?'◉':'✦'}</span></div><p class="small">${a.nominees.length} nominees</p>${deadlineHtml(a)}${a.status==='DRAFT'?`<div class="awardNomineeStrip">${a.nominees.slice(0,5).map(n=>`<span>${esc(n.playerName)}</span>`).join('')}${a.nominees.length>5?`<span>+${a.nominees.length-5}</span>`:''}</div><div class="awardActions"><button class="btn" data-edit type="button">Configure</button>${a.kind==='BALLONDOR'?'<button class="btn" data-top20 type="button">Refresh top 20</button>':''}<button class="btn primary" data-command="open" type="button">Open voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button></div>`:`${participation(a)}${a.status==='CLOSED'?resultHtml(a):''}<div class="awardActions">${a.status==='OPEN'?'<button class="btn primary" data-command="notify" type="button">Notify all</button><button class="btn" data-command="remind" type="button">Remind pending</button>':''}<button class="btn" data-share type="button">Share voter image</button><button class="btn" data-participation type="button">Who voted?</button>${a.status==='OPEN'?'<button class="btn gray" data-command="close" type="button">Close voting</button><button class="btn dangerGhost" data-command="delete" type="button">Remove award</button>':''}</div>`}</article>`).join('')}</div><p class="awardsFootnote">Golden Boot, Highest Rated (10 rated matches), Most Assists, Most Man of the Match and Most Appearances publish automatically after the season ends and all matches finish.</p><button class="btn" data-refresh type="button">Refresh awards & leaders</button>`;
     body.querySelector('[data-add]').onclick=()=>editAward(null,data,refresh);
+    body.querySelector('[data-share-voting]')?.addEventListener('click',e=>{
+      const button=e.currentTarget;
+      run(button,async()=>{
+        const fresh=check(await API.seasonAwards(seasonId,true));
+        if(modal.open)shareVoting(fresh,button);
+      });
+    });
     body.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
     for(const card of body.querySelectorAll('[data-award]')) {
       const a=data.awards.find(a=>a.awardId===card.dataset.award);
@@ -155,6 +176,15 @@ async function shareParticipation(a,seasonName) {
   host.querySelector('[data-copy]').onclick=e=>run(e.currentTarget,async()=>{await navigator.clipboard.writeText(awardUrl(a.seasonId));toastInfo('Voting link copied.');});
   host.querySelector('[data-share]').onclick=e=>run(e.currentTarget,async()=>{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],text,title:a.name});else {await navigator.clipboard.writeText(text);toastInfo('Link copied. Download the image and attach it to your group message.');}});
 }
+function ballotContents(a,user) {
+  const voted=Boolean(a.myVote);
+  const subtitle=a.status==='OPEN'?(voted?`Your vote: ${a.myVote}`:`${a.nominees.length} nominees · ${a.canVote?'Choose a player':'View category'}`):a.status==='CLOSED'?(a.winners?.join(' · ') || 'Voting closed'):'Voting not open yet';
+  return `<summary class="awardCategory"><span class="awardCategory__mark ${voted?'awardCategory__mark--voted':''}" aria-hidden="true">${voted?'✓':'✦'}</span><span class="awardCategory__title"><h2>${esc(a.name)}</h2><span>${esc(subtitle)}</span></span><span class="awardState awardState--${voted && a.status==='OPEN'?'voted':esc(String(a.status).toLowerCase())}">${voted && a.status==='OPEN'?'Voted':stateLabel(a.status)}</span><span class="awardCategory__chevron" aria-hidden="true">⌄</span></summary><div class="awardBallot__body">${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`${deadlineHtml(a)}${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="awardBallot__hint">${a.canVote?'Choose one player. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees" role="radiogroup" aria-label="${esc(a.name)} nominees">${a.nominees.map(n=>{const self=n.playerName.toLowerCase()===String(user?.name).toLowerCase();const disabled=!a.canVote || self;return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" aria-label="${esc(n.playerName)}${self?' (you)':''}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong>${self?'<small>You</small>':n.overall?`<small>${Number(n.overall)} OVR${n.position?` · ${esc(n.position)}`:''}</small>`:''}</span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Saved: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</div>`;
+}
+function ballotProgressHtml(awards) {
+  const {open,voted,pending}=votingProgress(awards);
+  return open?`<div class="awardBallotProgress" role="status"><strong>${voted} voted <span>·</span> ${pending} pending</strong><span>Open a category to ${pending?'vote':'view details'}.</span></div>`:'';
+}
 export async function renderAwardsPage(root,query,routeToken,navigation={}) {
   const seasonId=query.get('seasonId') || '';
   root.classList.add('awardsPage');
@@ -166,15 +196,72 @@ export async function renderAwardsPage(root,query,routeToken,navigation={}) {
   const generation=crypto.randomUUID();
   root.dataset.awardsGeneration=generation;
   root.innerHTML='<section class="card" role="status">Loading season awards…</section>';
-  const refresh=async()=>{
+  let request=0;
+  const pendingVotes=new Set();
+  const refresh=async({savedId='',focusSaved=false,restoreRefreshFocus=false}={})=>{
+    const currentRequest=++request;
     const [ballot,leaders]=await Promise.all([API.seasonAwards(seasonId),API.leaderboardSeason(seasonId).catch(()=>null)]);
+    if(!root.isConnected || root.dataset.awardsGeneration!==generation || currentRequest!==request)return;
     const data=check(ballot);
-    if(!root.isConnected || root.dataset.awardsGeneration!==generation)return;
     const user=getCachedUser();
-    root.innerHTML=`<header class="awardsPageHeader"><a class="awardsPageHeader__control pageBack" href="${esc(backHash)}" data-awards-back aria-label="Back to previous screen"><span aria-hidden="true">‹</span><span class="awardsPageHeader__controlLabel">Back</span></a><div class="awardsPageHeader__title"><h1>Season awards</h1><p>${esc(data.season.name)}</p></div><button class="awardsPageHeader__control" data-refresh type="button" aria-label="Refresh awards and leaders" title="Refresh awards and leaders">↻</button></header>${leadersHtml(leaders)}<div class="awardBallots">${data.awards.length?data.awards.map(a=>`<article class="card awardBallot" data-id="${esc(a.awardId)}"><div class="awardCardHead"><h2>${esc(a.name)}</h2><span class="awardState awardState--${esc(String(a.status).toLowerCase())}">${stateLabel(a.status)}</span></div>${a.status==='DRAFT'?'<p class="small">Nominees are being prepared. Check back when voting opens.</p>':`${deadlineHtml(a)}${participation(a)}${a.status==='CLOSED'?resultHtml(a):`<p class="small">${a.canVote?'One vote. Choose any nominee except yourself. You can change your vote until voting closes.':'Voting is available to players who completed a match in this season before the ballot opened.'}</p><form><div class="awardNominees">${a.nominees.map(n=>{const disabled=!a.canVote || n.playerName.toLowerCase()===String(user?.name).toLowerCase();return `<label class="awardNominee ${disabled?'awardNominee--disabled':''}"><input type="radio" name="candidate" value="${esc(n.playerName)}" ${a.myVote===n.playerName?'checked':''} ${disabled?'disabled':''} required />${playerPhotoHtml(n.playerName,n.photoUrl || '')}<span><strong>${esc(n.playerName)}</strong><small>${n.overall?`${Number(n.overall)} OVR · ${esc(n.position || '')}`:'Season nominee'}</small></span><i aria-hidden="true">✓</i></label>`;}).join('')}</div>${a.canVote?`<div class="awardVoteFooter"><span>${a.myVote?`Your vote: ${esc(a.myVote)}`:'Your choice stays private.'}</span><button class="btn primary" type="submit">${a.myVote?'Update vote':'Confirm vote'}</button></div>`:''}</form>`}`}</article>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
+    const existing=[...root.querySelectorAll('.awardBallot')];
+    let openId=existing.find(card=>card.open)?.dataset.id;
+    if(!existing.length)openId=data.awards.find(a=>a.status==='OPEN' && a.canVote && !a.myVote)?.awardId;
+    if(openId===savedId)openId=null;
+    const choices=new Map(existing.filter(card=>card.dataset.id!==savedId).map(card=>{
+      const choice=card.querySelector('input:checked')?.value;
+      const saved=card.querySelector('input[checked]')?.value;
+      return [card.dataset.id,choice!==saved?choice:null];
+    }));
+    const active=document.activeElement;
+    const focusCard=active?.closest('.awardBallot')?.dataset.id;
+    const focusValue=active?.matches('input[type=radio]')?active.value:null;
+    const focusRefresh=active?.matches('[data-refresh]') || (restoreRefreshFocus && active===document.body);
+    const leadersOpen=root.querySelector('.awardLeadersPanel')?.open;
+    root.innerHTML=`<header class="awardsPageHeader"><a class="awardsPageHeader__control pageBack" href="${esc(backHash)}" data-awards-back aria-label="Back to previous screen"><span aria-hidden="true">‹</span><span class="awardsPageHeader__controlLabel">Back</span></a><div class="awardsPageHeader__title"><h1>Season awards</h1><p>${esc(data.season.name)}</p></div><button class="awardsPageHeader__control" data-refresh type="button" aria-label="Refresh awards and leaders" title="Refresh awards and leaders">↻</button></header><details class="awardLeadersPanel" ${leadersOpen?'open':''}><summary>Season leaders <span>Recorded match stats</span></summary>${leadersHtml(leaders)}</details>${ballotProgressHtml(data.awards)}<div class="awardBallots">${data.awards.length?data.awards.map(a=>`<details class="card awardBallot" data-id="${esc(a.awardId)}" ${a.awardId===openId?'open':''}>${ballotContents(a,user)}</details>`).join(''):'<div class="card emptyState"><b>No awards configured yet</b><span>Your admin will notify you when voting opens.</span></div>'}</div>`;
     root.querySelector('[data-awards-back]').onclick=event=>{event.preventDefault();returnTo(backHash,previousHash);};
-    root.querySelector('[data-refresh]').onclick=e=>run(e.currentTarget,refresh);
-    root.querySelectorAll('[data-id] form').forEach(form=>form.onsubmit=e=>{e.preventDefault();const candidate=new FormData(form).get('candidate');if(!candidate)return;run(form.querySelector('[type=submit]'),async()=>{check(await API.awardVote(form.closest('[data-id]').dataset.id,candidate));toastSuccess('Vote saved.');await refresh();});});
+    root.querySelector('[data-refresh]').onclick=e=>{
+      const button=e.currentTarget;
+      const restoreRefreshFocus=document.activeElement===button;
+      run(button,()=>refresh({restoreRefreshFocus}));
+    };
+    for(const card of root.querySelectorAll('.awardBallot')) {
+      card.ontoggle=()=>{if(card.open)root.querySelectorAll('.awardBallot[open]').forEach(other=>{if(other!==card)other.open=false;});};
+      const choice=choices.get(card.dataset.id);
+      const input=[...card.querySelectorAll('input')].find(input=>input.value===choice && !input.disabled);
+      if(input)input.checked=true;
+      const form=card.querySelector('form');
+      const button=form?.querySelector('[type=submit]');
+      if(!button)continue;
+      button.disabled=pendingVotes.has(card.dataset.id);
+      form.onsubmit=e=>{
+        e.preventDefault();
+        const candidate=new FormData(form).get('candidate');
+        if(!candidate || button.disabled || pendingVotes.has(card.dataset.id))return;
+        const focusOnSave=card.contains(document.activeElement);
+        pendingVotes.add(card.dataset.id);
+        run(button,async()=>{
+          try {
+            check(await API.awardVote(card.dataset.id,candidate));
+            pendingVotes.delete(card.dataset.id);
+            toastSuccess('Vote saved.');
+            await refresh({savedId:card.dataset.id,focusSaved:focusOnSave && (document.activeElement===document.body || card.contains(document.activeElement))});
+          } finally {
+            pendingVotes.delete(card.dataset.id);
+            const current=[...root.querySelectorAll('.awardBallot')].find(el=>el.dataset.id===card.dataset.id);
+            const retry=current?.querySelector('[type=submit]');
+            if(retry && root.dataset.awardsGeneration===generation)retry.disabled=false;
+          }
+        });
+      };
+    }
+    const targetId=focusSaved?savedId:focusCard;
+    const target=[...root.querySelectorAll('.awardBallot')].find(card=>card.dataset.id===targetId);
+    if(target){
+      const focusInput=!focusSaved && focusValue?[...target.querySelectorAll('input')].find(input=>input.value===focusValue):null;
+      (focusInput || target.querySelector('summary')).focus({preventScroll:true});
+      if(focusSaved)target.querySelector('summary').scrollIntoView({block:'nearest'});
+    } else if(focusRefresh)root.querySelector('[data-refresh]').focus({preventScroll:true});
   };
-  try{await refresh();}catch(e){root.innerHTML=`<section class="card emptyState"><b>Could not load the ballot</b><span>${esc(e.message)}</span><div class="awardActions"><a class="btn" href="${esc(backHash)}">Back</a><button class="btn" type="button">Try again</button></div></section>`;root.querySelector('button').onclick=()=>renderAwardsPage(root,query,routeToken,navigation);}
+  try{await refresh();}catch(e){if(root.dataset.awardsGeneration!==generation)return;root.innerHTML=`<section class="card emptyState"><b>Could not load the ballot</b><span>${esc(e.message)}</span><div class="awardActions"><a class="btn" href="${esc(backHash)}">Back</a><button class="btn" type="button">Try again</button></div></section>`;root.querySelector('button').onclick=()=>renderAwardsPage(root,query,routeToken,navigation);}
 }
