@@ -25,12 +25,12 @@ async function requestJson(url, options) {
     const res = await fetch(url, { ...options, signal: controller.signal });
     const data = await res.json().catch(() => null);
     if (!data || typeof data !== "object") {
-      return { ok: false, error: `Server returned an invalid response (${res.status})` };
+      return { ok: false, status: res.status, error: `Server returned an invalid response (${res.status})` };
     }
     if (!res.ok && data.ok !== false) {
-      return { ...data, ok: false, error: data.error || `Request failed (${res.status})` };
+      return { ...data, ok: false, status: res.status, error: data.error || `Request failed (${res.status})` };
     }
-    return data;
+    return res.ok ? data : { ...data, status: res.status };
   } catch (e) {
     if (e?.name === "AbortError") return { ok: false, error: "The server took too long to respond. Try again." };
     return { ok: false, error: "Could not reach the server. Check your connection and try again." };
@@ -73,7 +73,9 @@ export async function apiGet(params) {
   try {
     const url = new URL(CONFIG.API_BASE);
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    const key = url.toString();
+    const token = getToken();
+    const requestUrl = url.toString();
+    const key = JSON.stringify([requestUrl, token]);
 
     // De-dupe: if same request is already running, return its promise.
     if (INFLIGHT_GET.has(key)) return await INFLIGHT_GET.get(key);
@@ -81,11 +83,11 @@ export async function apiGet(params) {
     const p = (async () => {
       loadingStart();
       try {
-        return await requestJson(key, {
+        return await requestJson(requestUrl, {
           method: "GET",
           cache: "no-store",
           credentials: "omit",
-          headers: (getToken() ? { "Authorization": `Bearer ${getToken()}` } : {}),
+          headers: (token ? { "Authorization": `Bearer ${token}` } : {}),
         });
       } finally {
         loadingEnd();

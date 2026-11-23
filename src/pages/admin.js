@@ -2730,11 +2730,12 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   const availabilityLocked = isTrueFlag(m.availabilityLocked);
   const isCompleted = status === "COMPLETED";
   const scoreStarted = String(m.scoreHome ?? "").trim() !== "" || String(m.scoreAway ?? "").trim() !== "";
-  const isEditLocked = locked || status === "CLOSED" || isCompleted || scoreStarted;
+  const isEditLocked = locked || status !== "OPEN";
   const groundLocked = locked || status === "CLOSED" || isCompleted;
   const hasBothScores = String(m.scoreHome ?? "").trim() !== "" && String(m.scoreAway ?? "").trim() !== "";
   const potm = data.potm || {};
   const potmStarted = String(potm.openedAt || "").trim() !== "";
+  const resultsStarted = scoreStarted || potmStarted || Number(m.ratingCount || 0) > 0 || (data.ratings || []).length > 0;
   const potmFinal = potmStarted && Boolean(potm.closed);
   const potmResults = Array.isArray(potm.results) ? potm.results : [];
   const potmReady = potmStarted && Number(potm.voteCount || 0) > 0;
@@ -2761,7 +2762,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     return Math.min(n, 100);
   })();
 
-  const limitEditLocked = isCompleted; // allow editing even if availability is closed, but not once completed
+  const limitEditLocked = isEditLocked; // Ratings in progress and closed availability do not lock the cap.
 
   function availabilityLimitEditorHtml() {
     return `
@@ -2769,7 +2770,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
         <summary style="font-weight:950">Availability limit</summary>
 
         <div class="small" style="margin-top:8px">
-          Max number of players who can be <b>YES</b> for this match. Extra YES requests will be placed on the <b>WAITING</b> list.
+          Max number of players who can be <b>YES</b> for this match. Extra YES requests will be placed on the <b>WAITING</b> list.${resultsStarted ? " Changes update availability only; save the team field separately to change who played." : ""}
         </div>
 
         <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap; align-items:center">
@@ -2778,7 +2779,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
           <div class="small" id="availLimitMsg"></div>
         </div>
 
-        ${limitEditLocked ? `<div class="small" style="margin-top:10px">This match is completed — availability limit can’t be changed.</div>` : ""}
+        ${limitEditLocked ? `<div class="small" style="margin-top:10px">Unlock this match to change the availability limit.</div>` : ""}
       </details>
     `;
   }
@@ -2834,6 +2835,13 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   const captains = data.captains || {};
   const teams = data.teams || [];
   const captainEditLocked = locked || status !== "OPEN";
+  const draftEligibleNames = new Set([...yesPlayers, ...(resultsStarted ? teams.map(row => row.playerName) : [])].map(name => name.toLowerCase()));
+  function confirmRosterRemoval(previous, next) {
+    const keys = new Set(next.map(name => name.toLowerCase()));
+    const removed = previous.filter(name => !keys.has(name.toLowerCase()));
+    return !removed.length || !resultsStarted || confirm(`Remove ${removed.join(", ")} from this match? Their match ratings, goals, assists, boosts and POTM votes will also be removed. Other players' stats and the score will be kept.`);
+  }
+
   const playerPhotos = Object.fromEntries(teams
     .filter(row => row.photoUrl)
     .flatMap(row => [[row.playerName, row.photoUrl], [String(row.playerName || "").trim().toLowerCase(), row.photoUrl]]));
@@ -2854,7 +2862,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
         </div>
         <div class="manageCommand__statusGroup">
           <div class="manageCommand__state"><span class="statusDot" aria-hidden="true"></span>${phaseLabel}</div>
-          <button class="btn ${availabilityLocked ? "primary" : "warn"} manageCommand__availabilityBtn" id="${availabilityLocked ? "openAvailability" : "closeAvailability"}" type="button" aria-label="${availabilityLocked ? "Open availability" : "Close availability"}" ${isEditLocked ? "disabled" : ""}>${availabilityLocked ? "Open" : "Close"}</button>
+          <button class="btn ${availabilityLocked ? "primary" : "warn"} manageCommand__availabilityBtn" id="${availabilityLocked ? "openAvailability" : "closeAvailability"}" type="button" aria-label="${availabilityLocked ? "Open availability" : "Close availability"}" ${isEditLocked || (availabilityLocked && scoreStarted) ? "disabled" : ""}>${availabilityLocked ? "Open" : "Close"}</button>
         </div>
       </div>
       <div class="manageCommand__actions">
@@ -3123,7 +3131,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     const opponentDraft = lsGet(setupDraftKey(m.matchId));
     let opponentCaptain = cap;
     if (!isEditLocked && opponentDraft?.type === "OPPONENT") {
-      squad = uniqueSorted((opponentDraft.squad || []).filter(name => yesPlayers.includes(name)));
+      squad = uniqueSorted((opponentDraft.squad || []).filter(name => draftEligibleNames.has(name.toLowerCase())));
       fieldPositions = opponentDraft.positions || fieldPositions;
       opponentCaptain = squad.includes(opponentDraft.captain) ? opponentDraft.captain : "";
     }
@@ -3147,9 +3155,8 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       if (captainEditLocked) return toastWarn("Unlock the match before changing captains.");
       if (!squad.length) return toastWarn("Select at least one MLFC player before saving.");
       if (!opponentCaptain) return toastWarn("Select one MLFC captain before saving.");
-      const out = scoreStarted
-        ? await API.adminUpdateCaptains({ matchId:m.matchId, captain:opponentCaptain })
-        : await API.adminSetupOpponent({ matchId:m.matchId, captain:opponentCaptain, mlfcPlayers:squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
+      if (!confirmRosterRemoval(savedOpponent.squad, squad)) return;
+      const out = await API.adminSetupOpponent({ matchId:m.matchId, captain:opponentCaptain, mlfcPlayers:squad, positions:positionRows([{team:"MLFC",players:squad}],fieldPositions) });
       if (!out?.ok) return toastError(out?.error || "Team changes could not be saved.");
       if (out.captains) data.captains = out.captains;
       savedOpponent.squad = [...squad];
@@ -3161,13 +3168,13 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
       updateOpponentDraft();
       const notifyButton = manageBody.querySelector("#publishOpponent");
       if (notifyButton) notifyButton.disabled = isEditLocked || !savedOpponent.squad.length;
-      toastSuccess(scoreStarted ? "Captain updated." : "Team-field changes saved.");
+      toastSuccess("Team-field changes saved.");
     }
 
     function renderSquadLists() {
       mountTeamField(manageBody.querySelector("#opponentTeamPreview"), {
         groups:[{team:"MLFC",label:homeTeamName,players:squad,captain:opponentCaptain}],positions:fieldPositions,photos:playerPhotos,pool:yesPlayers,disabled:isEditLocked,captainEditable:!captainEditLocked,
-        note:"Availability changes are reflected automatically. Save field edits before notifying players.",
+        note:resultsStarted ? "Players and positions remain editable during ratings. Update availability, then save the team field before notifying players." : "Availability changes are reflected automatically. Save field edits before notifying players.",
         onResetDraft:(event) => clearLocalDraftsAndReload(event?.currentTarget),
         onChange:updateOpponentDraft,
         onDraft:updateOpponentDraft,
@@ -3304,14 +3311,16 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   let captainOrange = String(captains.captain2 || "");
   let autoBalanceReport = data.teamBalance || null;
   const teamSelectionMode = String(m.teamSelectionMode || "AUTO").toUpperCase() === "MANUAL" ? "MANUAL" : "AUTO";
-  const teamAutomationNote = teamSelectionMode === "MANUAL"
+  const teamAutomationNote = resultsStarted
+    ? "Players and positions remain editable during ratings. Availability changes keep the saved teams; save field edits before notifying players."
+    : teamSelectionMode === "MANUAL"
     ? "Admin adjustments stay fixed. New players are balanced by strength and recent outfield roles; goalkeepers rotate separately."
     : "Teams balance strength and recent outfield roles automatically. Goalkeepers are rotated randomly and do not affect role balancing.";
   const savedInternal = { blue: [...blue], orange: [...orange], captainBlue, captainOrange };
   const internalDraft = lsGet(setupDraftKey(m.matchId));
 
   if (!isEditLocked && internalDraft?.type === "INTERNAL") {
-    const allowed = new Set(yesPlayers.map(name => name.toLowerCase()));
+    const allowed = draftEligibleNames;
     blue = uniqueSorted((internalDraft.blue || []).filter(name => allowed.has(name.toLowerCase())));
     orange = uniqueSorted((internalDraft.orange || []).filter(name => allowed.has(name.toLowerCase()) && !blue.some(b => b.toLowerCase() === name.toLowerCase())));
     fieldPositions = internalDraft.positions || fieldPositions;
@@ -3339,9 +3348,8 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
   async function saveInternalField() {
     if (captainEditLocked) return toastWarn("Unlock the match before changing captains.");
     if (!(blue.length + orange.length)) return toastWarn("Assign at least one player before saving.");
-    const out = scoreStarted
-      ? await API.adminUpdateCaptains({ matchId:m.matchId, captainBlue, captainOrange })
-      : await API.adminSetupInternal({
+    if (!confirmRosterRemoval([...savedInternal.blue, ...savedInternal.orange], [...blue, ...orange])) return;
+    const out = await API.adminSetupInternal({
       matchId:m.matchId, bluePlayers:blue, orangePlayers:orange,
       captainBlue, captainOrange,
       positions:positionRows([{team:"BLUE",players:blue},{team:"ORANGE",players:orange}],fieldPositions)
@@ -3357,7 +3365,7 @@ function renderManageUI(root, data, routeToken, { fromCache = true, prevView = "
     clearManageCache(m.publicCode);
     clearPublicMatchDetailCache(m.publicCode);
     updateInternalDraft();
-    toastSuccess(scoreStarted ? "Captains updated." : "Team-field changes saved.");
+    toastSuccess("Team-field changes saved.");
   }
 
   // Links can be generated as soon as we know the captain names.

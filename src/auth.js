@@ -26,7 +26,8 @@ export function setCachedUser(user) {
 }
 
 export async function refreshMe(force = false) {
-  if (!getToken()) {
+  const token = getToken();
+  if (!token) {
     clearAuth();
     return null;
   }
@@ -35,9 +36,16 @@ export async function refreshMe(force = false) {
     if (cached) return cached;
   }
   const res = await API.me();
+  // A response from a previous session must not clear or replace a newer login.
+  if (getToken() !== token) return getCachedUser();
   if (!res?.ok) {
-    clearAuth();
-    return null;
+    // Opening a shared link or returning from another app triggers this check.
+    // Network errors and server failures do not mean the session has expired.
+    if (res?.status === 401 && /^(Not logged in|Login required)$/i.test(res.error || "")) {
+      clearAuth();
+      return null;
+    }
+    return getCachedUser();
   }
   setCachedUser(res.user);
   return res.user;
